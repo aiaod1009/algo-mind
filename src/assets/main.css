@@ -1,0 +1,58 @@
+@import './base.css';
+
+:root {
+  --brand-blue: #4a6f9d;
+  --brand-blue-strong: #3f5d85;
+  --brand-accent: #6672cb;
+  --brand-warm: #d88966;
+
+  --text-title: #1f2f44;
+  --text-main: #2f425b;
+  --text-sub: #5f7286;
+  --text-muted: #667789;
+
+  --line: #d4dde8;
+  --line-soft: #e1e8f1;
+  --line-card: #dde6f2;
+
+  --panel-bg: #f3f6fa;
+  --card-bg: #ffffff;
+  --app-bg: linear-gradient(180deg, #f8fafc 0%, #eef2f6 100%);
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--app-bg);
+}
+
+.page-container {
+  width: 1200px;
+  max-width: calc(100% - 32px);
+  margin: 0 auto;
+}
+
+.surface-card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(63, 89, 124, 0.1);
+}
+
+.section-title {
+  margin-bottom: 18px;
+  color: var(--text-title);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .page-container {
+    max-width: calc(100% - 20px);
+  }
+}
