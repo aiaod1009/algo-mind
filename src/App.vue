@@ -13,6 +13,15 @@ const trackTextMap = {
   ds: '数据结构',
   contest: '竞赛冲刺',
 }
+
+const menuItems = [
+  { path: '/home', label: '学习计划' },
+  { path: '/courses', label: '网课' },
+  { path: '/levels', label: '关卡练习' },
+  { path: '/forum', label: '论坛' },
+  { path: '/ranking', label: '积分排行' },
+  { path: '/errors', label: '错题本' },
+]
 const activePath = computed(() => {
   if (route.path.startsWith('/challenge/')) {
     return '/levels'
@@ -77,6 +86,20 @@ const handleUserCommand = (command) => {
       </div>
     </header>
 
+    <!-- 移动端菜单 -->
+    <div v-if="showTopbar" class="mobile-menu-wrapper hidden-on-desktop">
+      <div class="mobile-menu">
+        <div
+          v-for="item in menuItems"
+          :key="item.path"
+          :class="['mobile-menu-item', { active: activePath === item.path }]"
+          @click="handleMenuSelect(item.path)"
+        >
+          {{ item.label }}
+        </div>
+      </div>
+    </div>
+
     <main :class="['app-main', { 'with-topbar': showTopbar }]">
       <RouterView />
     </main>
@@ -106,10 +129,11 @@ const handleUserCommand = (command) => {
 }
 
 .brand {
-  width: 180px;
+  flex-shrink: 0;
   font-size: 22px;
   font-weight: 700;
   color: var(--text-title);
+  white-space: nowrap;
 }
 
 .main-menu {
@@ -119,7 +143,7 @@ const handleUserCommand = (command) => {
 }
 
 .actions {
-  min-width: 320px;
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   align-items: center;
@@ -160,25 +184,130 @@ const handleUserCommand = (command) => {
   padding-top: 92px;
 }
 
-@media (max-width: 900px) {
+/* 默认隐藏移动端菜单 */
+.hidden-on-desktop {
+  display: none;
+}
+
+@media (max-width: 925px) {
   .topbar-inner {
-    height: auto;
-    flex-wrap: wrap;
-    padding: 10px 0;
+    flex-wrap: nowrap;
+    gap: 12px;
   }
 
-  .brand,
+  .brand {
+    font-size: 18px;
+  }
+
   .actions {
-    width: auto;
+    gap: 6px;
+  }
+
+  .actions :deep(.el-tag) {
+    padding: 0 6px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 680px) {
+  .topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+  }
+
+  .topbar-inner {
+    height: 56px;
+    flex-wrap: nowrap;
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .brand {
+    font-size: 16px;
+    flex-shrink: 0;
   }
 
   .main-menu {
-    width: 100%;
-    order: 3;
+    display: none;
+  }
+
+  /* 在移动端显示菜单 */
+  .hidden-on-desktop {
+    display: block;
+  }
+
+  .mobile-menu-wrapper {
+    position: fixed;
+    top: 56px;
+    left: 0;
+    right: 0;
+    z-index: 19;
+    background: rgba(248, 250, 252, 0.94);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(10px);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .mobile-menu-wrapper::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-menu {
+    display: flex;
+    flex-wrap: nowrap;
+    padding: 8px 12px;
+    gap: 4px;
+    min-width: min-content;
+  }
+
+  .mobile-menu-item {
+    flex-shrink: 0;
+    padding: 8px 16px;
+    font-size: 14px;
+    color: var(--text-sub);
+    cursor: pointer;
+    border-radius: 20px;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+
+  .mobile-menu-item:hover {
+    background: rgba(64, 158, 255, 0.1);
+    color: var(--brand-blue);
+  }
+
+  .mobile-menu-item.active {
+    background: var(--brand-blue);
+    color: #fff;
+  }
+
+  .actions {
+    gap: 4px;
+    margin-left: auto;
+  }
+
+  .actions :deep(.el-tag) {
+    display: none;
+  }
+
+  .actions :deep(.el-tag:last-of-type) {
+    display: inline-flex;
+    padding: 0 4px;
+    font-size: 11px;
+  }
+
+  .user-name {
+    display: none;
   }
 
   .app-main.with-topbar {
-    padding-top: 128px;
+    padding-top: 112px;
   }
 }
 </style>

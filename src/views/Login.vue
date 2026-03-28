@@ -11,12 +11,167 @@ const isPasswordFocused = ref(false)
 const isEmailFocused = ref(false)
 const activeMode = ref('none')
 const mouseOffset = reactive({ x: 0, y: 0 })
+const containerRef = ref(null)
+const containerRect = reactive({ x: 0, y: 0, width: 550, height: 400 })
+
+// 平滑动画状态
+const smoothState = reactive({
+  // 柱子倾斜角度（使用skew）
+  skewX: 0,
+  targetSkewX: 0,
+  // 每个眼睛的独立偏移
+  eyes: {
+    'purple-eye-1': { x: 0, y: 0, targetX: 0, targetY: 0 },
+    'purple-eye-2': { x: 0, y: 0, targetX: 0, targetY: 0 },
+    'black-eye-1': { x: 0, y: 0, targetX: 0, targetY: 0 },
+    'black-eye-2': { x: 0, y: 0, targetX: 0, targetY: 0 },
+    'orange-eye-1': { x: 0, y: 0, targetX: 0, targetY: 0 },
+    'orange-eye-2': { x: 0, y: 0, targetX: 0, targetY: 0 },
+    'yellow-eye-1': { x: 0, y: 0, targetX: 0, targetY: 0 },
+    'yellow-eye-2': { x: 0, y: 0, targetX: 0, targetY: 0 },
+  },
+  // 黄色柱子面部偏移
+  faceOffsetX: 0,
+  faceOffsetY: 0,
+  targetFaceOffsetX: 0,
+  targetFaceOffsetY: 0,
+})
+
+let animationFrameId = null
+const lerpFactor = 0.12 // 插值因子
 
 const form = reactive({
   email: '',
   password: '',
   remember: true,
 })
+
+// 眼睛配置（与原始HTML一致）
+const eyeConfigs = {
+  'purple-eye-1': { maxDistance: 5, elementX: 0, elementY: 0 },
+  'purple-eye-2': { maxDistance: 5, elementX: 0, elementY: 0 },
+  'black-eye-1': { maxDistance: 4, elementX: 0, elementY: 0 },
+  'black-eye-2': { maxDistance: 4, elementX: 0, elementY: 0 },
+  'orange-eye-1': { maxDistance: 5, elementX: 0, elementY: 0 },
+  'orange-eye-2': { maxDistance: 5, elementX: 0, elementY: 0 },
+  'yellow-eye-1': { maxDistance: 5, elementX: 0, elementY: 0 },
+  'yellow-eye-2': { maxDistance: 5, elementX: 0, elementY: 0 },
+}
+
+// 更新容器位置信息
+const updateContainerRect = () => {
+  if (containerRef.value) {
+    const rect = containerRef.value.getBoundingClientRect()
+    containerRect.x = rect.left
+    containerRect.y = rect.top
+    containerRect.width = rect.width
+    containerRect.height = rect.height
+    updateEyePositions()
+  }
+}
+
+// 更新每个眼睛在屏幕上的绝对位置
+const updateEyePositions = () => {
+  const eyeIds = Object.keys(eyeConfigs)
+  eyeIds.forEach(id => {
+    const el = document.getElementById(id)
+    if (el) {
+      const rect = el.getBoundingClientRect()
+      eyeConfigs[id].elementX = rect.left + rect.width / 2
+      eyeConfigs[id].elementY = rect.top + rect.height / 2
+    }
+  })
+}
+
+// 线性插值函数
+const lerp = (start, end, factor) => start + (end - start) * factor
+
+// 计算单个眼睛的瞳孔偏移
+const calculateEyeOffset = (eyeId, mouseX, mouseY) => {
+  const config = eyeConfigs[eyeId]
+  const dx = mouseX - config.elementX
+  const dy = mouseY - config.elementY
+  const distance = Math.sqrt(dx * dx + dy * dy)
+  const angle = Math.atan2(dy, dx)
+
+  // 根据距离计算移动量，越远移动越多但有上限
+  const moveDistance = Math.min(distance * 0.08, config.maxDistance)
+
+  return {
+    x: Math.cos(angle) * moveDistance,
+    y: Math.sin(angle) * moveDistance,
+  }
+}
+
+// 动画循环
+const animate = () => {
+  // 平滑插值柱子倾斜
+  smoothState.skewX = lerp(smoothState.skewX, smoothState.targetSkewX, lerpFactor)
+
+  // 平滑插值每个眼睛的偏移
+  Object.keys(smoothState.eyes).forEach(eyeId => {
+    const eye = smoothState.eyes[eyeId]
+    eye.x = lerp(eye.x, eye.targetX, lerpFactor)
+    eye.y = lerp(eye.y, eye.targetY, lerpFactor)
+
+    // 更新DOM
+    const el = document.getElementById(eyeId)
+    if (el) {
+      el.style.transform = `translate(${eye.x}px, ${eye.y}px)`
+    }
+  })
+
+  // 平滑插值黄色柱子面部偏移
+  smoothState.faceOffsetX = lerp(smoothState.faceOffsetX, smoothState.targetFaceOffsetX, lerpFactor)
+  smoothState.faceOffsetY = lerp(smoothState.faceOffsetY, smoothState.targetFaceOffsetY, lerpFactor)
+
+  animationFrameId = requestAnimationFrame(animate)
+}
+
+const onMouseMove = (event) => {
+  updateContainerRect()
+
+  // 计算鼠标相对于容器中心的位置
+  const centerX = containerRect.x + containerRect.width / 2
+  const centerY = containerRect.y + containerRect.height / 2
+
+  mouseOffset.x = event.clientX - centerX
+  mouseOffset.y = event.clientY - centerY
+
+  // 计算柱子倾斜角度（基于鼠标水平位置）
+  // 原始HTML使用 skew(-6deg, 0deg) 作为基准
+  const baseSkew = -6
+  const maxSkewOffset = 8
+  const skewOffset = (mouseOffset.x / window.innerWidth) * maxSkewOffset
+  smoothState.targetSkewX = baseSkew + skewOffset
+
+  // 计算每个眼睛的目标偏移
+  Object.keys(smoothState.eyes).forEach(eyeId => {
+    const offset = calculateEyeOffset(eyeId, event.clientX, event.clientY)
+    smoothState.eyes[eyeId].targetX = offset.x
+    smoothState.eyes[eyeId].targetY = offset.y
+  })
+
+  // 计算黄色柱子面部偏移（与原始HTML一致）
+  // 原始：transform: translate(15px, -7.4306px) 等
+  const faceMoveFactor = 0.03
+  smoothState.targetFaceOffsetX = Math.min(Math.max(mouseOffset.x * faceMoveFactor, 0), 20)
+  smoothState.targetFaceOffsetY = Math.min(Math.max(mouseOffset.y * faceMoveFactor * 0.5, -10), 0)
+}
+
+// 获取柱子倾斜样式
+const getColumnStyle = (factor = 1) => {
+  return {
+    transform: `skew(${smoothState.skewX * factor}deg, 0deg)`,
+  }
+}
+
+// 获取黄色柱子面部偏移样式
+const getYellowFaceStyle = () => {
+  return {
+    transform: `translate(${smoothState.faceOffsetX}px, ${smoothState.faceOffsetY}px)`,
+  }
+}
 
 const syncActiveMode = () => {
   if (isPasswordFocused.value || Boolean(form.password.trim())) {
@@ -28,48 +183,6 @@ const syncActiveMode = () => {
     return
   }
   activeMode.value = 'none'
-}
-
-const onMouseMove = (event) => {
-  const centerX = window.innerWidth / 2
-  const centerY = window.innerHeight / 2
-  mouseOffset.x = event.clientX - centerX
-  mouseOffset.y = event.clientY - centerY
-}
-
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
-
-const characterStyle = (emailShiftX, passwordShiftX) => {
-  let finalX = 0
-
-  if (activeMode.value === 'email') {
-    finalX = emailShiftX
-  } else if (activeMode.value === 'password') {
-    finalX = passwordShiftX
-  }
-
-  return {
-    transform: `translateX(${finalX}px)`,
-  }
-}
-
-const eyeStyle = (xFactor, yFactor, modeBias = 0) => {
-  if (activeMode.value === 'password') {
-    return {
-      '--pupil-x': '-5.5px',
-      '--pupil-y': '0px',
-    }
-  }
-
-  let modeOffset = 0
-  if (activeMode.value === 'email') modeOffset = modeBias
-
-  const eyeX = clamp(mouseOffset.x / xFactor + modeOffset, -5.5, 5.5)
-  const eyeY = clamp(mouseOffset.y / yFactor, -3.8, 3.8)
-  return {
-    '--pupil-x': `${eyeX}px`,
-    '--pupil-y': `${eyeY}px`,
-  }
 }
 
 const normalizeLoginAccount = (value) => {
@@ -145,43 +258,81 @@ const handleRegister = () => {
 
 onMounted(() => {
   window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('resize', updateContainerRect)
+  updateContainerRect()
+  // 启动动画循环
+  animate()
 })
 
 onUnmounted(() => {
   window.removeEventListener('mousemove', onMouseMove)
+  window.removeEventListener('resize', updateContainerRect)
+  // 停止动画循环
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+  }
 })
 </script>
 
 <template>
   <div class="login-page">
     <section class="left-panel">
-      <div class="characters-stage">
-        <div class="character purple" :style="characterStyle(36, -24)">
-          <div class="eyes">
-            <span class="eye" :style="eyeStyle(120, 170, 1.8)"><i class="pupil"></i></span>
-            <span class="eye" :style="eyeStyle(120, 170, 1.8)"><i class="pupil"></i></span>
+      <div ref="containerRef" class="characters-stage">
+        <!-- 紫色柱子 -->
+        <div
+          class="character purple"
+          :style="getColumnStyle(1)"
+        >
+          <div class="eyes-container">
+            <div class="eyeball">
+              <div id="purple-eye-1" class="eyeball-pupil"></div>
+            </div>
+            <div class="eyeball">
+              <div id="purple-eye-2" class="eyeball-pupil"></div>
+            </div>
           </div>
         </div>
 
-        <div class="character black" :style="characterStyle(0, -16)">
-          <div class="eyes">
-            <span class="eye" :style="eyeStyle(132, 180, 1.1)"><i class="pupil"></i></span>
-            <span class="eye" :style="eyeStyle(132, 180, 1.1)"><i class="pupil"></i></span>
+        <!-- 黑色柱子 -->
+        <div
+          class="character black"
+          :style="getColumnStyle(1)"
+        >
+          <div class="eyes-container">
+            <div class="eyeball small">
+              <div id="black-eye-1" class="eyeball-pupil small"></div>
+            </div>
+            <div class="eyeball small">
+              <div id="black-eye-2" class="eyeball-pupil small"></div>
+            </div>
           </div>
         </div>
 
-        <div class="character yellow" :style="characterStyle(0, -14)">
-          <div class="eyes">
-            <span class="eye" :style="eyeStyle(145, 190, 1)"><i class="pupil"></i></span>
-            <span class="eye" :style="eyeStyle(145, 190, 1)"><i class="pupil"></i></span>
+        <!-- 橙色柱子 -->
+        <div
+          class="character orange"
+          :style="getColumnStyle(1)"
+        >
+          <div class="eyes-container orange-eyes" :style="getYellowFaceStyle()">
+            <div class="pupil" id="orange-eye-1"></div>
+            <div class="pupil" id="orange-eye-2"></div>
           </div>
-          <div class="mouth"></div>
         </div>
 
-        <div class="character orange" :style="characterStyle(0, -18)">
-          <div class="eyes">
-            <span class="eye" :style="eyeStyle(150, 200, 0.8)"><i class="pupil"></i></span>
-            <span class="eye" :style="eyeStyle(150, 200, 0.8)"><i class="pupil"></i></span>
+        <!-- 黄色柱子 -->
+        <div
+          class="character yellow"
+          :style="getColumnStyle(1)"
+        >
+          <div 
+            class="face-container"
+            :style="getYellowFaceStyle()"
+          >
+            <div class="eyes-container yellow-eyes">
+              <div class="pupil" id="yellow-eye-1"></div>
+              <div class="pupil" id="yellow-eye-2"></div>
+            </div>
+            <div class="mouth"></div>
           </div>
         </div>
       </div>
@@ -234,27 +385,14 @@ onUnmounted(() => {
     position: relative;
     overflow: hidden;
     background: radial-gradient(circle at 18% 20%, #5a667a 0%, #465267 45%, #3f4b60 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 
     .characters-stage {
-      position: absolute;
-      width: 520px;
-      max-width: calc(100% - 42px);
-      height: 420px;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-
-      &::after {
-        content: '';
-        position: absolute;
-        left: 14px;
-        right: 14px;
-        bottom: 0;
-        height: 14px;
-        border-radius: 999px;
-        background: rgba(18, 25, 39, 0.25);
-        filter: blur(8px);
-      }
+      position: relative;
+      width: 550px;
+      height: 400px;
     }
   }
 
@@ -335,114 +473,143 @@ onUnmounted(() => {
   }
 }
 
+// 角色基础样式
 .character {
   position: absolute;
-  transform-origin: bottom center;
-  transition: transform 0.3s ease;
+  bottom: 0;
+  transform-origin: center bottom;
+  will-change: transform;
+  transition: transform 0.1s ease-out;
 
-  .eyes {
+  .eyes-container {
+    position: absolute;
     display: flex;
-    gap: 20px;
-    align-items: center;
+    gap: 32px;
 
-    .eye {
-      width: 22px;
-      height: 22px;
+    .eyeball {
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
-      background: #f5f7fa;
-      display: grid;
-      place-items: center;
-      box-shadow: 0 1px 1px rgba(0, 0, 0, 0.12) inset;
+      background-color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      will-change: transform;
 
-      .pupil {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #111;
-        transform: translate(var(--pupil-x, 0), var(--pupil-y, 0));
-        transition: transform 0.2s ease;
+      &.small {
+        width: 16px;
+        height: 16px;
       }
+
+      .eyeball-pupil {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background-color: rgb(45, 45, 45);
+        will-change: transform;
+
+        &.small {
+          width: 6px;
+          height: 6px;
+        }
+      }
+    }
+
+    .pupil {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: rgb(45, 45, 45);
+      will-change: transform;
+    }
+
+    &.orange-eyes {
+      gap: 32px;
+    }
+
+    &.yellow-eyes {
+      gap: 24px;
     }
   }
 }
 
+// 紫色柱子
 .purple {
+  left: 70px;
+  width: 180px;
+  height: 400px;
+  background-color: rgb(108, 63, 245);
+  border-radius: 10px 10px 0px 0px;
   z-index: 1;
-  left: 92px;
-  bottom: 0;
-  width: 176px;
-  height: 330px;
-  border-radius: 12px;
-  background: #6672cb;
 
-  .eyes {
-    position: absolute;
-    top: 42px;
-    left: 50%;
-    transform: translateX(-50%);
+  .eyes-container {
+    left: 67px;
+    top: 36px;
   }
 }
 
+// 黑色柱子
 .black {
+  left: 240px;
+  width: 120px;
+  height: 310px;
+  background-color: rgb(45, 45, 45);
+  border-radius: 8px 8px 0px 0px;
   z-index: 2;
-  left: 250px;
-  bottom: 0;
-  width: 126px;
-  height: 260px;
-  border-radius: 10px;
-  background: #303b4c;
 
-  .eyes {
-    position: absolute;
-    top: 38px;
-    left: 50%;
-    transform: translateX(-50%);
+  .eyes-container {
+    left: 41px;
+    top: 26px;
+    gap: 24px;
   }
 }
 
-.yellow {
-  z-index: 3;
-  left: 328px;
-  bottom: 0;
-  width: 162px;
-  height: 210px;
-  border-radius: 82px 82px 10px 10px;
-  background: #c9b26d;
-
-  .eyes {
-    position: absolute;
-    top: 42px;
-    left: 50%;
-    transform: translateX(-50%);
-    gap: 18px;
-  }
-
-  .mouth {
-    position: absolute;
-    width: 52px;
-    height: 4px;
-    background: #20222b;
-    border-radius: 999px;
-    left: 50%;
-    top: 110px;
-    transform: translateX(-50%);
-  }
-}
-
+// 橙色柱子
 .orange {
-  z-index: 4;
-  left: 26px;
-  bottom: 0;
-  width: 268px;
-  height: 170px;
-  border-radius: 135px 135px 0 0;
-  background: #d88966;
+  left: 0px;
+  width: 240px;
+  height: 200px;
+  background-color: rgb(255, 155, 107);
+  border-radius: 120px 120px 0px 0px;
+  z-index: 3;
 
-  .eyes {
+  .eyes-container {
+    left: 82px;
+    top: 90px;
+  }
+}
+
+// 黄色柱子
+.yellow {
+  left: 310px;
+  width: 140px;
+  height: 230px;
+  background-color: rgb(232, 215, 84);
+  border-radius: 70px 70px 0px 0px;
+  z-index: 4;
+
+  .face-container {
     position: absolute;
-    top: 76px;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 52px;
+    top: 40px;
+    transition: transform 0.1s ease-out;
+
+    .eyes-container {
+      position: relative;
+      left: 0;
+      top: 0;
+    }
+
+    .mouth {
+      position: absolute;
+      width: 80px;
+      height: 4px;
+      background-color: rgb(45, 45, 45);
+      border-radius: 999px;
+      left: -12px;
+      top: 48px;
+    }
   }
 }
 
@@ -452,38 +619,10 @@ onUnmounted(() => {
 
     .left-panel {
       min-height: 380px;
+      padding: 20px;
 
       .characters-stage {
-        top: auto;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 420px;
-        height: 320px;
-      }
-
-      .purple {
-        left: 70px;
-        width: 138px;
-        height: 250px;
-      }
-
-      .black {
-        left: 185px;
-        width: 100px;
-        height: 206px;
-      }
-
-      .yellow {
-        left: 246px;
-        width: 132px;
-        height: 172px;
-      }
-
-      .orange {
-        left: 14px;
-        width: 216px;
-        height: 136px;
+        transform: scale(0.75);
       }
     }
 
@@ -494,6 +633,18 @@ onUnmounted(() => {
         h1 {
           font-size: 36px;
         }
+      }
+    }
+  }
+}
+
+@media (max-width: 600px) {
+  .login-page {
+    .left-panel {
+      min-height: 300px;
+
+      .characters-stage {
+        transform: scale(0.55);
       }
     }
   }
