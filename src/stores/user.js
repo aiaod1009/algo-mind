@@ -1,0 +1,195 @@
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import api from '../api'
+
+const LEADERBOARD_KEY = 'leaderboard'
+const TRACK_KEY = 'learning-track'
+
+const DEFAULT_USERS = [
+  {
+    id: 1,
+    username: 'guest',
+    nickname: '游客',
+    password: 'guest',
+    token: 'guest-token',
+    bio: '先把基础打扎实，再冲更高难度。',
+    gender: 'unknown',
+    avatar: '',
+    targetTrack: 'algo',
+    weeklyGoal: 8,
+  },
+  {
+    id: 2,
+    username: 'admin',
+    nickname: '管理员',
+    password: '123456',
+    token: 'admin-token',
+    bio: '持续刷题，稳定提分。',
+    gender: 'unknown',
+    avatar: '',
+    targetTrack: 'algo',
+    weeklyGoal: 12,
+  },
+]
+
+const readLocalUser = () => {
+  const userRaw = localStorage.getItem('user')
+  if (!userRaw) return null
+  try {
+    return JSON.parse(userRaw)
+  } catch (error) {
+    return null
+  }
+}
+
+const readLeaderboard = () => {
+  const raw = localStorage.getItem(LEADERBOARD_KEY)
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch (error) {
+    return []
+  }
+}
+
+const saveLeaderboard = (list) => {
+  localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(list))
+}
+
+const createDefaultUser = (item) => ({
+  id: item.id,
+  name: item.nickname,
+  token: item.token,
+  bio: item.bio,
+  gender: item.gender,
+  avatar: item.avatar,
+  targetTrack: item.targetTrack,
+  weeklyGoal: item.weeklyGoal,
+})
+
+export const useUserStore = defineStore('user', () => {
+  const userInfo = ref(readLocalUser())
+  const points = ref(Number(localStorage.getItem('points') || 0))
+  const selectedTrack = ref(localStorage.getItem(TRACK_KEY) || 'algo')
+
+  const syncLeaderboard = (payloadUser, payloadPoints) => {
+    if (!payloadUser?.id) return
+    const list = readLeaderboard()
+    const currentIndex = list.findIndex((item) => Number(item.id) === Number(payloadUser.id))
+    const nextItem = {
+      id: payloadUser.id,
+      name: payloadUser.name || '匿名用户',
+      points: Number(payloadPoints || 0),
+      targetTrack: payloadUser.targetTrack || selectedTrack.value,
+      updatedAt: Date.now(),
+    }
+    if (currentIndex >= 0) {
+      list[currentIndex] = { ...list[currentIndex], ...nextItem }
+    } else {
+      list.push(nextItem)
+    }
+    saveLeaderboard(list)
+  }
+
+  const syncUser = (user, score) => {
+    const mergedUser = {
+      ...user,
+      targetTrack: user.targetTrack || selectedTrack.value,
+      weeklyGoal: Number(user.weeklyGoal || 10),
+      bio: user.bio || '保持节奏，长期主义。',
+      gender: user.gender || 'unknown',
+      avatar: user.avatar || '',
+    }
+    userInfo.value = mergedUser
+    points.value = score
+    selectedTrack.value = mergedUser.targetTrack
+    localStorage.setItem('user', JSON.stringify(mergedUser))
+    localStorage.setItem('points', String(score))
+    localStorage.setItem(TRACK_KEY, selectedTrack.value)
+    syncLeaderboard(mergedUser, score)
+  }
+
+  const login = async (username, password) => {
+    try {
+      const res = await api.post('/login', { username, password })
+      if (res.data?.code === 0) {
+        const nextUser = {
+          ...res.data.data.user,
+          targetTrack: res.data.data.user?.targetTrack || selectedTrack.value,
+          weeklyGoal: Number(res.data.data.user?.weeklyGoal || 10),
+          bio: res.data.data.user?.bio || '保持节奏，长期主义。',
+          gender: res.data.data.user?.gender || 'unknown',
+          avatar: res.data.data.user?.avatar || '',
+        }
+        const nextPoints = Number(res.data.data.points || 0)
+        syncUser(nextUser, nextPoints)
+        return true
+      }
+    } catch (error) {
+      console.warn('登录接口不可用，使用本地模拟登录。', error)
+    }
+
+    const matched = DEFAULT_USERS.find((item) => item.username === username && item.password === password)
+    if (!matched) return false
+    syncUser(createDefaultUser(matched), points.value || 0)
+    return true
+  }
+
+  const addPoints = (value) => {
+    points.value += Number(value || 0)
+    localStorage.setItem('points', String(points.value))
+    syncLeaderboard(userInfo.value, points.value)
+  }
+
+  const setTrack = (trackCode) => {
+    selectedTrack.value = trackCode
+    localStorage.setItem(TRACK_KEY, trackCode)
+    if (userInfo.value) {
+      userInfo.value.targetTrack = trackCode
+      localStorage.setItem('user', JSON.stringify(userInfo.value))
+      syncLeaderboard(userInfo.value, points.value)
+    }
+  }
+
+  const updateProfile = (payload) => {
+    if (!userInfo.value) return
+    userInfo.value = {
+      ...userInfo.value,
+      ...payload,
+      weeklyGoal: Number(payload.weeklyGoal || userInfo.value.weeklyGoal || 10),
+    }
+    selectedTrack.value = userInfo.value.targetTrack || selectedTrack.value
+    localStorage.setItem('user', JSON.stringify(userInfo.value))
+    localStorage.setItem(TRACK_KEY, selectedTrack.value)
+    syncLeaderboard(userInfo.value, points.value)
+  }
+
+  const getLeaderboard = () => {
+    return readLeaderboard()
+      .slice()
+      .sort((a, b) => Number(b.points || 0) - Number(a.points || 0))
+      .map((item, index) => ({ ...item, rank: index + 1 }))
+  }
+
+  const logout = () => {
+    userInfo.value = null
+    points.value = 0
+    localStorage.removeItem('user')
+    localStorage.removeItem('points')
+    localStorage.removeItem('levels')
+    localStorage.removeItem(TRACK_KEY)
+  }
+
+  return {
+    userInfo,
+    points,
+    selectedTrack,
+    login,
+    logout,
+    addPoints,
+    setTrack,
+    updateProfile,
+    getLeaderboard,
+  }
+})
