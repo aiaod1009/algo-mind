@@ -8,23 +8,24 @@ import { useUserStore } from '../stores/user'
 const router = useRouter()
 const levelStore = useLevelStore()
 const userStore = useUserStore()
+
 const loading = ref(false)
+const dialogVisible = ref(false)
+const selectedLevel = ref(null)
 const activeTrack = ref(userStore.userInfo?.targetTrack || userStore.selectedTrack || 'algo')
-const selectedLevelId = ref(null)
 
 const trackList = computed(() => levelStore.tracks)
-
 const trackLevels = computed(() => levelStore.getLevelsByTrack(activeTrack.value))
-const turnXPattern = [14, 82, 22, 80, 20, 78, 18, 76]
-const NODE_VERTICAL_GAP = 170
-const MAP_TOP_PADDING = 14
-const MAP_BOTTOM_PADDING = 16
 
-const selectedLevel = computed(() => {
-  if (!selectedLevelId.value) {
-    return trackLevels.value[0] || null
-  }
-  return trackLevels.value.find((item) => Number(item.id) === Number(selectedLevelId.value)) || null
+const progressLevelId = computed(() => {
+  if (!trackLevels.value.length) return null
+  const latestUnlocked = [...trackLevels.value].reverse().find((item) => item.isUnlocked)
+  return latestUnlocked?.id || trackLevels.value[0]?.id || null
+})
+
+const progressLevelIndex = computed(() => {
+  if (!trackLevels.value.length || !progressLevelId.value) return -1
+  return trackLevels.value.findIndex((item) => Number(item.id) === Number(progressLevelId.value))
 })
 
 const typeTagMap = {
@@ -42,104 +43,55 @@ const getLevelStars = (level) => {
   return Math.max(0, Math.min(3, Math.floor(rawStars)))
 }
 
-const findPreferredLevelId = () => {
-  if (!trackLevels.value.length) return null
-  const firstUnlockedNotFull = trackLevels.value.find((item) => item.isUnlocked && getLevelStars(item) < 3)
-  if (firstUnlockedNotFull) return firstUnlockedNotFull.id
-  const latestUnlocked = [...trackLevels.value].reverse().find((item) => item.isUnlocked)
-  return latestUnlocked?.id || trackLevels.value[0]?.id || null
-}
-
-const progressLevelId = computed(() => {
-  if (!trackLevels.value.length) return null
-  const latestCompleted = [...trackLevels.value].reverse().find((item) => item.isCompleted)
-  if (latestCompleted) return latestCompleted.id
-  const latestUnlocked = [...trackLevels.value].reverse().find((item) => item.isUnlocked)
-  return latestUnlocked?.id || trackLevels.value[0]?.id || null
-})
-
-const mapTrackStyle = computed(() => {
-  const expectedHeight = (trackLevels.value.length - 1) * NODE_VERTICAL_GAP + MAP_TOP_PADDING + MAP_BOTTOM_PADDING + 90
-  return {
-    minHeight: `${Math.max(700, expectedHeight)}px`,
-  }
-})
-
-const nodePoints = computed(() => {
+const mapWorldStyle = computed(() => {
   const count = trackLevels.value.length
-  if (!count) return []
-  if (count === 1) {
-    return [{ x: 24, y: 14 }]
+  const expectedWidth = count > 0 ? count * 260 + 400 : 2200
+  return {
+    minWidth: `${Math.max(2200, expectedWidth)}px`,
   }
-
-  const top = MAP_TOP_PADDING
-  const bottom = 100 - MAP_BOTTOM_PADDING
-  const step = (bottom - top) / (count - 1)
-  return Array.from({ length: count }, (_, index) => ({
-    x: turnXPattern[index % turnXPattern.length],
-    y: Number((top + step * index).toFixed(2)),
-  }))
 })
 
-const buildRoadPath = (points) => {
-  if (!points.length) return ''
-  if (points.length === 1) {
-    const point = points[0]
-    return `M ${point.x} ${point.y} L ${point.x + 0.1} ${point.y + 0.1}`
+const getNodePoint = (index) => {
+  return {
+    x: 140 + index * 260,
   }
-
-  const tension = 0.26
-  let path = `M ${points[0].x} ${points[0].y}`
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const p0 = points[index - 1] || points[index]
-    const p1 = points[index]
-    const p2 = points[index + 1]
-    const p3 = points[index + 2] || p2
-
-    const cp1x = Number((p1.x + (p2.x - p0.x) * tension).toFixed(2))
-    const cp1y = Number((p1.y + (p2.y - p0.y) * tension).toFixed(2))
-    const cp2x = Number((p2.x - (p3.x - p1.x) * tension).toFixed(2))
-    const cp2y = Number((p2.y - (p3.y - p1.y) * tension).toFixed(2))
-
-    path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`
-  }
-  return path
 }
-
-const roadPath = computed(() => buildRoadPath(nodePoints.value))
 
 const getNodeStyle = (index) => {
-  const point = nodePoints.value[index] || { x: 50, y: 50 }
+  const point = getNodePoint(index)
   return {
-    left: `${point.x}%`,
-    top: `${point.y}%`,
+    left: `${point.x}px`,
+    bottom: '100px',
   }
 }
 
-const getNodeStateClass = (level) => {
-  if (!level?.isUnlocked) return 'state-locked'
-  if (level.isCompleted) return 'state-completed'
-  return 'state-unlocked'
+const getTruckStyle = (index) => {
+  const point = getNodePoint(index)
+  return {
+    left: `${point.x + 56}px`,
+    bottom: '104px',
+  }
 }
 
-const getRunnerSideClass = (index) => {
-  const point = nodePoints.value[index] || { x: 50 }
-  return point.x >= 50 ? 'inner-left' : 'inner-right'
+const openLevelDialog = (level) => {
+  selectedLevel.value = level
+  dialogVisible.value = true
 }
 
-const handleStart = (level) => {
-  if (!level.isUnlocked) {
+const startChallengeFromDialog = () => {
+  if (!selectedLevel.value) return
+  if (!selectedLevel.value.isUnlocked) {
     ElMessage.warning('该关卡尚未解锁')
     return
   }
-  router.push(`/challenge/${level.id}`)
+  dialogVisible.value = false
+  router.push(`/challenge/${selectedLevel.value.id}`)
 }
 
 const loadData = async () => {
   loading.value = true
   try {
     await levelStore.fetchLevels()
-    selectedLevelId.value = findPreferredLevelId()
   } catch (error) {
     ElMessage.error('关卡加载失败')
   } finally {
@@ -148,12 +100,9 @@ const loadData = async () => {
 }
 
 watch(activeTrack, () => {
-  selectedLevelId.value = findPreferredLevelId()
+  dialogVisible.value = false
+  selectedLevel.value = null
 })
-
-const selectLevel = (item) => {
-  selectedLevelId.value = item.id
-}
 
 onMounted(loadData)
 </script>
@@ -169,14 +118,22 @@ onMounted(loadData)
     </el-tabs>
 
     <el-skeleton :loading="loading" animated :rows="6">
-      <div class="stage-layout">
-        <section class="surface-card level-map">
-          <div class="map-track" v-if="trackLevels.length" :style="mapTrackStyle">
-            <svg class="road-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              <path class="road-edge" :d="roadPath" />
-              <path class="road-fill" :d="roadPath" />
-            </svg>
-            <div v-for="(item, index) in trackLevels" :key="item.id" class="level-node-wrap"
+      <section class="surface-card pixel-stage">
+        <div v-if="trackLevels.length" class="stage-viewport">
+          <div class="map-world" :style="mapWorldStyle">
+            <div class="sky-pixels" aria-hidden="true"></div>
+
+            <span class="cloud cloud-a" aria-hidden="true"></span>
+            <span class="cloud cloud-b" aria-hidden="true"></span>
+            <span class="cloud cloud-c" aria-hidden="true"></span>
+            <span class="cloud cloud-d" aria-hidden="true"></span>
+
+            <span class="pipe pipe-a" aria-hidden="true"></span>
+            <span class="pipe pipe-b" aria-hidden="true"></span>
+            <span class="pipe pipe-c" aria-hidden="true"></span>
+            <span class="pipe pipe-d" aria-hidden="true"></span>
+
+            <div v-for="(item, index) in trackLevels" :key="item.id" class="level-sign-wrap"
               :style="getNodeStyle(index)">
               <div class="node-stars" :class="{ dimmed: !item.isUnlocked }">
                 <span v-for="star in 3" :key="`${item.id}-${star}`" class="star"
@@ -184,482 +141,590 @@ onMounted(loadData)
                   ★
                 </span>
               </div>
-              <div v-if="Number(item.id) === Number(progressLevelId)" class="runner-marker"
-                :class="getRunnerSideClass(index)" aria-hidden="true">
-                <span class="runner-crew">
-                  <span class="crew-char crew-purple">
-                    <span class="crew-eyes eyes-white">
-                      <span class="eye"><i class="pupil"></i></span>
-                      <span class="eye"><i class="pupil"></i></span>
-                    </span>
-                  </span>
-                  <span class="crew-char crew-black">
-                    <span class="crew-eyes eyes-white small-gap">
-                      <span class="eye small"><i class="pupil small"></i></span>
-                      <span class="eye small"><i class="pupil small"></i></span>
-                    </span>
-                  </span>
-                  <span class="crew-char crew-orange">
-                    <span class="crew-eyes eyes-orange">
-                      <i class="pupil-dot"></i>
-                      <i class="pupil-dot"></i>
-                    </span>
-                  </span>
-                  <span class="crew-char crew-yellow">
-                    <span class="crew-face">
-                      <span class="crew-eyes eyes-yellow">
-                        <i class="pupil-dot"></i>
-                        <i class="pupil-dot"></i>
-                      </span>
-                      <span class="crew-mouth"></span>
-                    </span>
-                  </span>
-                </span>
-              </div>
-              <button class="level-node" :class="[getNodeStateClass(item), {
-                active: Number(item.id) === Number(selectedLevelId),
-              }]" type="button" @click="selectLevel(item)">
-                <span class="node-index">{{ index + 1 }}</span>
-              </button>
-              <div v-if="!item.isUnlocked" class="node-lock-badge" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                  <path
-                    d="M12 2a5 5 0 0 0-5 5v2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5m-3 7V7a3 3 0 1 1 6 0v2zm3 4a2 2 0 0 1 1 3.72V18h-2v-1.28A2 2 0 0 1 12 13" />
-                </svg>
-              </div>
-              <div class="level-node-name">{{ item.name }}</div>
-            </div>
-          </div>
-          <div v-else class="empty-map">当前赛道暂无关卡</div>
-        </section>
 
-        <section class="surface-card detail-panel" v-if="selectedLevel">
-          <div class="detail-head">
-            <h3>{{ selectedLevel.name }}</h3>
-            <el-tag :type="selectedLevel.isUnlocked ? 'success' : 'info'" effect="light">
-              {{ selectedLevel.isUnlocked ? '已解锁' : '未解锁' }}
-            </el-tag>
+              <button class="level-sign" :class="{
+                completed: item.isCompleted,
+                locked: !item.isUnlocked,
+              }" type="button" @click="openLevelDialog(item)">
+                <span class="sign-plate">
+                  <span class="piece-index">{{ item.order || index + 1 }}</span>
+                  <span v-if="!item.isUnlocked" class="sign-lock" aria-hidden="true">🔒</span>
+                </span>
+                <span class="sign-pole" aria-hidden="true"></span>
+                <span class="sign-base" aria-hidden="true"></span>
+              </button>
+
+              <div class="piece-name">{{ item.name }}</div>
+            </div>
+
+            <div v-if="progressLevelIndex >= 0" class="progress-truck" :style="getTruckStyle(progressLevelIndex)"
+              aria-hidden="true">
+              <span class="truck-body"></span>
+              <span class="truck-cab"></span>
+              <span class="truck-window"></span>
+              <span class="truck-wheel wheel-front"></span>
+              <span class="truck-wheel wheel-back"></span>
+            </div>
+
+            <div class="ground-line" aria-hidden="true"></div>
+            <div class="brick-floor" aria-hidden="true"></div>
           </div>
-          <p class="detail-desc">{{ selectedLevel.description }}</p>
-          <div class="meta-row">
-            <el-tag type="warning" effect="plain">奖励 {{ selectedLevel.rewardPoints }} 积分</el-tag>
-            <el-tag type="primary" effect="plain">题型 {{ typeTagMap[selectedLevel.type] || selectedLevel.type }}</el-tag>
-          </div>
-          <div class="meta-row">
-            <el-tag type="success" effect="plain">最佳星级 {{ getLevelStars(selectedLevel) }}/3</el-tag>
-            <el-tag :type="selectedLevel.isCompleted ? 'success' : 'info'" effect="plain">
-              {{ selectedLevel.isCompleted ? '已通关' : '未通关' }}
-            </el-tag>
-          </div>
-          <p v-if="!selectedLevel.isUnlocked" class="unlock-tip">完成同赛道上一关后可解锁当前关卡</p>
-          <el-button type="primary" :disabled="!selectedLevel.isUnlocked" @click="handleStart(selectedLevel)">
+        </div>
+
+        <div v-else class="empty-map">当前赛道暂无关卡</div>
+      </section>
+    </el-skeleton>
+
+    <el-dialog v-model="dialogVisible" width="460px" :title="selectedLevel?.name || '关卡信息'" class="level-dialog"
+      destroy-on-close>
+      <div v-if="selectedLevel" class="dialog-content">
+        <p class="dialog-desc">{{ selectedLevel.description }}</p>
+
+        <div class="dialog-stars">
+          <span>已存星级</span>
+          <span class="stars-inline">
+            <span v-for="star in 3" :key="`dialog-${star}`" class="star"
+              :class="{ filled: star <= getLevelStars(selectedLevel) }">
+              ★
+            </span>
+          </span>
+        </div>
+
+        <div class="dialog-meta">
+          <el-tag type="warning" effect="plain">奖励 {{ selectedLevel.rewardPoints }} 积分</el-tag>
+          <el-tag type="primary" effect="plain">题型 {{ typeTagMap[selectedLevel.type] || selectedLevel.type }}</el-tag>
+          <el-tag :type="selectedLevel.isUnlocked ? 'success' : 'info'" effect="plain">
+            {{ selectedLevel.isUnlocked ? '已解锁' : '未解锁' }}
+          </el-tag>
+        </div>
+
+        <p v-if="!selectedLevel.isUnlocked" class="unlock-tip">完成同赛道上一关后可解锁当前关卡</p>
+      </div>
+
+      <template #footer>
+        <div class="dialog-actions">
+          <el-button @click="dialogVisible = false">关闭</el-button>
+          <el-button type="primary" :disabled="!selectedLevel?.isUnlocked" @click="startChallengeFromDialog">
             开始挑战
           </el-button>
-        </section>
-      </div>
-    </el-skeleton>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <style scoped>
 .levels-page {
-  padding-bottom: 28px;
   display: grid;
   gap: 10px;
+  padding-bottom: 26px;
 }
 
 .track-goal {
   color: var(--text-sub);
 }
 
-.stage-layout {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 14px;
-}
-
-.level-map {
-  min-height: 560px;
-  padding: 14px;
+.pixel-stage {
   border: 1px solid var(--line-soft);
   border-radius: 18px;
-  background:
-    radial-gradient(circle at 9% 10%, rgba(123, 176, 83, 0.9) 0 48px, transparent 49px),
-    radial-gradient(circle at 85% 20%, rgba(118, 173, 78, 0.84) 0 42px, transparent 43px),
-    radial-gradient(circle at 15% 82%, rgba(120, 176, 82, 0.88) 0 56px, transparent 57px),
-    radial-gradient(circle at 90% 86%, rgba(119, 173, 79, 0.85) 0 50px, transparent 51px),
-    linear-gradient(180deg, #a8cf70 0%, #9fc767 100%);
+  padding: 10px;
   overflow: hidden;
 }
 
-.map-track {
-  position: relative;
-  min-height: 530px;
-  width: 100%;
+.stage-viewport {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 14px;
+  background: #6cc3ec;
+  padding-bottom: 8px;
 }
 
-.road-svg {
+.map-world {
+  position: relative;
+  height: 580px;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 28% 18%, rgba(255, 255, 255, 0.2) 0 78px, transparent 79px),
+    linear-gradient(180deg, #64c2ef 0%, #58bce9 52%, #74c8e9 100%);
+  overflow: hidden;
+}
+
+.sky-pixels {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.11) 1px, transparent 1px) 0 0 / 7px 7px,
+    radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px) 3px 3px / 9px 9px;
+  opacity: 0.4;
 }
 
-.road-edge {
-  fill: none;
-  stroke: #79ad4d;
-  stroke-width: 18;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.road-fill {
-  fill: none;
-  stroke: #efd49b;
-  stroke-width: 12;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.level-node-wrap {
+.cloud {
   position: absolute;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  width: 180px;
-  transform: translate(-50%, -50%);
-}
-
-.runner-marker {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 3;
-  pointer-events: none;
-  animation: crew-float 2.6s ease-in-out infinite;
-}
-
-.runner-marker.inner-left {
-  left: 18px;
-}
-
-.runner-marker.inner-right {
-  right: 18px;
-}
-
-.runner-crew {
-  position: relative;
-  display: inline-block;
-  width: 62px;
-  height: 46px;
-  animation: crew-breath 2.6s ease-in-out infinite;
-}
-
-.crew-char {
-  position: absolute;
-  bottom: 0;
-  transform-origin: center bottom;
-}
-
-.crew-eyes {
-  position: absolute;
-  display: flex;
-  align-items: center;
-}
-
-.eye {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #ffffff;
-  display: grid;
-  place-items: center;
-}
-
-.eye.small {
-  width: 4px;
-  height: 4px;
-}
-
-.pupil {
-  width: 2px;
-  height: 2px;
-  border-radius: 50%;
-  background: #2d2d2d;
-}
-
-.pupil.small {
-  width: 1.6px;
-  height: 1.6px;
-}
-
-.pupil-dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: #2d2d2d;
-}
-
-.crew-purple {
-  left: 8px;
-  width: 21px;
-  height: 46px;
-  background: #6c3ff5;
-  border-radius: 2px 2px 0 0;
-}
-
-.crew-black {
-  left: 28px;
-  width: 14px;
-  height: 36px;
-  background: #2d2d2d;
-  border-radius: 2px 2px 0 0;
-}
-
-.crew-orange {
-  left: 0;
-  width: 28px;
-  height: 23px;
-  background: #ff9b6b;
-  border-radius: 14px 14px 0 0;
-}
-
-.crew-yellow {
-  left: 36px;
-  width: 16px;
-  height: 26px;
-  background: #e8d754;
-  border-radius: 8px 8px 0 0;
-}
-
-.crew-purple .crew-eyes {
-  left: 7px;
-  top: 5px;
-  gap: 4px;
-}
-
-.crew-black .crew-eyes {
-  left: 4px;
-  top: 4px;
-  gap: 3px;
-}
-
-.crew-orange .crew-eyes {
-  left: 9px;
-  top: 10px;
-  gap: 4px;
-}
-
-.crew-face {
-  position: absolute;
-  left: 5px;
-  top: 4px;
-}
-
-.crew-yellow .crew-eyes {
-  position: relative;
-  left: 0;
-  top: 0;
-  gap: 3px;
-}
-
-.crew-mouth {
-  margin-top: 4px;
-  width: 9px;
-  height: 1.6px;
-  border-radius: 999px;
-  background: #2d2d2d;
-}
-
-@keyframes crew-float {
-
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-3px);
-  }
-}
-
-@keyframes crew-breath {
-
-  0%,
-  100% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.08);
-  }
-}
-
-.level-node {
-  width: 104px;
+  width: 190px;
   height: 58px;
-  border: 3px solid #f4f8eb;
-  border-radius: 999px;
-  position: relative;
-  background: linear-gradient(180deg, #bad68a 0%, #9fbe6f 100%);
-  color: #f8fff0;
-  font-size: 36px;
-  font-weight: 700;
-  cursor: pointer;
-  text-shadow: 0 2px 0 rgba(112, 139, 78, 0.8);
-  box-shadow: 0 6px 0 #bb8d53, 0 12px 0 #8a6133;
+  border-radius: 40px 48px 36px 42px;
+  background: #fff;
+  filter: drop-shadow(0 5px 0 rgba(95, 153, 188, 0.34));
+  --cloud-scale: 1;
+  animation: cloud-float 10s ease-in-out infinite;
 }
 
-.level-node::before {
+.cloud::before,
+.cloud::after {
   content: '';
   position: absolute;
-  left: 7px;
-  right: 7px;
-  top: 7px;
-  height: 18px;
-  border-radius: 999px;
-  background: rgba(237, 247, 210, 0.62);
+  background: #fff;
 }
 
-.node-index {
-  position: relative;
-  z-index: 1;
-  line-height: 0.95;
+.cloud::before {
+  width: 86px;
+  height: 54px;
+  left: 18px;
+  top: -24px;
+  border-radius: 60% 56% 52% 58%;
 }
 
-.level-node.active {
-  box-shadow: 0 0 0 4px rgba(244, 248, 233, 0.75), 0 6px 0 #bb8d53, 0 12px 0 #8a6133;
+.cloud::after {
+  width: 96px;
+  height: 48px;
+  right: 18px;
+  top: -18px;
+  border-radius: 58% 52% 56% 62%;
 }
 
-.level-node.state-completed {
-  border-color: #ffe39b;
-  background: linear-gradient(180deg, #c7e48f 0%, #afd374 100%);
-  box-shadow: 0 6px 0 #d6a05c, 0 12px 0 #8a6133;
+.cloud-a {
+  top: 64px;
+  left: 180px;
+  width: 230px;
+  --cloud-scale: 1.08;
 }
 
-.level-node.state-unlocked {
-  border-color: #f2f6e8;
-  background: linear-gradient(180deg, #afcf7c 0%, #95b963 100%);
-  box-shadow: 0 6px 0 #be945d, 0 12px 0 #7f5d3a;
+.cloud-a::before {
+  width: 98px;
+  height: 64px;
+  left: 28px;
+  top: -30px;
 }
 
-.level-node.state-locked {
-  border-color: #e4e7e0;
-  background: linear-gradient(180deg, #b5bfaa 0%, #9ca794 100%);
-  color: #f1f3ec;
-  text-shadow: 0 2px 0 rgba(117, 126, 108, 0.7);
-  box-shadow: 0 6px 0 #a48e6f, 0 12px 0 #7f6548;
+.cloud-a::after {
+  width: 112px;
+  height: 54px;
+  right: 24px;
+  top: -20px;
 }
 
-.node-lock-badge {
+.cloud-b {
+  top: 132px;
+  left: 860px;
+  width: 170px;
+  --cloud-scale: 0.94;
+}
+
+.cloud-b::before {
+  width: 74px;
+  height: 46px;
+  left: 16px;
+  top: -20px;
+}
+
+.cloud-b::after {
+  width: 80px;
+  height: 40px;
+  right: 16px;
+  top: -14px;
+}
+
+.cloud-c {
+  top: 96px;
+  left: 1500px;
+  width: 250px;
+  --cloud-scale: 1.14;
+}
+
+.cloud-c::before {
+  width: 108px;
+  height: 66px;
+  left: 26px;
+  top: -34px;
+}
+
+.cloud-c::after {
+  width: 122px;
+  height: 58px;
+  right: 22px;
+  top: -24px;
+}
+
+.cloud-d {
+  top: 148px;
+  left: 2070px;
+  width: 200px;
+  --cloud-scale: 1.02;
+}
+
+.cloud-d::before {
+  width: 82px;
+  height: 50px;
+  left: 20px;
+  top: -22px;
+}
+
+.cloud-d::after {
+  width: 95px;
+  height: 46px;
+  right: 18px;
+  top: -18px;
+}
+
+.pipe {
   position: absolute;
-  left: 50%;
-  bottom: 20px;
+  bottom: 104px;
+  width: 96px;
+  height: 146px;
+  background:
+    linear-gradient(90deg, #2f8f2f 0%, #55c12f 32%, #bcff3c 60%, #4baa28 100%);
+  border-left: 4px solid rgba(29, 96, 34, 0.55);
+  border-right: 4px solid rgba(28, 92, 31, 0.45);
+}
+
+.pipe::before {
+  content: '';
+  position: absolute;
+  top: -18px;
+  left: -11px;
+  width: 118px;
+  height: 24px;
+  border-radius: 2px;
+  background:
+    linear-gradient(90deg, #2b8b2b 0%, #5fcd31 28%, #d8ff56 62%, #4faf29 100%);
+  border-left: 3px solid rgba(29, 96, 34, 0.5);
+  border-right: 3px solid rgba(28, 92, 31, 0.45);
+}
+
+.pipe-a {
+  left: 260px;
+  height: 170px;
+}
+
+.pipe-b {
+  left: 740px;
+  height: 124px;
+}
+
+.pipe-c {
+  left: 1320px;
+  height: 186px;
+}
+
+.pipe-d {
+  left: 1870px;
+  height: 148px;
+}
+
+.level-sign-wrap {
+  position: absolute;
   transform: translateX(-50%);
-  width: 32px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  color: #f6f9f0;
-  background: rgba(77, 92, 65, 0.72);
-  border: 1px solid rgba(226, 235, 206, 0.45);
-  border-radius: 999px;
+  width: 150px;
+  height: 164px;
   z-index: 2;
-}
-
-.node-lock-badge svg {
-  width: 14px;
-  height: 14px;
-  fill: currentColor;
-}
-
-.level-node-name {
-  max-width: 176px;
-  color: #f4faeb;
-  background: rgba(88, 132, 56, 0.5);
-  border: 1px solid rgba(218, 238, 180, 0.45);
-  border-radius: 10px;
-  padding: 5px 10px;
-  font-size: 13px;
-  font-weight: 500;
 }
 
 .node-stars {
   position: absolute;
-  top: -36px;
+  bottom: 108px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
+  width: 108px;
   justify-content: center;
-  align-items: center;
-  width: 110px;
-  gap: 6px;
-  padding: 0;
+  gap: 4px;
 }
 
 .node-stars.dimmed {
-  opacity: 0.6;
+  opacity: 0.56;
 }
 
 .star {
-  font-size: 25px;
+  font-size: 24px;
   line-height: 1;
-  color: #f4f6ef;
+  color: #f3f7f0;
   text-shadow:
-    -2px 0 #88ae5e,
-    2px 0 #88ae5e,
-    0 -2px #88ae5e,
-    0 2px #88ae5e,
-    0 3px 0 rgba(255, 255, 255, 0.55);
+    -2px 0 #5ca03f,
+    2px 0 #5ca03f,
+    0 -2px #5ca03f,
+    0 2px #5ca03f;
 }
 
 .star.filled {
-  color: #ffd84a;
+  color: #ffd84d;
   text-shadow:
-    -2px 0 #7cae4e,
-    2px 0 #7cae4e,
-    0 -2px #7cae4e,
-    0 2px #7cae4e,
-    0 2px 0 #fff2b6;
+    -2px 0 #568f38,
+    2px 0 #568f38,
+    0 -2px #568f38,
+    0 2px #568f38;
+}
+
+.level-sign {
+  width: 100px;
+  height: 96px;
+  border: none;
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  background: transparent;
+  cursor: pointer;
+}
+
+.sign-plate {
+  position: absolute;
+  top: 0;
+  left: 7px;
+  width: 86px;
+  height: 56px;
+  border-radius: 12px;
+  border: 3px solid #f3f8e9;
+  background: linear-gradient(180deg, #b7dc77 0%, #8eb95a 72%, #77a04d 100%);
+  color: #f8fff0;
+  text-shadow: 0 2px 0 rgba(86, 113, 50, 0.78);
+  box-shadow: 0 5px 0 #8a6133;
+  display: grid;
+  place-items: center;
+}
+
+.sign-plate::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 6px;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(241, 251, 220, 0.66);
+}
+
+.sign-pole {
+  position: absolute;
+  left: 48px;
+  top: 53px;
+  width: 10px;
+  height: 32px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #cca26b 0%, #936737 100%);
+  box-shadow: inset 2px 0 0 rgba(255, 227, 176, 0.4);
+}
+
+.sign-base {
+  position: absolute;
+  left: 36px;
+  top: 82px;
+  width: 34px;
+  height: 10px;
+  border-radius: 999px;
+  background: #7b532b;
+}
+
+.level-sign.completed .sign-plate {
+  border-color: #ffe6a5;
+  background: linear-gradient(180deg, #c8e98c 0%, #9cc966 72%, #80ab4f 100%);
+}
+
+.level-sign.locked .sign-plate {
+  border-color: #dde3d2;
+  background: linear-gradient(180deg, #b8c3ad 0%, #9aa491 72%, #818a79 100%);
+  box-shadow: 0 5px 0 #6d5942;
+}
+
+.sign-lock {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.piece-index {
+  position: relative;
+  z-index: 1;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.progress-truck {
+  position: absolute;
+  transform: translateX(-50%);
+  width: 102px;
+  height: 52px;
+  z-index: 4;
+  animation: truck-drive 1.1s linear infinite;
+}
+
+.truck-body {
+  position: absolute;
+  left: 0;
+  bottom: 10px;
+  width: 64px;
+  height: 24px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #f26a37 0%, #d14f24 100%);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.22);
+}
+
+.truck-cab {
+  position: absolute;
+  left: 54px;
+  bottom: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 5px 7px 4px 4px;
+  background: linear-gradient(180deg, #ffd95f 0%, #ecbc3f 100%);
+}
+
+.truck-window {
+  position: absolute;
+  left: 60px;
+  bottom: 26px;
+  width: 17px;
+  height: 10px;
+  border-radius: 3px;
+  background: #b7efff;
+}
+
+.truck-wheel {
+  position: absolute;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #2f2f2f;
+  border: 3px solid #595959;
+  animation: truck-wheel-spin 0.7s linear infinite;
+}
+
+.wheel-front {
+  left: 14px;
+}
+
+.wheel-back {
+  left: 66px;
+}
+
+@keyframes truck-drive {
+
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  50% {
+    transform: translateX(-50%) translateY(-2px);
+  }
+}
+
+@keyframes truck-wheel-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.piece-name {
+  position: absolute;
+  left: 50%;
+  bottom: 136px;
+  transform: translateX(-50%);
+  max-width: 144px;
+  text-align: center;
+  color: #f4faeb;
+  background: rgba(82, 126, 49, 0.5);
+  border: 1px solid rgba(210, 233, 173, 0.42);
+  border-radius: 10px;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@keyframes cloud-float {
+
+  0%,
+  100% {
+    transform: translateX(0) translateY(0) scale(var(--cloud-scale));
+  }
+
+  50% {
+    transform: translateX(10px) translateY(-5px) scale(calc(var(--cloud-scale) + 0.03));
+  }
+}
+
+.ground-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 94px;
+  height: 10px;
+  background: linear-gradient(180deg, #6ece2f 0%, #58b727 100%);
+  box-shadow: 0 2px 0 #46951f;
+}
+
+.brick-floor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 94px;
+  background:
+    repeating-linear-gradient(0deg,
+      #a65a2e 0,
+      #a65a2e 12px,
+      #8f4928 12px,
+      #8f4928 16px),
+    repeating-linear-gradient(90deg,
+      rgba(255, 179, 113, 0.28) 0,
+      rgba(255, 179, 113, 0.28) 22px,
+      rgba(120, 58, 29, 0.24) 22px,
+      rgba(120, 58, 29, 0.24) 24px);
+  border-top: 3px solid #d27b42;
 }
 
 .empty-map {
-  height: 100%;
-  min-height: 320px;
+  min-height: 300px;
   display: grid;
   place-items: center;
   color: var(--text-sub);
 }
 
-.detail-panel {
-  padding: 22px;
-  border: 1px solid var(--line-soft);
+.dialog-content {
   display: grid;
   gap: 12px;
 }
 
-.detail-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.detail-head h3 {
-  color: var(--text-title);
-  font-size: 20px;
-}
-
-.detail-desc {
+.dialog-desc {
+  margin: 0;
   color: var(--text-sub);
 }
 
-.meta-row {
+.dialog-stars {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-title);
+  font-weight: 600;
+}
+
+.stars-inline {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.dialog-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .unlock-tip {
@@ -667,65 +732,41 @@ onMounted(loadData)
   color: #6a7f99;
 }
 
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 @media (max-width: 900px) {
-  .stage-layout {
-    grid-template-columns: 1fr;
+  .pixel-stage {
+    padding: 8px;
   }
 
-  .level-map {
-    min-height: 430px;
-    padding: 10px;
+  .map-world {
+    height: 520px;
   }
 
-  .map-track {
-    min-height: 460px;
+  .level-sign-wrap {
+    width: 132px;
   }
 
-  .road-svg {
-    inset: 0;
-    width: 100%;
-    height: 100%;
+  .level-sign {
+    width: 90px;
+    height: 86px;
   }
 
-  .road-edge {
-    stroke-width: 20;
+  .progress-truck {
+    width: 84px;
+    height: 44px;
   }
 
-  .road-fill {
-    stroke-width: 15;
-  }
-
-  .level-node-wrap {
-    width: 148px;
-  }
-
-  .runner-marker {
-    top: -42px;
-  }
-
-  .runner-text {
-    display: none;
-  }
-
-  .level-node {
-    width: 88px;
-    height: 52px;
+  .piece-index {
     font-size: 30px;
   }
 
-  .node-stars {
-    top: -30px;
-    width: 96px;
-    gap: 4px;
-  }
-
-  .level-node-name {
-    max-width: 180px;
-    font-size: 12px;
-  }
-
   .star {
-    font-size: 22px;
+    font-size: 21px;
   }
 }
 </style>
