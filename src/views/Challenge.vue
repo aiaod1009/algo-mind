@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useLevelStore } from '../stores/level'
@@ -13,7 +13,12 @@ const errorStore = useErrorStore()
 const userStore = useUserStore()
 
 const answer = ref('')
+const stdinInput = ref('')
+const language = ref('cpp')
 const loading = ref(false)
+const attemptsInRun = ref(0)
+const startTimestamp = ref(Date.now())
+const DRAFT_KEY_PREFIX = 'challenge-draft-'
 
 const currentLevelId = computed(() => Number(route.params.id))
 const currentLevel = computed(() => levelStore.findLevelById(currentLevelId.value))
@@ -23,6 +28,47 @@ const typeTagMap = {
   judge: '判断题',
   fill: '填空题',
   code: '代码题',
+}
+
+const practiceRuleText = computed(() => `学生多次练习最高分达到 ${currentLevel.value?.rewardPoints || 0} 分`)
+const practiceWindowText = computed(() => {
+  const now = new Date()
+  const end = new Date(now.getTime() + 9 * 24 * 60 * 60 * 1000)
+  return `${now.toLocaleDateString()} 00:00 至 ${end.toLocaleDateString()} 23:59`
+})
+const maxAttempts = computed(() => 5)
+
+const getDraftKey = () => `${DRAFT_KEY_PREFIX}${currentLevelId.value}`
+
+const loadDraft = () => {
+  const raw = localStorage.getItem(getDraftKey())
+  if (!raw) return
+  try {
+    const draft = JSON.parse(raw)
+    if (draft.answer != null) {
+      answer.value = draft.answer
+    }
+    if (typeof draft.stdinInput === 'string') {
+      stdinInput.value = draft.stdinInput
+    }
+    if (typeof draft.language === 'string') {
+      language.value = draft.language
+    }
+  } catch (error) {
+    console.warn('草稿读取失败。', error)
+  }
+}
+
+const saveDraft = () => {
+  localStorage.setItem(
+    getDraftKey(),
+    JSON.stringify({
+      answer: answer.value,
+      stdinInput: stdinInput.value,
+      language: language.value,
+      savedAt: Date.now(),
+    }),
+  )
 }
 
 const resetAnswer = () => {
@@ -51,7 +97,11 @@ const loadLevel = async () => {
     router.push('/levels')
     return
   }
+  attemptsInRun.value = 0
+  startTimestamp.value = Date.now()
   resetAnswer()
+  stdinInput.value = ''
+  loadDraft()
 }
 
 const validateAnswer = () => {
@@ -69,8 +119,13 @@ const handleSubmit = async () => {
   }
 
   loading.value = true
+  attemptsInRun.value += 1
   try {
-    const result = await levelStore.submitAnswer(currentLevelId.value, answer.value)
+    const timeMs = Date.now() - startTimestamp.value
+    const result = await levelStore.submitAnswer(currentLevelId.value, answer.value, {
+      attempts: attemptsInRun.value,
+      timeMs,
+    })
     if (!result) {
       ElMessage.error('提交失败，请稍后重试')
       return
@@ -78,8 +133,10 @@ const handleSubmit = async () => {
 
     if (result.correct) {
       userStore.addPoints(result.pointsEarned)
+      localStorage.removeItem(getDraftKey())
+      const starsText = '★'.repeat(result.starsEarned || 0) + '☆'.repeat(3 - (result.starsEarned || 0))
       await ElMessageBox.alert(
-        `回答正确，获得 ${result.pointsEarned} 积分${result.nextLevelUnlocked ? '，下一关已解锁。' : '。'}`,
+        `回答正确，获得 ${result.pointsEarned} 积分。\n本次星级：${starsText}（${result.starsEarned || 0}/3），历史最佳：${result.bestStars || 0}/3${result.nextLevelUnlocked ? '。\n下一关已解锁。' : '。'}`,
         '挑战成功',
         { type: 'success' },
       )
@@ -102,84 +159,272 @@ const handleSubmit = async () => {
   }
 }
 
+const handleSaveDraft = () => {
+  saveDraft()
+  ElMessage.success('已保存当前作答')
+}
+
+const handleAutoRun = () => {
+  ElMessage.success('已执行快速检查（演示模式）')
+}
+
 onMounted(loadLevel)
+watch(currentLevelId, loadLevel)
 </script>
 
 <template>
   <div class="page-container challenge-page" v-if="currentLevel">
-    <div class="title-row">
-      <h2 class="section-title">{{ currentLevel.name }}</h2>
-      <el-tag type="primary" effect="plain">{{ typeTagMap[currentLevel.type] || currentLevel.type }}</el-tag>
+    <div class="challenge-top">
+      <div class="top-title">AI 实践</div>
+      <div class="top-action-group">
+        <el-button plain @click="router.push('/errors')">作答记录</el-button>
+        <el-button type="primary" :loading="loading" @click="handleSubmit">开始评估</el-button>
+      </div>
     </div>
-    <el-card class="surface-card challenge-card" shadow="never">
-      <div class="question">{{ currentLevel.question }}</div>
+    <div class="challenge-layout">
+      <aside class="surface-card task-panel">
+        <h3>任务要求</h3>
+        <div class="task-name">{{ currentLevel.name }}</div>
+        <p class="task-rule">达标标准：{{ practiceRuleText }}</p>
+        <p class="task-rule">练习时间：{{ practiceWindowText }}</p>
+        <p class="task-rule">可作答次数：{{ maxAttempts }} 次</p>
+        <div class="task-section-title">任务说明</div>
+        <p class="task-desc">{{ currentLevel.description }}</p>
+        <p class="task-desc">{{ currentLevel.question }}</p>
+        <div class="task-tags">
+          <el-tag type="primary" effect="plain">{{ typeTagMap[currentLevel.type] || currentLevel.type }}</el-tag>
+          <el-tag type="warning" effect="plain">奖励 {{ currentLevel.rewardPoints }} 分</el-tag>
+        </div>
+      </aside>
 
-      <el-radio-group v-if="currentLevel.type === 'single'" v-model="answer" class="option-group">
-        <el-radio v-for="item in currentLevel.options" :key="item" :value="item">{{ item }}</el-radio>
-      </el-radio-group>
+      <section class="surface-card editor-panel">
+        <div class="editor-head">
+          <h3>代码编辑</h3>
+          <div class="editor-head-actions">
+            <el-button text @click="handleAutoRun">自动运行</el-button>
+            <el-button text @click="handleSaveDraft">保存作答</el-button>
+          </div>
+        </div>
 
-      <el-checkbox-group v-else-if="currentLevel.type === 'multi'" v-model="answer" class="option-group">
-        <el-checkbox v-for="item in currentLevel.options" :key="item" :value="item">{{ item }}</el-checkbox>
-      </el-checkbox-group>
+        <div class="editor-shell">
+          <div class="editor-toolbar">
+            <el-select v-model="language" size="small" class="lang-select">
+              <el-option label="C++" value="cpp" />
+              <el-option label="Java" value="java" />
+              <el-option label="Python" value="python" />
+              <el-option label="JavaScript" value="javascript" />
+            </el-select>
+            <div class="toolbar-right">评测模式</div>
+          </div>
 
-      <el-radio-group v-else-if="currentLevel.type === 'judge'" v-model="answer" class="option-group">
-        <el-radio v-for="item in currentLevel.options || ['正确', '错误']" :key="item" :value="item">
-          {{ item }}
-        </el-radio>
-      </el-radio-group>
+          <div class="answer-wrap" v-if="currentLevel.type === 'single'">
+            <el-radio-group v-model="answer" class="option-group">
+              <el-radio v-for="item in currentLevel.options" :key="item" :value="item">{{ item }}</el-radio>
+            </el-radio-group>
+          </div>
 
-      <div v-else-if="currentLevel.type === 'fill'" class="input-wrap">
-        <el-input v-model="answer" type="textarea" :rows="3" placeholder="请输入你的答案，例如：f(n-1)+f(n-2)" />
-      </div>
+          <div class="answer-wrap" v-else-if="currentLevel.type === 'multi'">
+            <el-checkbox-group v-model="answer" class="option-group">
+              <el-checkbox v-for="item in currentLevel.options" :key="item" :value="item">{{ item }}</el-checkbox>
+            </el-checkbox-group>
+          </div>
 
-      <div v-else class="input-wrap">
-        <el-input v-model="answer" type="textarea" :rows="8" placeholder="请输入代码或伪代码，建议包含关键逻辑和注释。" />
-      </div>
+          <div class="answer-wrap" v-else-if="currentLevel.type === 'judge'">
+            <el-radio-group v-model="answer" class="option-group">
+              <el-radio v-for="item in currentLevel.options || ['正确', '错误']" :key="item" :value="item">
+                {{ item }}
+              </el-radio>
+            </el-radio-group>
+          </div>
 
-      <div class="action-row">
-        <el-button @click="router.push('/levels')">返回关卡</el-button>
-        <el-button type="primary" :loading="loading" @click="handleSubmit">提交答案</el-button>
-      </div>
-    </el-card>
+          <div class="answer-wrap" v-else-if="currentLevel.type === 'fill'">
+            <el-input v-model="answer" type="textarea" :rows="5" placeholder="请输入你的答案，例如：f(n-1)+f(n-2)" />
+          </div>
+
+          <div class="answer-wrap" v-else>
+            <el-input v-model="answer" type="textarea" :rows="16" class="code-input"
+              placeholder="请输入代码或伪代码，建议包含关键逻辑和注释。" />
+          </div>
+        </div>
+
+        <div class="stdin-box">
+          <div class="stdin-title">程序键盘读取输入</div>
+          <el-input v-model="stdinInput" type="textarea" :rows="4" placeholder="请输入测试输入" />
+        </div>
+
+        <div class="action-row">
+          <el-button @click="router.push('/levels')">返回关卡</el-button>
+          <el-button type="primary" @click="handleSubmit" :loading="loading">提交答案</el-button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .challenge-page {
   padding-bottom: 28px;
+  display: grid;
+  gap: 14px;
 }
 
-.title-row {
+.challenge-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.challenge-card {
-  padding: 24px;
-  border: 1px solid var(--line-soft);
+.top-title {
+  color: var(--text-title);
+  font-size: 28px;
+  font-weight: 700;
 }
 
-.question {
-  font-size: 19px;
-  font-weight: 700;
+.top-action-group {
+  display: flex;
+  gap: 10px;
+}
+
+.challenge-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 14px;
+}
+
+.task-panel {
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  display: grid;
+  gap: 8px;
+}
+
+.task-panel h3 {
   color: var(--text-title);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.task-name {
+  color: var(--brand-blue-strong);
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.task-rule,
+.task-desc {
+  color: var(--text-sub);
+  margin: 0;
+}
+
+.task-section-title {
+  margin-top: 10px;
+  color: var(--text-title);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.task-tags {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.editor-panel {
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  display: grid;
+  gap: 14px;
+}
+
+.editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.editor-head h3 {
+  color: var(--text-title);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.editor-head-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.editor-shell {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.editor-toolbar {
+  height: 38px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f2f7ff;
+}
+
+.lang-select {
+  width: 120px;
+}
+
+.toolbar-right {
+  color: var(--text-sub);
+  font-size: 13px;
+}
+
+.answer-wrap {
+  min-height: 280px;
+  padding: 16px;
 }
 
 .option-group {
-  margin-top: 20px;
   display: grid;
   gap: 12px;
 }
 
-.input-wrap {
-  margin-top: 20px;
+.code-input :deep(textarea) {
+  font-family: 'Consolas', 'JetBrains Mono', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.stdin-box {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 12px;
+  background: #f8fbff;
+  display: grid;
+  gap: 8px;
+}
+
+.stdin-title {
+  color: var(--text-title);
+  font-weight: 700;
 }
 
 .action-row {
-  margin-top: 24px;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+@media (max-width: 980px) {
+  .challenge-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .task-panel h3,
+  .editor-head h3 {
+    font-size: 22px;
+  }
 }
 </style>

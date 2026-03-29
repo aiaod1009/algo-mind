@@ -49,6 +49,44 @@ const MOCK_LEVELS = [
   },
   {
     id: 4,
+    track: 'algo',
+    order: 4,
+    name: 'A4 滑动窗口核心',
+    isUnlocked: false,
+    rewardPoints: 32,
+    type: 'multi',
+    question: '关于滑动窗口算法，哪些说法正确？',
+    options: ['常用于子数组/子串最值问题', '窗口左右边界都可能移动', '一定要排序数组', '可配合哈希表维护频次'],
+    answer: ['常用于子数组/子串最值问题', '窗口左右边界都可能移动', '可配合哈希表维护频次'],
+    description: '理解窗口收缩与扩张',
+  },
+  {
+    id: 5,
+    track: 'algo',
+    order: 5,
+    name: 'A5 二分模板编程',
+    isUnlocked: false,
+    rewardPoints: 38,
+    type: 'code',
+    question: '实现二分查找模板，包含 left、right、mid 和命中返回下标逻辑。',
+    answer: ['left', 'right', 'mid', 'while', 'return'],
+    description: '把思路落到可复用代码',
+  },
+  {
+    id: 6,
+    track: 'algo',
+    order: 6,
+    name: 'A6 递归终止条件',
+    isUnlocked: false,
+    rewardPoints: 42,
+    type: 'judge',
+    question: '递归函数若没有终止条件，通常会导致栈溢出。',
+    options: ['正确', '错误'],
+    answer: '正确',
+    description: '强化递归边界意识',
+  },
+  {
+    id: 7,
     track: 'ds',
     order: 1,
     name: 'D1 栈与括号匹配',
@@ -61,7 +99,7 @@ const MOCK_LEVELS = [
     description: '理解栈的后进先出特性',
   },
   {
-    id: 5,
+    id: 8,
     track: 'ds',
     order: 2,
     name: 'D2 哈希冲突策略',
@@ -74,7 +112,7 @@ const MOCK_LEVELS = [
     description: '掌握常见冲突处理方案',
   },
   {
-    id: 6,
+    id: 9,
     track: 'ds',
     order: 3,
     name: 'D3 并查集代码骨架',
@@ -86,7 +124,44 @@ const MOCK_LEVELS = [
     description: '提升结构型题目实现能力',
   },
   {
-    id: 7,
+    id: 10,
+    track: 'ds',
+    order: 4,
+    name: 'D4 队列操作模拟',
+    isUnlocked: false,
+    rewardPoints: 34,
+    type: 'fill',
+    question: '循环队列中，判空条件通常是 front == ________。',
+    answer: 'rear',
+    description: '巩固队列边界状态',
+  },
+  {
+    id: 11,
+    track: 'ds',
+    order: 5,
+    name: 'D5 链表反转编程',
+    isUnlocked: false,
+    rewardPoints: 40,
+    type: 'code',
+    question: '编写单链表反转核心逻辑，至少包含 prev、curr、next 三个指针。',
+    answer: ['prev', 'curr', 'next', 'while', 'return'],
+    description: '训练指针操作稳定性',
+  },
+  {
+    id: 12,
+    track: 'ds',
+    order: 6,
+    name: 'D6 堆结构判断',
+    isUnlocked: false,
+    rewardPoints: 44,
+    type: 'single',
+    question: '数组表示的完全二叉树中，父节点 i 的左孩子下标通常是？',
+    options: ['2*i', '2*i+1', 'i+1', 'i/2'],
+    answer: '2*i+1',
+    description: '掌握堆的下标映射',
+  },
+  {
+    id: 13,
     track: 'contest',
     order: 1,
     name: 'C1 贪心选择判断',
@@ -99,7 +174,7 @@ const MOCK_LEVELS = [
     description: '练习竞赛常见贪心模型',
   },
   {
-    id: 8,
+    id: 14,
     track: 'contest',
     order: 2,
     name: 'C2 区间调度多选',
@@ -112,7 +187,7 @@ const MOCK_LEVELS = [
     description: '强化多策略组合思维',
   },
   {
-    id: 9,
+    id: 15,
     track: 'contest',
     order: 3,
     name: 'C3 限时模拟复盘',
@@ -123,9 +198,52 @@ const MOCK_LEVELS = [
     answer: '关键约束',
     description: '建立赛后复盘习惯',
   },
+  {
+    id: 16,
+    track: 'contest',
+    order: 4,
+    name: 'C4 差分数组应用',
+    isUnlocked: false,
+    rewardPoints: 42,
+    type: 'single',
+    question: '处理大量区间加法并最终还原数组，优先使用哪种技巧？',
+    options: ['前缀和', '差分数组', '单调栈', '并查集'],
+    answer: '差分数组',
+    description: '提升数据处理效率',
+  },
+  {
+    id: 17,
+    track: 'contest',
+    order: 5,
+    name: 'C5 快速输入输出编程',
+    isUnlocked: false,
+    rewardPoints: 48,
+    type: 'code',
+    question: '写出竞赛常用快速读入模板，至少包含读取循环和输出结果逻辑。',
+    answer: ['for', 'input', 'print'],
+    description: '减少IO成为瓶颈',
+  },
+  {
+    id: 18,
+    track: 'contest',
+    order: 6,
+    name: 'C6 复杂度压测判断',
+    isUnlocked: false,
+    rewardPoints: 52,
+    type: 'judge',
+    question: '当 n=1e5 时，O(n^2) 的算法在竞赛限时内通常不可接受。',
+    options: ['正确', '错误'],
+    answer: '正确',
+    description: '建立复杂度直觉',
+  },
 ]
 
 const LOCAL_LEVEL_KEY = 'levels'
+const STAR_RULES = {
+  twoStarMaxAttempts: 2,
+  threeStarMaxAttempts: 1,
+  defaultTargetTimeMs: 90000,
+}
 
 const readLocalLevels = () => {
   const raw = localStorage.getItem(LOCAL_LEVEL_KEY)
@@ -139,6 +257,43 @@ const readLocalLevels = () => {
 
 const saveLocalLevels = (levels) => {
   localStorage.setItem(LOCAL_LEVEL_KEY, JSON.stringify(levels))
+}
+
+const mergeLocalWithMockLevels = (localLevels) => {
+  if (!Array.isArray(localLevels) || !localLevels.length) {
+    return [...MOCK_LEVELS]
+  }
+  const localMap = new Map(localLevels.map((item) => [Number(item.id), item]))
+  const merged = MOCK_LEVELS.map((mockItem) => {
+    const localItem = localMap.get(Number(mockItem.id))
+    if (!localItem) return { ...mockItem }
+    return {
+      ...mockItem,
+      ...localItem,
+      id: mockItem.id,
+      track: mockItem.track,
+      order: mockItem.order,
+      name: mockItem.name,
+      question: mockItem.question,
+      description: mockItem.description,
+      type: mockItem.type,
+      options: mockItem.options,
+      answer: mockItem.answer,
+      rewardPoints: mockItem.rewardPoints,
+    }
+  })
+
+  const extras = localLevels.filter((item) => !MOCK_LEVELS.some((base) => Number(base.id) === Number(item.id)))
+  return [...merged, ...extras]
+}
+
+const normalizeNumber = (value, fallback = 0) => {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : fallback
+}
+
+const clampStars = (value) => {
+  return Math.max(0, Math.min(3, Math.floor(normalizeNumber(value, 0))))
 }
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase()
@@ -155,6 +310,20 @@ const compareCodeAnswer = (userAnswer, rightAnswer) => {
   return rightAnswer.every((keyword) => text.includes(normalizeText(keyword)))
 }
 
+const calculateStars = ({ attempts, timeMs, targetTimeMs }) => {
+  const safeAttempts = Math.max(1, Math.floor(normalizeNumber(attempts, 1)))
+  const safeTime = Math.max(0, normalizeNumber(timeMs, 0))
+  const safeTargetTime = Math.max(1000, normalizeNumber(targetTimeMs, STAR_RULES.defaultTargetTimeMs))
+
+  if (safeAttempts <= STAR_RULES.threeStarMaxAttempts && safeTime <= safeTargetTime) {
+    return 3
+  }
+  if (safeAttempts <= STAR_RULES.twoStarMaxAttempts) {
+    return 2
+  }
+  return 1
+}
+
 export const useLevelStore = defineStore('level', () => {
   const levels = ref([])
   const tracks = ref(TRACKS)
@@ -166,6 +335,12 @@ export const useLevelStore = defineStore('level', () => {
       order: Number(item.order || 1),
       type: item.type || 'single',
       isUnlocked: Boolean(item.isUnlocked),
+      stars: clampStars(item.stars ?? item.bestStars ?? 0),
+      bestStars: clampStars(item.bestStars ?? item.stars ?? 0),
+      isCompleted: Boolean(item.isCompleted || clampStars(item.bestStars ?? item.stars ?? 0) > 0),
+      attemptCount: Math.max(0, Math.floor(normalizeNumber(item.attemptCount, 0))),
+      bestTimeMs: item.bestTimeMs == null ? null : Math.max(0, Math.floor(normalizeNumber(item.bestTimeMs, 0))),
+      targetTimeMs: Math.max(1000, Math.floor(normalizeNumber(item.targetTimeMs, STAR_RULES.defaultTargetTimeMs))),
     }))
   }
 
@@ -173,7 +348,7 @@ export const useLevelStore = defineStore('level', () => {
     try {
       const res = await api.get('/levels')
       if (res.data?.code === 0 && Array.isArray(res.data.data)) {
-        levels.value = normalizeLevels(res.data.data)
+        levels.value = normalizeLevels(mergeLocalWithMockLevels(res.data.data))
         saveLocalLevels(levels.value)
         return
       }
@@ -182,8 +357,9 @@ export const useLevelStore = defineStore('level', () => {
     }
 
     const local = readLocalLevels()
-    levels.value = normalizeLevels(local || MOCK_LEVELS)
-    if (!local) {
+    const mergedLocal = mergeLocalWithMockLevels(local)
+    levels.value = normalizeLevels(mergedLocal)
+    if (!local || mergedLocal.length !== local.length) {
       saveLocalLevels(levels.value)
     }
   }
@@ -210,9 +386,9 @@ export const useLevelStore = defineStore('level', () => {
     return true
   }
 
-  const submitAnswer = async (levelId, answer) => {
+  const submitAnswer = async (levelId, answer, meta = {}) => {
     try {
-      const res = await api.post('/submit', { levelId, answer })
+      const res = await api.post('/submit', { levelId, answer, meta })
       if (res.data?.code === 0) {
         return res.data.data
       }
@@ -222,6 +398,8 @@ export const useLevelStore = defineStore('level', () => {
 
     const level = findLevelById(levelId)
     if (!level) return null
+
+    level.attemptCount = Math.max(0, Math.floor(normalizeNumber(level.attemptCount, 0))) + 1
 
     let correct = false
     if (level.type === 'multi') {
@@ -235,19 +413,42 @@ export const useLevelStore = defineStore('level', () => {
     }
 
     if (correct) {
+      const attemptsInRun = Math.max(1, Math.floor(normalizeNumber(meta.attempts, 1)))
+      const timeMs = Math.max(0, Math.floor(normalizeNumber(meta.timeMs, 0)))
+      const starsEarned = calculateStars({
+        attempts: attemptsInRun,
+        timeMs,
+        targetTimeMs: level.targetTimeMs,
+      })
+      const currentBestStars = clampStars(level.bestStars)
+
+      level.stars = starsEarned
+      level.bestStars = Math.max(currentBestStars, starsEarned)
+      level.isCompleted = true
+      if (timeMs > 0) {
+        level.bestTimeMs = level.bestTimeMs == null ? timeMs : Math.min(level.bestTimeMs, timeMs)
+      }
+
       const nextLevelUnlocked = unlockNextLevel(levelId)
       saveLocalLevels(levels.value)
       return {
         correct: true,
         pointsEarned: level.rewardPoints,
         nextLevelUnlocked,
+        starsEarned,
+        bestStars: level.bestStars,
+        timeMs,
       }
     }
+
+    saveLocalLevels(levels.value)
 
     return {
       correct: false,
       pointsEarned: 0,
       nextLevelUnlocked: false,
+      starsEarned: 0,
+      bestStars: clampStars(level.bestStars),
     }
   }
 
