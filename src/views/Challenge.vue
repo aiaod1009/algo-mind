@@ -18,6 +18,7 @@ const language = ref('cpp')
 const loading = ref(false)
 const attemptsInRun = ref(0)
 const startTimestamp = ref(Date.now())
+const evaluationResult = ref(null)
 const DRAFT_KEY_PREFIX = 'challenge-draft-'
 
 const currentLevelId = computed(() => Number(route.params.id))
@@ -37,6 +38,20 @@ const practiceWindowText = computed(() => {
   return `${now.toLocaleDateString()} 00:00 至 ${end.toLocaleDateString()} 23:59`
 })
 const maxAttempts = computed(() => 5)
+const isCodeChallenge = computed(() => currentLevel.value?.type === 'code')
+const submitButtonText = computed(() => (isCodeChallenge.value ? 'AI评估' : '开始评估'))
+
+const normalizeEvaluationResult = (result) => {
+  if (!result) return null
+  const scoreNumber = Number(result.score)
+  return {
+    score: Number.isFinite(scoreNumber) ? Math.max(0, Math.min(100, Math.round(scoreNumber))) : null,
+    output: String(result.output ?? result.stdout ?? result.runOutput ?? '').trim(),
+    analysis: String(result.analysis ?? result.aiAnalysis ?? result.feedback ?? '').trim(),
+    pointsEarned: Number(result.pointsEarned || 0),
+    updatedAt: new Date().toLocaleString(),
+  }
+}
 
 const getDraftKey = () => `${DRAFT_KEY_PREFIX}${currentLevelId.value}`
 
@@ -99,6 +114,7 @@ const loadLevel = async () => {
   }
   attemptsInRun.value = 0
   startTimestamp.value = Date.now()
+  evaluationResult.value = null
   resetAnswer()
   stdinInput.value = ''
   loadDraft()
@@ -125,9 +141,20 @@ const handleSubmit = async () => {
     const result = await levelStore.submitAnswer(currentLevelId.value, answer.value, {
       attempts: attemptsInRun.value,
       timeMs,
+      language: language.value,
+      stdinInput: stdinInput.value,
     })
     if (!result) {
       ElMessage.error('提交失败，请稍后重试')
+      return
+    }
+
+    if (isCodeChallenge.value) {
+      evaluationResult.value = normalizeEvaluationResult(result)
+      if (result.pointsEarned > 0) {
+        userStore.addPoints(result.pointsEarned)
+      }
+      ElMessage.success('AI评估完成')
       return
     }
 
@@ -178,7 +205,7 @@ watch(currentLevelId, loadLevel)
       <div class="top-title">AI 实践</div>
       <div class="top-action-group">
         <el-button plain @click="router.push('/errors')">作答记录</el-button>
-        <el-button type="primary" :loading="loading" @click="handleSubmit">开始评估</el-button>
+        <el-button type="primary" :loading="loading" @click="handleSubmit">{{ submitButtonText }}</el-button>
       </div>
     </div>
     <div class="challenge-layout">
@@ -206,55 +233,77 @@ watch(currentLevelId, loadLevel)
           </div>
         </div>
 
-        <div class="editor-shell">
-          <div class="editor-toolbar">
-            <el-select v-model="language" size="small" class="lang-select">
-              <el-option label="C++" value="cpp" />
-              <el-option label="Java" value="java" />
-              <el-option label="Python" value="python" />
-              <el-option label="JavaScript" value="javascript" />
-            </el-select>
-            <div class="toolbar-right">评测模式</div>
+        <div class="code-eval-layout" :class="{ 'is-code': isCodeChallenge }">
+          <div class="editor-shell">
+            <div class="editor-toolbar">
+              <el-select v-model="language" size="small" class="lang-select">
+                <el-option label="C++" value="cpp" />
+                <el-option label="Java" value="java" />
+                <el-option label="Python" value="python" />
+                <el-option label="JavaScript" value="js" />
+              </el-select>
+              <div class="toolbar-right">评测模式</div>
+            </div>
+
+            <div class="answer-wrap" v-if="currentLevel.type === 'single'">
+              <el-radio-group v-model="answer" class="option-group">
+                <el-radio v-for="item in currentLevel.options" :key="item" :value="item">{{ item }}</el-radio>
+              </el-radio-group>
+            </div>
+
+            <div class="answer-wrap" v-else-if="currentLevel.type === 'multi'">
+              <el-checkbox-group v-model="answer" class="option-group">
+                <el-checkbox v-for="item in currentLevel.options" :key="item" :value="item">{{ item }}</el-checkbox>
+              </el-checkbox-group>
+            </div>
+
+            <div class="answer-wrap" v-else-if="currentLevel.type === 'judge'">
+              <el-radio-group v-model="answer" class="option-group">
+                <el-radio v-for="item in currentLevel.options || ['正确', '错误']" :key="item" :value="item">
+                  {{ item }}
+                </el-radio>
+              </el-radio-group>
+            </div>
+
+            <div class="answer-wrap" v-else-if="currentLevel.type === 'fill'">
+              <el-input v-model="answer" type="textarea" :rows="5" placeholder="请输入你的答案，例如：f(n-1)+f(n-2)" />
+            </div>
+
+            <div class="answer-wrap" v-else>
+              <el-input v-model="answer" type="textarea" :rows="16" class="code-input"
+                placeholder="请输入代码或伪代码，建议包含关键逻辑和注释。" />
+            </div>
           </div>
 
-          <div class="answer-wrap" v-if="currentLevel.type === 'single'">
-            <el-radio-group v-model="answer" class="option-group">
-              <el-radio v-for="item in currentLevel.options" :key="item" :value="item">{{ item }}</el-radio>
-            </el-radio-group>
-          </div>
+          <aside v-if="isCodeChallenge" class="eval-panel">
+            <div class="eval-title">AI评估结果</div>
+            <template v-if="evaluationResult">
+              <div class="eval-score-row">
+                <span class="label">评估分数</span>
+                <span class="score">{{ evaluationResult.score ?? '--' }}</span>
+              </div>
+              <div class="eval-meta" v-if="evaluationResult.pointsEarned > 0">本次奖励：{{ evaluationResult.pointsEarned }} 分
+              </div>
+              <div class="eval-meta">更新时间：{{ evaluationResult.updatedAt }}</div>
 
-          <div class="answer-wrap" v-else-if="currentLevel.type === 'multi'">
-            <el-checkbox-group v-model="answer" class="option-group">
-              <el-checkbox v-for="item in currentLevel.options" :key="item" :value="item">{{ item }}</el-checkbox>
-            </el-checkbox-group>
-          </div>
+              <div class="eval-section-title">程序输出</div>
+              <pre class="eval-pre">{{ evaluationResult.output || '暂无输出' }}</pre>
 
-          <div class="answer-wrap" v-else-if="currentLevel.type === 'judge'">
-            <el-radio-group v-model="answer" class="option-group">
-              <el-radio v-for="item in currentLevel.options || ['正确', '错误']" :key="item" :value="item">
-                {{ item }}
-              </el-radio>
-            </el-radio-group>
-          </div>
-
-          <div class="answer-wrap" v-else-if="currentLevel.type === 'fill'">
-            <el-input v-model="answer" type="textarea" :rows="5" placeholder="请输入你的答案，例如：f(n-1)+f(n-2)" />
-          </div>
-
-          <div class="answer-wrap" v-else>
-            <el-input v-model="answer" type="textarea" :rows="16" class="code-input"
-              placeholder="请输入代码或伪代码，建议包含关键逻辑和注释。" />
-          </div>
+              <div class="eval-section-title">AI分析</div>
+              <p class="eval-analysis">{{ evaluationResult.analysis || '暂无分析内容' }}</p>
+            </template>
+            <p v-else class="eval-empty">点击“AI评估”后，这里会展示后端返回的分数、程序输出和分析建议。</p>
+          </aside>
         </div>
 
-        <div class="stdin-box">
+        <div class="stdin-box" v-if="isCodeChallenge">
           <div class="stdin-title">程序键盘读取输入</div>
           <el-input v-model="stdinInput" type="textarea" :rows="4" placeholder="请输入测试输入" />
         </div>
 
         <div class="action-row">
           <el-button @click="router.push('/levels')">返回关卡</el-button>
-          <el-button type="primary" @click="handleSubmit" :loading="loading">提交答案</el-button>
+          <el-button type="primary" @click="handleSubmit" :loading="loading">{{ submitButtonText }}</el-button>
         </div>
       </section>
     </div>
@@ -355,6 +404,16 @@ watch(currentLevelId, loadLevel)
   gap: 10px;
 }
 
+.code-eval-layout {
+  display: block;
+}
+
+.code-eval-layout.is-code {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 12px;
+}
+
 .editor-shell {
   border: 1px solid var(--line-soft);
   border-radius: 12px;
@@ -397,6 +456,83 @@ watch(currentLevelId, loadLevel)
   line-height: 1.6;
 }
 
+.eval-panel {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 12px;
+  background: #f8fbff;
+  display: grid;
+  gap: 8px;
+}
+
+.eval-title {
+  color: var(--text-title);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.eval-score-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.eval-score-row .label {
+  color: var(--text-sub);
+  font-size: 13px;
+}
+
+.eval-score-row .score {
+  color: var(--brand-blue-strong);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.eval-meta {
+  color: var(--text-sub);
+  font-size: 12px;
+}
+
+.eval-section-title {
+  margin-top: 6px;
+  color: var(--text-title);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.eval-pre {
+  margin: 0;
+  border: 1px solid var(--line-soft);
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px;
+  min-height: 68px;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-main);
+  font-size: 12px;
+}
+
+.eval-analysis {
+  margin: 0;
+  border: 1px solid var(--line-soft);
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px;
+  min-height: 96px;
+  white-space: pre-wrap;
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.eval-empty {
+  margin: 0;
+  color: var(--text-sub);
+  font-size: 13px;
+}
+
 .stdin-box {
   border: 1px solid var(--line-soft);
   border-radius: 12px;
@@ -415,6 +551,12 @@ watch(currentLevelId, loadLevel)
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+@media (max-width: 1200px) {
+  .code-eval-layout.is-code {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 980px) {

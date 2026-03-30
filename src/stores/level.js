@@ -388,7 +388,18 @@ export const useLevelStore = defineStore('level', () => {
 
   const submitAnswer = async (levelId, answer, meta = {}) => {
     try {
-      const res = await api.post('/submit', { levelId, answer, meta })
+      const payload = { levelId, answer, meta }
+      if (meta?.language) {
+        payload.language = meta.language
+      }
+      if (meta?.stdinInput != null) {
+        payload.stdinInput = meta.stdinInput
+      }
+      if (typeof answer === 'string') {
+        payload.code = answer
+      }
+
+      const res = await api.post('/submit', payload)
       if (res.data?.code === 0) {
         return res.data.data
       }
@@ -438,6 +449,12 @@ export const useLevelStore = defineStore('level', () => {
         starsEarned,
         bestStars: level.bestStars,
         timeMs,
+        score: 100,
+        output: level.type === 'code' ? '本地评测模式未执行真实代码，以下为模拟输出。' : '',
+        analysis:
+          level.type === 'code'
+            ? '关键逻辑匹配通过。当前为离线本地判题，建议连接后端以获取真实运行日志、边界用例和 AI 详细建议。'
+            : '',
       }
     }
 
@@ -449,6 +466,12 @@ export const useLevelStore = defineStore('level', () => {
       nextLevelUnlocked: false,
       starsEarned: 0,
       bestStars: clampStars(level.bestStars),
+      score: level.type === 'code' ? 60 : 0,
+      output: level.type === 'code' ? '本地评测模式未执行真实代码，无法返回程序标准输出。' : '',
+      analysis:
+        level.type === 'code'
+          ? '未通过关键字匹配校验。请检查主流程、边界处理和返回值，再次提交可获得新的 AI 评估结果。'
+          : '',
     }
   }
 

@@ -89,12 +89,8 @@ const handleUserCommand = (command) => {
     <!-- 移动端菜单 -->
     <div v-if="showTopbar" class="mobile-menu-wrapper hidden-on-desktop">
       <div class="mobile-menu">
-        <div
-          v-for="item in menuItems"
-          :key="item.path"
-          :class="['mobile-menu-item', { active: activePath === item.path }]"
-          @click="handleMenuSelect(item.path)"
-        >
+        <div v-for="item in menuItems" :key="item.path"
+          :class="['mobile-menu-item', { active: activePath === item.path }]" @click="handleMenuSelect(item.path)">
           {{ item.label }}
         </div>
       </div>
