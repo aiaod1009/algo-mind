@@ -19,6 +19,9 @@ const smoothState = reactive({
   // 柱子倾斜角度（使用skew）
   skewX: 0,
   targetSkewX: 0,
+  // 柱子水平缩放（背过身效果，模拟转身）
+  characterScaleX: 1,
+  targetCharacterScaleX: 1,
   // 每个眼睛的独立偏移
   eyes: {
     'purple-eye-1': { x: 0, y: 0, targetX: 0, targetY: 0 },
@@ -38,7 +41,9 @@ const smoothState = reactive({
 })
 
 let animationFrameId = null
+let blinkIntervalId = null
 const lerpFactor = 0.12 // 插值因子
+const isBlinking = ref(false)
 
 const form = reactive({
   email: '',
@@ -107,6 +112,9 @@ const calculateEyeOffset = (eyeId, mouseX, mouseY) => {
 const animate = () => {
   // 平滑插值柱子倾斜
   smoothState.skewX = lerp(smoothState.skewX, smoothState.targetSkewX, lerpFactor)
+  
+  // 平滑插值柱子水平缩放
+  smoothState.characterScaleX = lerp(smoothState.characterScaleX, smoothState.targetCharacterScaleX, lerpFactor)
 
   // 平滑插值每个眼睛的偏移
   Object.keys(smoothState.eyes).forEach(eyeId => {
@@ -145,24 +153,27 @@ const onMouseMove = (event) => {
   const skewOffset = (mouseOffset.x / window.innerWidth) * maxSkewOffset
   smoothState.targetSkewX = baseSkew + skewOffset
 
-  // 计算每个眼睛的目标偏移
-  Object.keys(smoothState.eyes).forEach(eyeId => {
-    const offset = calculateEyeOffset(eyeId, event.clientX, event.clientY)
-    smoothState.eyes[eyeId].targetX = offset.x
-    smoothState.eyes[eyeId].targetY = offset.y
-  })
+  // 密码聚焦时，禁用眼睛跟随鼠标，保持看向左上角
+  if (!isPasswordFocused.value) {
+    // 计算每个眼睛的目标偏移
+    Object.keys(smoothState.eyes).forEach(eyeId => {
+      const offset = calculateEyeOffset(eyeId, event.clientX, event.clientY)
+      smoothState.eyes[eyeId].targetX = offset.x
+      smoothState.eyes[eyeId].targetY = offset.y
+    })
 
-  // 计算黄色柱子面部偏移（与原始HTML一致）
-  // 原始：transform: translate(15px, -7.4306px) 等
-  const faceMoveFactor = 0.03
-  smoothState.targetFaceOffsetX = Math.min(Math.max(mouseOffset.x * faceMoveFactor, 0), 20)
-  smoothState.targetFaceOffsetY = Math.min(Math.max(mouseOffset.y * faceMoveFactor * 0.5, -10), 0)
+    // 计算黄色柱子面部偏移（与原始HTML一致）
+    // 原始：transform: translate(15px, -7.4306px) 等
+    const faceMoveFactor = 0.03
+    smoothState.targetFaceOffsetX = Math.min(Math.max(mouseOffset.x * faceMoveFactor, 0), 20)
+    smoothState.targetFaceOffsetY = Math.min(Math.max(mouseOffset.y * faceMoveFactor * 0.5, -10), 0)
+  }
 }
 
 // 获取柱子倾斜样式
 const getColumnStyle = (factor = 1) => {
   return {
-    transform: `skew(${smoothState.skewX * factor}deg, 0deg)`,
+    transform: `scaleX(${smoothState.characterScaleX}) skew(${smoothState.skewX * factor}deg, 0deg)`,
   }
 }
 
@@ -209,11 +220,33 @@ const handleEmailInput = () => {
 const handlePasswordFocus = () => {
   isPasswordFocused.value = true
   syncActiveMode()
+  // 密码框聚焦时，所有眼睛看向左上角
+  lookAtTopLeft()
 }
 
 const handlePasswordBlur = () => {
   isPasswordFocused.value = false
   syncActiveMode()
+  // 恢复鼠标跟随
+  resumeMouseFollow()
+}
+
+// 眼睛看向左上角，柱子背过身
+const lookAtTopLeft = () => {
+  // 眼睛看向左上角
+  Object.keys(smoothState.eyes).forEach(eyeId => {
+    smoothState.eyes[eyeId].targetX = -3
+    smoothState.eyes[eyeId].targetY = -3
+  })
+  // 柱子水平缩放（模拟转身，底部保持不动）
+  smoothState.targetCharacterScaleX = 0.7
+}
+
+// 恢复鼠标跟随（重置目标值，让鼠标移动重新计算）
+const resumeMouseFollow = () => {
+  updateContainerRect()
+  // 恢复柱子水平缩放
+  smoothState.targetCharacterScaleX = 1
 }
 
 const handlePasswordInput = () => {
@@ -256,12 +289,37 @@ const handleRegister = () => {
   ElMessage.info('注册入口开发中，当前可使用演示账号登录')
 }
 
+// 眨眼动画
+const blink = () => {
+  isBlinking.value = true
+  setTimeout(() => {
+    isBlinking.value = false
+  }, 150)
+}
+
+// 启动定时眨眼
+const startBlinking = () => {
+  blinkIntervalId = setInterval(() => {
+    blink()
+  }, 10000) // 每10秒眨一次
+}
+
+// 停止定时眨眼
+const stopBlinking = () => {
+  if (blinkIntervalId) {
+    clearInterval(blinkIntervalId)
+    blinkIntervalId = null
+  }
+}
+
 onMounted(() => {
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('resize', updateContainerRect)
   updateContainerRect()
   // 启动动画循环
   animate()
+  // 启动定时眨眼
+  startBlinking()
 })
 
 onUnmounted(() => {
@@ -271,6 +329,8 @@ onUnmounted(() => {
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId)
   }
+  // 停止定时眨眼
+  stopBlinking()
 })
 </script>
 
@@ -284,10 +344,10 @@ onUnmounted(() => {
           :style="getColumnStyle(1)"
         >
           <div class="eyes-container">
-            <div class="eyeball">
+            <div class="eyeball" :class="{ 'is-blinking': isBlinking }">
               <div id="purple-eye-1" class="eyeball-pupil"></div>
             </div>
-            <div class="eyeball">
+            <div class="eyeball" :class="{ 'is-blinking': isBlinking }">
               <div id="purple-eye-2" class="eyeball-pupil"></div>
             </div>
           </div>
@@ -299,10 +359,10 @@ onUnmounted(() => {
           :style="getColumnStyle(1)"
         >
           <div class="eyes-container">
-            <div class="eyeball small">
+            <div class="eyeball small" :class="{ 'is-blinking': isBlinking }">
               <div id="black-eye-1" class="eyeball-pupil small"></div>
             </div>
-            <div class="eyeball small">
+            <div class="eyeball small" :class="{ 'is-blinking': isBlinking }">
               <div id="black-eye-2" class="eyeball-pupil small"></div>
             </div>
           </div>
@@ -314,8 +374,8 @@ onUnmounted(() => {
           :style="getColumnStyle(1)"
         >
           <div class="eyes-container orange-eyes" :style="getYellowFaceStyle()">
-            <div class="pupil" id="orange-eye-1"></div>
-            <div class="pupil" id="orange-eye-2"></div>
+            <div class="pupil" :class="{ 'is-blinking': isBlinking }" id="orange-eye-1"></div>
+            <div class="pupil" :class="{ 'is-blinking': isBlinking }" id="orange-eye-2"></div>
           </div>
         </div>
 
@@ -329,8 +389,8 @@ onUnmounted(() => {
             :style="getYellowFaceStyle()"
           >
             <div class="eyes-container yellow-eyes">
-              <div class="pupil" id="yellow-eye-1"></div>
-              <div class="pupil" id="yellow-eye-2"></div>
+              <div class="pupil" :class="{ 'is-blinking': isBlinking }" id="yellow-eye-1"></div>
+              <div class="pupil" :class="{ 'is-blinking': isBlinking }" id="yellow-eye-2"></div>
             </div>
             <div class="mouth"></div>
           </div>
@@ -450,10 +510,31 @@ onUnmounted(() => {
         border-radius: 999px;
         min-height: 48px;
         border: none;
-        background: linear-gradient(90deg, #557faf 0%, #4a6f9d 100%);
+        background: #0c1559;
+        transform-style: preserve-3d;
+        transform: perspective(500px) translateZ(0);
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        box-shadow: 0 4px 0 #070c33, 0 6px 20px rgba(12, 21, 89, 0.4);
+        position: relative;
 
         &:hover {
-          background: linear-gradient(90deg, #4f77a5 0%, #436994 100%);
+          background: #1a237e;
+          transform: perspective(500px) translateZ(8px) translateY(-2px);
+          box-shadow: 0 8px 0 #070c33, 0 12px 30px rgba(12, 21, 89, 0.5);
+        }
+
+        &:active {
+          transform: perspective(500px) translateZ(-4px) translateY(4px);
+          box-shadow: 0 2px 0 #070c33, 0 2px 10px rgba(12, 21, 89, 0.4);
+        }
+
+        &::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 999px;
+          background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%);
+          pointer-events: none;
         }
       }
 
@@ -496,10 +577,16 @@ onUnmounted(() => {
       justify-content: center;
       overflow: hidden;
       will-change: transform;
+      transition: transform 0.05s ease-out;
+      transform-origin: center;
 
       &.small {
         width: 16px;
         height: 16px;
+      }
+
+      &.is-blinking {
+        animation: blink-animation 0.15s ease-in-out;
       }
 
       .eyeball-pupil {
@@ -522,6 +609,17 @@ onUnmounted(() => {
       border-radius: 50%;
       background-color: rgb(45, 45, 45);
       will-change: transform;
+      transition: transform 0.05s ease-out;
+      transform-origin: center;
+
+      &.is-blinking {
+        animation: blink-animation 0.15s ease-in-out;
+      }
+    }
+
+    @keyframes blink-animation {
+      0%, 100% { transform: scaleY(1); }
+      50% { transform: scaleY(0.1); }
     }
 
     &.orange-eyes {
