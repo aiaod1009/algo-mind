@@ -39,7 +39,8 @@ const practiceWindowText = computed(() => {
 })
 const maxAttempts = computed(() => 5)
 const isCodeChallenge = computed(() => currentLevel.value?.type === 'code')
-const submitButtonText = computed(() => (isCodeChallenge.value ? 'AI评估' : '开始评估'))
+const showEvaluationPanel = computed(() => isCodeChallenge.value && Boolean(evaluationResult.value))
+const submitButtonText = computed(() => (isCodeChallenge.value ? '提交' : '开始评估'))
 
 const normalizeEvaluationResult = (result) => {
   if (!result) return null
@@ -154,7 +155,7 @@ const handleSubmit = async () => {
       if (result.pointsEarned > 0) {
         userStore.addPoints(result.pointsEarned)
       }
-      ElMessage.success('AI评估完成')
+      ElMessage.success('提交成功，已生成评估结果')
       return
     }
 
@@ -233,7 +234,7 @@ watch(currentLevelId, loadLevel)
           </div>
         </div>
 
-        <div class="code-eval-layout" :class="{ 'is-code': isCodeChallenge }">
+        <div class="code-eval-layout" :class="{ 'is-code': showEvaluationPanel }">
           <div class="editor-shell">
             <div class="editor-toolbar">
               <el-select v-model="language" size="small" class="lang-select">
@@ -275,9 +276,9 @@ watch(currentLevelId, loadLevel)
             </div>
           </div>
 
-          <aside v-if="isCodeChallenge" class="eval-panel">
-            <div class="eval-title">AI评估结果</div>
-            <template v-if="evaluationResult">
+          <Transition name="eval-slide">
+            <aside v-if="showEvaluationPanel" class="eval-panel">
+              <div class="eval-title">评估结果</div>
               <div class="eval-score-row">
                 <span class="label">评估分数</span>
                 <span class="score">{{ evaluationResult.score ?? '--' }}</span>
@@ -291,9 +292,8 @@ watch(currentLevelId, loadLevel)
 
               <div class="eval-section-title">AI分析</div>
               <p class="eval-analysis">{{ evaluationResult.analysis || '暂无分析内容' }}</p>
-            </template>
-            <p v-else class="eval-empty">点击“AI评估”后，这里会展示后端返回的分数、程序输出和分析建议。</p>
-          </aside>
+            </aside>
+          </Transition>
         </div>
 
         <div class="stdin-box" v-if="isCodeChallenge">
@@ -414,6 +414,17 @@ watch(currentLevelId, loadLevel)
   gap: 12px;
 }
 
+.eval-slide-enter-active,
+.eval-slide-leave-active {
+  transition: all 0.24s ease;
+}
+
+.eval-slide-enter-from,
+.eval-slide-leave-to {
+  opacity: 0;
+  transform: translateX(10px);
+}
+
 .editor-shell {
   border: 1px solid var(--line-soft);
   border-radius: 12px;
@@ -445,6 +456,11 @@ watch(currentLevelId, loadLevel)
   padding: 16px;
 }
 
+.answer-wrap :deep(textarea),
+.stdin-box :deep(textarea) {
+  overflow-y: auto;
+}
+
 .option-group {
   display: grid;
   gap: 12px;
@@ -463,6 +479,8 @@ watch(currentLevelId, loadLevel)
   background: #f8fbff;
   display: grid;
   gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
 }
 
 .eval-title {
@@ -522,6 +540,8 @@ watch(currentLevelId, loadLevel)
   border-radius: 8px;
   padding: 8px;
   min-height: 96px;
+  max-height: 220px;
+  overflow-y: auto;
   white-space: pre-wrap;
   color: var(--text-main);
   font-size: 13px;
