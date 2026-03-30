@@ -33,6 +33,8 @@ const resolveUserLevel = () => {
 
 const isComposerExpanded = ref(false)
 const publishing = ref(false)
+const contentTextarea = ref(null)
+const showEmojiPicker = ref(false)
 
 const postForm = reactive({
   topic: '',
@@ -41,24 +43,83 @@ const postForm = reactive({
   quote: '',
 })
 
-const allTags = ['# 学习交流', '# 算法刷题', '# 面试经验', '# 校招求职', '# 实习分享', '# 技术讨论', '# 职场成长', '# 项目经验', '# 系统设计', '# 源码解析']
+const allTags = [
+  { name: '# 学习交流', icon: '📚', color: '#4a90d9' },
+  { name: '# 算法刷题', icon: '💻', color: '#52c41a' },
+  { name: '# 面试经验', icon: '🎯', color: '#faad14' },
+  { name: '# 校招求职', icon: '🏢', color: '#722ed1' },
+  { name: '# 实习分享', icon: '📝', color: '#13c2c2' },
+  { name: '# 技术讨论', icon: '⚙️', color: '#eb2f96' },
+  { name: '# 职场成长', icon: '📈', color: '#fa8c16' },
+  { name: '# 项目经验', icon: '🚀', color: '#2f54eb' },
+  { name: '# 系统设计', icon: '🏗️', color: '#1890ff' },
+  { name: '# 源码解析', icon: '🔍', color: '#f5222d' },
+]
 const tagInput = ref('')
 const showTagDropdown = ref(false)
 const filteredTags = computed(() => {
   if (!tagInput.value) return allTags
   const input = tagInput.value.toLowerCase().replace('#', '').trim()
-  return allTags.filter(t => t.toLowerCase().includes(input))
+  return allTags.filter(t => t.name.toLowerCase().includes(input))
 })
 
-watch(tagInput, (val) => {
-  if (val.includes('#')) {
-    showTagDropdown.value = true
+const emojiList = ['😀', '😂', '🥰', '😎', '🤔', '👍', '👏', '🎉', '🔥', '❤️', '💯', '✨', '🚀', '💪', '🙏', '😊']
+const recentEmojis = ref([])
+
+const insertEmoji = (emoji) => {
+  postForm.content += emoji
+  if (!recentEmojis.value.includes(emoji)) {
+    recentEmojis.value.unshift(emoji)
+    if (recentEmojis.value.length > 8) recentEmojis.value.pop()
   }
-})
+  showEmojiPicker.value = false
+}
+
+const toolbarActions = {
+  bold: { prefix: '**', suffix: '**', placeholder: '加粗文本' },
+  italic: { prefix: '*', suffix: '*', placeholder: '斜体文本' },
+  heading: { prefix: '## ', suffix: '', placeholder: '标题' },
+  link: { prefix: '[', suffix: '](url)', placeholder: '链接文字' },
+  image: { prefix: '![', suffix: '](图片URL)', placeholder: '图片描述' },
+  code: { prefix: '```\n', suffix: '\n```', placeholder: '代码' },
+  list: { prefix: '- ', suffix: '', placeholder: '列表项' },
+  quote: { prefix: '> ', suffix: '', placeholder: '引用文字' },
+}
+
+const insertFormat = (type) => {
+  const action = toolbarActions[type]
+  if (!action || !contentTextarea.value) return
+  
+  const textarea = contentTextarea.value
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+  const selectedText = postForm.content.substring(start, end) || action.placeholder
+  
+  const before = postForm.content.substring(0, start)
+  const after = postForm.content.substring(end)
+  const newText = action.prefix + selectedText + action.suffix
+  
+  postForm.content = before + newText + after
+  
+  nextTick(() => {
+    textarea.focus()
+    const newPos = start + action.prefix.length
+    textarea.setSelectionRange(newPos, newPos + selectedText.length)
+  })
+}
+
+const topicCharCount = computed(() => postForm.topic.length)
+const contentCharCount = computed(() => postForm.content.length)
+
+const closeTagDropdown = () => {
+  setTimeout(() => {
+    showTagDropdown.value = false
+  }, 150)
+}
 
 const selectTag = (tag) => {
-  postForm.tag = tag
-  tagInput.value = tag
+  postForm.tag = tag.name
+  tagInput.value = tag.name
   showTagDropdown.value = false
 }
 
@@ -289,90 +350,235 @@ onUnmounted(() => {
     <div class="composer-wrapper">
       <div v-if="!isComposerExpanded" class="composer-collapsed" @click="isComposerExpanded = true">
         <div class="collapsed-left">
-          <el-avatar :size="36" :src="userStore.userInfo?.avatar || ''">
+          <el-avatar :size="40" :src="userStore.userInfo?.avatar || ''" class="collapsed-avatar">
             {{ (userStore.userInfo?.name || '同学').slice(0, 1) }}
           </el-avatar>
-          <span class="collapsed-hint">{{ userStore.userInfo?.name || '同学' }}，有什么想分享的？</span>
+          <div class="collapsed-content">
+            <span class="collapsed-name">{{ userStore.userInfo?.name || '同学' }}</span>
+            <span class="collapsed-hint">分享你的想法、经验或问题...</span>
+          </div>
         </div>
-        <el-button type="primary" round size="small">发布</el-button>
+        <div class="collapsed-actions">
+          <el-button type="primary" round size="default" class="publish-btn-collapsed">
+            <span class="btn-icon">📝</span> 发布帖子
+          </el-button>
+        </div>
       </div>
 
       <Transition name="composer-expand">
-        <el-card v-if="isComposerExpanded" class="composer-card" shadow="never">
+        <div v-if="isComposerExpanded" class="composer-card">
           <div class="composer-header">
-            <el-avatar :size="40" :src="userStore.userInfo?.avatar || ''">
-              {{ (userStore.userInfo?.name || '同学').slice(0, 1) }}
-            </el-avatar>
-            <div class="composer-user-info">
-              <span class="composer-name">{{ userStore.userInfo?.name || '同学' }}</span>
-              <span class="composer-level">{{ resolveUserLevel() }}</span>
+            <div class="header-left">
+              <el-avatar :size="48" :src="userStore.userInfo?.avatar || ''" class="composer-avatar">
+                {{ (userStore.userInfo?.name || '同学').slice(0, 1) }}
+              </el-avatar>
+              <div class="composer-user-info">
+                <span class="composer-name">{{ userStore.userInfo?.name || '同学' }}</span>
+                <div class="composer-badges">
+                  <span class="composer-level">{{ resolveUserLevel() }}</span>
+                  <span class="composer-role">社区成员</span>
+                </div>
+              </div>
             </div>
-            <el-button link type="info" @click="isComposerExpanded = false">收起</el-button>
+            <button class="collapse-btn" @click="isComposerExpanded = false" title="收起">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
           </div>
 
-          <input 
-            v-model="postForm.topic" 
-            class="topic-input" 
-            placeholder="请输入标题..."
-            maxlength="50"
-          />
+          <div class="topic-input-wrapper">
+            <input 
+              v-model="postForm.topic" 
+              class="topic-input" 
+              placeholder="输入一个吸引人的标题..."
+              maxlength="50"
+            />
+            <span class="char-counter" :class="{ 'is-warning': topicCharCount > 40 }">
+              {{ topicCharCount }}/50
+            </span>
+          </div>
 
           <div class="editor-toolbar">
-            <button class="toolbar-btn" title="加粗"><b>B</b></button>
-            <button class="toolbar-btn" title="斜体"><i>I</i></button>
-            <button class="toolbar-btn" title="标题">H</button>
-            <button class="toolbar-btn" title="链接">🔗</button>
-            <button class="toolbar-btn" title="图片">🖼️</button>
-            <button class="toolbar-btn" title="代码">{ }</button>
-            <button class="toolbar-btn" title="列表">≡</button>
-            <button class="toolbar-btn" title="引用">"</button>
-          </div>
-
-          <textarea 
-            v-model="postForm.content" 
-            class="content-textarea" 
-            placeholder="输入你想发布的论坛内容，支持 Markdown 格式..."
-            maxlength="400"
-          />
-
-          <div class="form-row">
-            <div class="tag-input-wrapper">
-              <input 
-                v-model="tagInput"
-                class="tag-input" 
-                placeholder="输入 # 添加话题标签..."
-                @focus="showTagDropdown = true"
-                @blur="setTimeout(() => showTagDropdown = false, 200)"
-              />
-              <Transition name="dropdown">
-                <div v-if="showTagDropdown && (tagInput.includes('#') || !tagInput)" class="tag-dropdown">
-                  <div 
-                    v-for="tag in filteredTags" 
-                    :key="tag" 
-                    class="tag-option"
-                    @mousedown="selectTag(tag)"
-                  >
-                    {{ tag }}
+            <div class="toolbar-group">
+              <button class="toolbar-btn" title="加粗 (Ctrl+B)" @click="insertFormat('bold')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4-4H7v14h7.04c2.09 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42zM10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3zm3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5z"/>
+                </svg>
+              </button>
+              <button class="toolbar-btn" title="斜体 (Ctrl+I)" @click="insertFormat('italic')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z"/>
+                </svg>
+              </button>
+              <button class="toolbar-btn" title="标题" @click="insertFormat('heading')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M5 4v3h5.5v12h3V7H19V4z"/>
+                </svg>
+              </button>
+            </div>
+            <div class="toolbar-divider"></div>
+            <div class="toolbar-group">
+              <button class="toolbar-btn" title="插入链接" @click="insertFormat('link')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
+                </svg>
+              </button>
+              <button class="toolbar-btn" title="插入图片" @click="insertFormat('image')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                </svg>
+              </button>
+              <button class="toolbar-btn" title="代码块" @click="insertFormat('code')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>
+                </svg>
+              </button>
+            </div>
+            <div class="toolbar-divider"></div>
+            <div class="toolbar-group">
+              <button class="toolbar-btn" title="列表" @click="insertFormat('list')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"/>
+                </svg>
+              </button>
+              <button class="toolbar-btn" title="引用" @click="insertFormat('quote')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/>
+                </svg>
+              </button>
+            </div>
+            <div class="toolbar-spacer"></div>
+            <div class="toolbar-group emoji-group">
+              <button class="toolbar-btn emoji-btn" title="插入表情" @click="showEmojiPicker = !showEmojiPicker">
+                <span>😊</span>
+              </button>
+              <Transition name="emoji-dropdown">
+                <div v-if="showEmojiPicker" class="emoji-picker">
+                  <div class="emoji-header">
+                    <span class="emoji-title">常用表情</span>
                   </div>
-                  <div v-if="tagInput && !filteredTags.includes(tagInput)" class="tag-option create-new" @mousedown="createNewTag">
-                    + 创建新话题 "{{ tagInput }}"
+                  <div class="emoji-grid">
+                    <button 
+                      v-for="emoji in emojiList" 
+                      :key="emoji" 
+                      class="emoji-item"
+                      @click="insertEmoji(emoji)"
+                    >
+                      {{ emoji }}
+                    </button>
+                  </div>
+                  <div v-if="recentEmojis.length > 0" class="emoji-recent">
+                    <span class="recent-label">最近使用</span>
+                    <div class="recent-grid">
+                      <button 
+                        v-for="emoji in recentEmojis" 
+                        :key="emoji" 
+                        class="emoji-item"
+                        @click="insertEmoji(emoji)"
+                      >
+                        {{ emoji }}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </Transition>
             </div>
-            <input 
-              v-model="postForm.quote" 
-              class="quote-input" 
-              placeholder="引用语（可选）"
-              maxlength="80"
+          </div>
+
+          <div class="content-wrapper">
+            <textarea 
+              ref="contentTextarea"
+              v-model="postForm.content" 
+              class="content-textarea" 
+              placeholder="分享你的想法、经验或问题...&#10;&#10;支持 Markdown 格式，让内容更丰富！"
+              maxlength="2000"
             />
+            <div class="content-footer">
+              <span class="content-hint">支持 Markdown 格式</span>
+              <span class="char-counter" :class="{ 'is-warning': contentCharCount > 1800, 'is-danger': contentCharCount > 1950 }">
+                {{ contentCharCount }}/2000
+              </span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="tag-input-wrapper">
+              <div class="tag-input-icon">#</div>
+              <input 
+                v-model="tagInput"
+                class="tag-input" 
+                placeholder="选择或创建话题标签..."
+                @focus="showTagDropdown = true"
+                @click="showTagDropdown = true"
+                @blur="closeTagDropdown"
+              />
+              <Transition name="dropdown">
+                <div v-if="showTagDropdown" class="tag-dropdown" @mousedown.stop>
+                  <div class="dropdown-header">
+                    <span class="dropdown-title">热门话题</span>
+                    <button class="dropdown-close" @mousedown.prevent="showTagDropdown = false">×</button>
+                  </div>
+                  <div class="tag-list">
+                    <div 
+                      v-for="tag in filteredTags" 
+                      :key="tag.name" 
+                      class="tag-option"
+                      :style="{ '--tag-color': tag.color }"
+                      @mousedown.prevent="selectTag(tag)"
+                    >
+                      <span class="tag-icon">{{ tag.icon }}</span>
+                      <span class="tag-name">{{ tag.name }}</span>
+                    </div>
+                  </div>
+                  <div v-if="tagInput && !filteredTags.find(t => t.name === tagInput)" class="create-new-tag" @mousedown.prevent="createNewTag">
+                    <span class="create-icon">✨</span>
+                    <span>创建新话题 "{{ tagInput }}"</span>
+                  </div>
+                </div>
+              </Transition>
+            </div>
+            <div class="quote-input-wrapper">
+              <span class="quote-icon">💭</span>
+              <input 
+                v-model="postForm.quote" 
+                class="quote-input" 
+                placeholder="添加引用语（可选）"
+                maxlength="80"
+              />
+            </div>
           </div>
 
           <div class="publish-row">
-            <el-button @click="isComposerExpanded = false">取消</el-button>
-            <el-button type="primary" :loading="publishing" @click="handlePublish" round>发布帖子</el-button>
+            <div class="publish-hints">
+              <span class="hint-item">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                发布后可编辑
+              </span>
+              <span class="hint-item">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+                </svg>
+                内容安全审核
+              </span>
+            </div>
+            <div class="publish-actions">
+              <button class="cancel-btn" @click="isComposerExpanded = false">取消</button>
+              <button 
+                class="publish-btn" 
+                :class="{ 'is-disabled': !postForm.topic.trim() || !postForm.content.trim() }"
+                :disabled="!postForm.topic.trim() || !postForm.content.trim()"
+                @click="handlePublish"
+              >
+                <span v-if="publishing" class="loading-spinner"></span>
+                <span v-else class="btn-icon">🚀</span>
+                {{ publishing ? '发布中...' : '发布帖子' }}
+              </button>
+            </div>
           </div>
-        </el-card>
+        </div>
       </Transition>
     </div>
 
@@ -526,180 +732,681 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
   border: 1px solid var(--line-soft);
   border-radius: 16px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.composer-collapsed::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #4a90d9, #67b26f, #4a90d9);
+  background-size: 200% 100%;
+  animation: gradient-flow 3s ease infinite;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.composer-collapsed:hover::before {
+  opacity: 1;
 }
 
 .composer-collapsed:hover {
-  border-color: rgba(74, 144, 217, 0.3);
-  box-shadow: 0 4px 16px rgba(74, 144, 217, 0.1);
+  border-color: rgba(74, 144, 217, 0.4);
+  box-shadow: 0 6px 24px rgba(74, 144, 217, 0.12);
+  transform: translateY(-1px);
+}
+
+@keyframes gradient-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 .collapsed-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+}
+
+.collapsed-avatar {
+  border: 2px solid rgba(74, 144, 217, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.collapsed-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.collapsed-name {
+  font-weight: 600;
+  color: var(--text-title);
+  font-size: 15px;
 }
 
 .collapsed-hint {
   color: var(--text-sub);
-  font-size: 15px;
+  font-size: 13px;
+}
+
+.collapsed-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.collapsed-icon {
+  font-size: 20px;
+  opacity: 0.6;
+}
+
+.publish-btn-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  font-weight: 500;
+}
+
+.publish-btn-collapsed .btn-icon {
+  font-size: 14px;
 }
 
 .composer-card {
-  border: 2px solid rgba(74, 144, 217, 0.2);
-  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid var(--line-soft);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
 }
 
 .composer-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
   margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.composer-avatar {
+  border: 3px solid rgba(74, 144, 217, 0.15);
+  box-shadow: 0 4px 12px rgba(74, 144, 217, 0.15);
 }
 
 .composer-user-info {
-  flex: 1;
   display: flex;
   flex-direction: column;
+  gap: 4px;
 }
 
 .composer-name {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-title);
+  font-size: 17px;
+}
+
+.composer-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .composer-level {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #4a90d9 0%, #3a7bc8 100%);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+}
+
+.composer-role {
   font-size: 12px;
   color: var(--text-sub);
 }
 
+.collapse-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-sub);
+  transition: all 0.2s;
+}
+
+.collapse-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-main);
+  transform: rotate(90deg);
+}
+
+.topic-input-wrapper {
+  position: relative;
+  margin-bottom: 12px;
+}
+
 .topic-input {
   width: 100%;
-  padding: 12px 0;
+  padding: 14px 60px 14px 0;
   border: none;
-  border-bottom: 1px solid var(--line-soft);
-  font-size: 20px;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.06);
+  font-size: 22px;
   font-weight: 700;
   color: var(--text-title);
   outline: none;
   background: transparent;
+  transition: border-color 0.2s;
+}
+
+.topic-input:focus {
+  border-color: #4a90d9;
 }
 
 .topic-input::placeholder {
-  color: var(--text-sub);
+  color: #bfbfbf;
   font-weight: 400;
+}
+
+.char-counter {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--text-sub);
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.char-counter.is-warning {
+  color: #faad14;
+  background: rgba(250, 173, 20, 0.1);
+}
+
+.char-counter.is-danger {
+  color: #ff4d4f;
+  background: rgba(255, 77, 79, 0.1);
 }
 
 .editor-toolbar {
   display: flex;
+  align-items: center;
   gap: 4px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line-soft);
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f0f2f5 100%);
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.08);
+  margin: 0 8px;
+}
+
+.toolbar-spacer {
+  flex: 1;
 }
 
 .toolbar-btn {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-sub);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.toolbar-btn:hover {
+  background: white;
+  color: #4a90d9;
+  box-shadow: 0 2px 8px rgba(74, 144, 217, 0.15);
+  transform: translateY(-1px);
+}
+
+.toolbar-btn:active {
+  transform: translateY(0);
+}
+
+.emoji-group {
+  position: relative;
+}
+
+.emoji-btn span {
+  font-size: 18px;
+}
+
+.emoji-picker {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  background: white;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  padding: 12px;
+  z-index: 100;
+}
+
+.emoji-header {
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  margin-bottom: 8px;
+}
+
+.emoji-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+
+.emoji-item {
+  width: 28px;
+  height: 28px;
   border: none;
   background: transparent;
   border-radius: 6px;
   cursor: pointer;
-  color: var(--text-sub);
-  font-size: 14px;
-  transition: all 0.2s;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
 }
 
-.toolbar-btn:hover {
+.emoji-item:hover {
   background: rgba(74, 144, 217, 0.1);
-  color: #4a90d9;
+  transform: scale(1.15);
+}
+
+.emoji-recent {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.recent-label {
+  font-size: 11px;
+  color: var(--text-sub);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.recent-grid {
+  display: flex;
+  gap: 4px;
+}
+
+.content-wrapper {
+  position: relative;
+  margin-bottom: 12px;
 }
 
 .content-textarea {
   width: 100%;
-  min-height: 120px;
-  padding: 12px 0;
-  border: none;
+  min-height: 140px;
+  padding: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.7;
   color: var(--text-main);
   outline: none;
   resize: vertical;
-  background: transparent;
+  background: linear-gradient(135deg, #fafbfc 0%, #ffffff 100%);
+  transition: all 0.2s;
+}
+
+.content-textarea:focus {
+  border-color: #4a90d9;
+  box-shadow: 0 0 0 4px rgba(74, 144, 217, 0.08);
+  background: white;
 }
 
 .content-textarea::placeholder {
+  color: #bfbfbf;
+}
+
+.content-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  padding: 0 4px;
+}
+
+.content-hint {
+  font-size: 12px;
   color: var(--text-sub);
 }
 
 .form-row {
   display: flex;
   gap: 12px;
-  margin-top: 12px;
+  margin-bottom: 16px;
 }
 
 .tag-input-wrapper {
   position: relative;
   flex: 1;
+  display: flex;
+  align-items: center;
 }
 
-.tag-input, .quote-input {
+.tag-input-icon {
+  position: absolute;
+  left: 14px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #4a90d9;
+  z-index: 1;
+}
+
+.tag-input {
   width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--line-soft);
-  border-radius: 10px;
+  padding: 12px 14px 12px 36px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
   font-size: 14px;
   color: var(--text-main);
   outline: none;
   transition: all 0.2s;
+  background: #fafbfc;
 }
 
-.tag-input:focus, .quote-input:focus {
+.tag-input:focus {
   border-color: #4a90d9;
-  box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.1);
+  box-shadow: 0 0 0 4px rgba(74, 144, 217, 0.08);
+  background: white;
+}
+
+.tag-input::placeholder {
+  color: #bfbfbf;
 }
 
 .tag-dropdown {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 8px);
   left: 0;
   right: 0;
-  margin-top: 4px;
   background: white;
   border: 1px solid var(--line-soft);
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
   z-index: 100;
+  overflow: hidden;
+}
+
+.dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f0f2f5 100%);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.dropdown-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-title);
+}
+
+.dropdown-close {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--text-sub);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.dropdown-close:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--text-main);
+}
+
+.tag-list {
   max-height: 200px;
   overflow-y: auto;
 }
 
 .tag-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 10px 14px;
   cursor: pointer;
   transition: all 0.15s;
+  border-left: 3px solid transparent;
 }
 
 .tag-option:hover {
-  background: rgba(74, 144, 217, 0.1);
-  color: #4a90d9;
+  background: rgba(74, 144, 217, 0.06);
+  border-left-color: var(--tag-color, #4a90d9);
 }
 
-.tag-option.create-new {
-  border-top: 1px solid var(--line-soft);
+.tag-icon {
+  font-size: 16px;
+}
+
+.tag-name {
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.create-new-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.1);
+  cursor: pointer;
   color: #4a90d9;
-  font-weight: 500;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.create-new-tag:hover {
+  background: rgba(74, 144, 217, 0.06);
+}
+
+.create-icon {
+  font-size: 14px;
+}
+
+.quote-input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.quote-icon {
+  position: absolute;
+  left: 14px;
+  font-size: 16px;
+  z-index: 1;
+}
+
+.quote-input {
+  width: 100%;
+  padding: 12px 14px 12px 38px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--text-main);
+  outline: none;
+  transition: all 0.2s;
+  background: #fafbfc;
+}
+
+.quote-input:focus {
+  border-color: #4a90d9;
+  box-shadow: 0 0 0 4px rgba(74, 144, 217, 0.08);
+  background: white;
+}
+
+.quote-input::placeholder {
+  color: #bfbfbf;
 }
 
 .publish-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.publish-hints {
+  display: flex;
+  gap: 16px;
+}
+
+.hint-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.hint-item svg {
+  color: #52c41a;
+}
+
+.publish-actions {
+  display: flex;
   gap: 10px;
-  margin-top: 16px;
+}
+
+.cancel-btn {
+  padding: 10px 20px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: white;
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--text-sub);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-btn:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  color: var(--text-main);
+}
+
+.publish-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  border: none;
+  background: linear-gradient(135deg, #4a90d9 0%, #3a7bc8 100%);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(74, 144, 217, 0.3);
+}
+
+.publish-btn:hover:not(.is-disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(74, 144, 217, 0.4);
+}
+
+.publish-btn:active:not(.is-disabled) {
+  transform: translateY(0);
+}
+
+.publish-btn.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.publish-btn .btn-icon {
+  font-size: 16px;
+}
+
+.loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.emoji-dropdown-enter-active,
+.emoji-dropdown-leave-active {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.emoji-dropdown-enter-from,
+.emoji-dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.95);
 }
 
 .forum-layout {
