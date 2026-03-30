@@ -89,7 +89,9 @@ const clearNavSearch = () => {
   <div class="app-shell">
     <header v-if="showTopbar" class="topbar">
       <div class="page-container topbar-inner">
-        <div class="brand">算法闯关助手</div>
+        <div class="brand" @click="handleMenuSelect('/home')">
+          <span class="brand-text"><span class="brand-algo">Algo</span><span class="brand-mind">Mind</span></span>
+        </div>
         <el-menu class="main-menu" :default-active="activePath" mode="horizontal" @select="handleMenuSelect">
           <el-menu-item index="/home">学习计划</el-menu-item>
           <el-menu-item index="/courses">网课</el-menu-item>
@@ -101,24 +103,20 @@ const clearNavSearch = () => {
         <div class="nav-search-wrapper" :class="{ 'is-expanded': navSearchExpanded }">
           <div class="nav-search-box">
             <button class="nav-search-btn" @click="toggleNavSearch">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="11" cy="11" r="8"/>
-                <path d="m21 21-4.35-4.35"/>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
               </svg>
             </button>
             <Transition name="search-expand">
               <div v-if="navSearchExpanded" class="nav-search-input-wrap">
-                <input 
-                  v-model="navSearchKeyword"
-                  type="text" 
-                  class="nav-search-input"
-                  placeholder="搜索帖子..."
-                  @keyup.enter="handleNavSearch"
-                  @keyup.esc="collapseNavSearch"
-                />
+                <input v-model="navSearchKeyword" type="text" class="nav-search-input" placeholder="搜索帖子..."
+                  @keyup.enter="handleNavSearch" @keyup.esc="collapseNavSearch" />
                 <button v-if="navSearchKeyword" class="nav-clear-btn" @click.stop="clearNavSearch">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <path d="M18 6 6 18M6 6l12 12"/>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
                   </svg>
                 </button>
                 <button class="nav-go-btn" @click="handleNavSearch">
@@ -188,10 +186,26 @@ const clearNavSearch = () => {
 
 .brand {
   flex-shrink: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text-title);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
   white-space: nowrap;
+}
+
+.brand-text {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  line-height: 1;
+}
+
+.brand-algo {
+  color: var(--brand-blue);
+}
+
+.brand-mind {
+  color: #1f2a37;
 }
 
 .main-menu {
@@ -313,6 +327,7 @@ const clearNavSearch = () => {
     width: 0;
     transform: translateX(-10px);
   }
+
   100% {
     opacity: 1;
     width: 220px;
@@ -372,8 +387,8 @@ const clearNavSearch = () => {
     gap: 12px;
   }
 
-  .brand {
-    font-size: 18px;
+  .brand-text {
+    font-size: 20px;
   }
 
   .main-menu {
@@ -434,8 +449,11 @@ const clearNavSearch = () => {
   }
 
   .brand {
-    font-size: 16px;
     flex-shrink: 0;
+  }
+
+  .brand-text {
+    font-size: 18px;
   }
 
   .main-menu {
