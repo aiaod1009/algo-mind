@@ -142,6 +142,12 @@ export const useUserStore = defineStore('user', () => {
     syncLeaderboard(userInfo.value, points.value)
   }
 
+  const setPoints = (value) => {
+    points.value = Number(value || 0)
+    localStorage.setItem('points', String(points.value))
+    syncLeaderboard(userInfo.value, points.value)
+  }
+
   const setTrack = (trackCode) => {
     selectedTrack.value = trackCode
     localStorage.setItem(TRACK_KEY, trackCode)
@@ -188,6 +194,7 @@ export const useUserStore = defineStore('user', () => {
     login,
     logout,
     addPoints,
+    setPoints,
     setTrack,
     updateProfile,
     getLeaderboard,
