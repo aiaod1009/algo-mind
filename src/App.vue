@@ -90,6 +90,19 @@ const clearNavSearch = () => {
     <header v-if="showTopbar" class="topbar">
       <div class="page-container topbar-inner">
         <div class="brand" @click="handleMenuSelect('/home')">
+          <div class="brand-icon">
+            <svg viewBox="0 0 32 32" width="32" height="32" fill="none">
+              <defs>
+                <linearGradient id="algoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#4a6f9d" />
+                  <stop offset="100%" stop-color="#6672cb" />
+                </linearGradient>
+              </defs>
+              <path d="M16 2L28 9V23L16 30L4 23V9L16 2Z" stroke="url(#algoGrad)" stroke-width="2" fill="none" />
+              <path d="M16 10L22 13.5V20.5L16 24L10 20.5V13.5L16 10Z" fill="url(#algoGrad)" opacity="0.3" />
+              <circle cx="16" cy="17" r="3" fill="url(#algoGrad)" />
+            </svg>
+          </div>
           <span class="brand-text"><span class="brand-algo">Algo</span><span class="brand-mind">Mind</span></span>
         </div>
         <el-menu class="main-menu" :default-active="activePath" mode="horizontal" @select="handleMenuSelect">
@@ -127,7 +140,6 @@ const clearNavSearch = () => {
           </div>
         </div>
         <div class="actions">
-          <el-tag type="info" effect="plain">赛道 {{ trackLabel }}</el-tag>
           <el-tag type="success" effect="light">积分 {{ userStore.points }}</el-tag>
           <el-dropdown trigger="click" @command="handleUserCommand">
             <div class="user-entry">
@@ -193,19 +205,68 @@ const clearNavSearch = () => {
   white-space: nowrap;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.brand:hover {
+  transform: scale(1.02);
+}
+
+.brand-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+}
+
+.brand:hover .brand-icon {
+  transform: rotate(15deg);
+}
+
 .brand-text {
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: 0.4px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   line-height: 1;
+  display: flex;
+  align-items: baseline;
 }
 
 .brand-algo {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
   color: var(--brand-blue);
+  position: relative;
+}
+
+.brand-algo::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--brand-blue), var(--brand-accent));
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s ease;
+}
+
+.brand:hover .brand-algo::after {
+  transform: scaleX(1);
+  transform-origin: left;
 }
 
 .brand-mind {
-  color: #1f2a37;
+  background: linear-gradient(135deg, var(--brand-accent) 0%, #8b5cf6 50%, #a855f7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 600;
 }
 
 .main-menu {
@@ -227,11 +288,11 @@ const clearNavSearch = () => {
 }
 
 .nav-search-btn {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   border: none;
   background: linear-gradient(135deg, #f0f4f8 0%, #e8ecf0 100%);
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -256,18 +317,18 @@ const clearNavSearch = () => {
   display: flex;
   align-items: center;
   background: white;
-  border: 2px solid rgba(74, 144, 217, 0.3);
-  border-radius: 12px;
-  padding: 4px;
+  border: 1.5px solid rgba(74, 144, 217, 0.3);
+  border-radius: 8px;
+  padding: 2px;
   box-shadow: 0 4px 16px rgba(74, 144, 217, 0.15);
 }
 
 .nav-search-input {
-  width: 160px;
-  padding: 6px 10px;
+  width: 120px;
+  padding: 4px 6px;
   border: none;
   outline: none;
-  font-size: 14px;
+  font-size: 12px;
   color: var(--text-main);
   background: transparent;
 }

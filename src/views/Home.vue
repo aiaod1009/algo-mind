@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/user'
 import { useLevelStore } from '../stores/level'
+import AIAssistant from '../components/AIAssistant.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -17,26 +18,6 @@ const trackOptions = [
   { label: '数据结构赛道', value: 'ds' },
   { label: '竞赛冲刺赛道', value: 'contest' },
 ]
-
-const trackPlanTemplates = {
-  algo: [
-    { title: '复杂度快读', detail: '10 分钟复盘 O(1)~O(nlogn) 的典型场景', to: '/challenge/1' },
-    { title: '双指针模板', detail: '完成两数之和变体，记录移动不变量', to: '/challenge/2' },
-    { title: 'DP 起手式', detail: '写出状态定义和转移方程，限时 20 分钟', to: '/challenge/3' },
-  ],
-  ds: [
-    { title: '栈队列热身', detail: '完成括号匹配与单调栈各 1 题', to: '/challenge/4' },
-    { title: '哈希冲突演练', detail: '对比链地址法与开放寻址法优缺点', to: '/challenge/5' },
-    { title: '并查集专题', detail: '手写路径压缩并完成 2 次调试', to: '/challenge/6' },
-  ],
-  contest: [
-    { title: '贪心判定', detail: '练习活动选择并总结可证明性', to: '/challenge/7' },
-    { title: '区间调度', detail: '训练排序 + 扫描组合策略', to: '/challenge/8' },
-    { title: '赛后复盘', detail: '按题意重述、约束、坑点输出复盘模板', to: '/challenge/9' },
-  ],
-}
-
-const planList = computed(() => trackPlanTemplates[selectedTrack.value] || trackPlanTemplates.algo)
 
 const weeklyStatus = computed(() => {
   const doneCount = levelStore.levels.filter((item) => item.isUnlocked).length
@@ -105,18 +86,7 @@ if (!levelStore.levels.length) {
       <el-progress :percentage="weeklyStatus.ratio" :stroke-width="14" />
     </section>
 
-    <section class="surface-card plan-card">
-      <h3 class="section-title">赛道学习计划</h3>
-      <el-timeline>
-        <el-timeline-item v-for="(item, index) in planList" :key="item.title" :timestamp="`步骤 ${index + 1}`"
-          placement="top">
-          <el-card class="plan-item" shadow="hover" @click="goTo(item.to)">
-            <div class="plan-title">{{ item.title }}</div>
-            <div class="plan-detail">{{ item.detail }}</div>
-          </el-card>
-        </el-timeline-item>
-      </el-timeline>
-    </section>
+    <AIAssistant />
   </div>
 </template>
 
@@ -168,10 +138,6 @@ if (!levelStore.levels.length) {
   color: var(--text-title);
 }
 
-.plan-card {
-  padding: 24px;
-}
-
 .target-card {
   padding: 20px 24px;
   display: grid;
@@ -186,22 +152,6 @@ if (!levelStore.levels.length) {
 
 .target-input {
   width: 240px;
-}
-
-.plan-item {
-  cursor: pointer;
-  border-radius: 12px;
-}
-
-.plan-title {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--text-title);
-}
-
-.plan-detail {
-  margin-top: 6px;
-  color: var(--text-sub);
 }
 
 @media (max-width: 900px) {

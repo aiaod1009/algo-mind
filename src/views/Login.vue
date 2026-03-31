@@ -1,49 +1,17 @@
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { onMounted, onUnmounted, reactive, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { View, Hide } from '@element-plus/icons-vue'
 import { useUserStore } from '../stores/user'
+import gsap from 'gsap'
 
 const router = useRouter()
 const userStore = useUserStore()
 const loading = ref(false)
-const isPasswordFocused = ref(false)
-const isEmailFocused = ref(false)
-const activeMode = ref('none')
-const mouseOffset = reactive({ x: 0, y: 0 })
-const containerRef = ref(null)
-const containerRect = reactive({ x: 0, y: 0, width: 550, height: 400 })
-
-// 平滑动画状态
-const smoothState = reactive({
-  // 柱子倾斜角度（使用skew）
-  skewX: 0,
-  targetSkewX: 0,
-  // 柱子水平缩放（背过身效果，模拟转身）
-  characterScaleX: 1,
-  targetCharacterScaleX: 1,
-  // 每个眼睛的独立偏移
-  eyes: {
-    'purple-eye-1': { x: 0, y: 0, targetX: 0, targetY: 0 },
-    'purple-eye-2': { x: 0, y: 0, targetX: 0, targetY: 0 },
-    'black-eye-1': { x: 0, y: 0, targetX: 0, targetY: 0 },
-    'black-eye-2': { x: 0, y: 0, targetX: 0, targetY: 0 },
-    'orange-eye-1': { x: 0, y: 0, targetX: 0, targetY: 0 },
-    'orange-eye-2': { x: 0, y: 0, targetX: 0, targetY: 0 },
-    'yellow-eye-1': { x: 0, y: 0, targetX: 0, targetY: 0 },
-    'yellow-eye-2': { x: 0, y: 0, targetX: 0, targetY: 0 },
-  },
-  // 黄色柱子面部偏移
-  faceOffsetX: 0,
-  faceOffsetY: 0,
-  targetFaceOffsetX: 0,
-  targetFaceOffsetY: 0,
-})
-
-let animationFrameId = null
-let blinkIntervalId = null
-const lerpFactor = 0.12 // 插值因子
-const isBlinking = ref(false)
+const showPassword = ref(false)
+const isTyping = ref(false)
+const passwordValue = ref('')
 
 const form = reactive({
   email: '',
@@ -51,150 +19,353 @@ const form = reactive({
   remember: true,
 })
 
-// 眼睛配置（与原始HTML一致）
-const eyeConfigs = {
-  'purple-eye-1': { maxDistance: 5, elementX: 0, elementY: 0 },
-  'purple-eye-2': { maxDistance: 5, elementX: 0, elementY: 0 },
-  'black-eye-1': { maxDistance: 4, elementX: 0, elementY: 0 },
-  'black-eye-2': { maxDistance: 4, elementX: 0, elementY: 0 },
-  'orange-eye-1': { maxDistance: 5, elementX: 0, elementY: 0 },
-  'orange-eye-2': { maxDistance: 5, elementX: 0, elementY: 0 },
-  'yellow-eye-1': { maxDistance: 5, elementX: 0, elementY: 0 },
-  'yellow-eye-2': { maxDistance: 5, elementX: 0, elementY: 0 },
+const containerRef = ref(null)
+const mouseRef = reactive({ x: 0, y: 0 })
+const rafIdRef = ref(0)
+
+const purpleRef = ref(null)
+const blackRef = ref(null)
+const yellowRef = ref(null)
+const orangeRef = ref(null)
+
+const purpleFaceRef = ref(null)
+const blackFaceRef = ref(null)
+const yellowFaceRef = ref(null)
+const orangeFaceRef = ref(null)
+
+const yellowMouthRef = ref(null)
+
+const purpleBlinkTimerRef = ref(null)
+const blackBlinkTimerRef = ref(null)
+const purplePeekTimerRef = ref(null)
+const lookingTimerRef = ref(null)
+
+const isLookingRef = ref(false)
+
+const isHidingPassword = ref(false)
+const isShowingPassword = ref(false)
+
+const quickToRef = ref(null)
+
+const updatePasswordState = () => {
+  isHidingPassword.value = passwordValue.value.length > 0 && !showPassword.value
+  isShowingPassword.value = passwordValue.value.length > 0 && showPassword.value
 }
 
-// 更新容器位置信息
-const updateContainerRect = () => {
-  if (containerRef.value) {
-    const rect = containerRef.value.getBoundingClientRect()
-    containerRect.x = rect.left
-    containerRect.y = rect.top
-    containerRect.width = rect.width
-    containerRect.height = rect.height
-    updateEyePositions()
-  }
-}
+watch([passwordValue, showPassword], () => {
+  updatePasswordState()
+})
 
-// 更新每个眼睛在屏幕上的绝对位置
-const updateEyePositions = () => {
-  const eyeIds = Object.keys(eyeConfigs)
-  eyeIds.forEach(id => {
-    const el = document.getElementById(id)
-    if (el) {
-      const rect = el.getBoundingClientRect()
-      eyeConfigs[id].elementX = rect.left + rect.width / 2
-      eyeConfigs[id].elementY = rect.top + rect.height / 2
-    }
-  })
-}
-
-// 线性插值函数
-const lerp = (start, end, factor) => start + (end - start) * factor
-
-// 计算单个眼睛的瞳孔偏移
-const calculateEyeOffset = (eyeId, mouseX, mouseY) => {
-  const config = eyeConfigs[eyeId]
-  const dx = mouseX - config.elementX
-  const dy = mouseY - config.elementY
-  const distance = Math.sqrt(dx * dx + dy * dy)
-  const angle = Math.atan2(dy, dx)
-
-  // 根据距离计算移动量，越远移动越多但有上限
-  const moveDistance = Math.min(distance * 0.08, config.maxDistance)
-
+const calcPos = (el) => {
+  const rect = el.getBoundingClientRect()
+  const cx = rect.left + rect.width / 2
+  const cy = rect.top + rect.height / 3
+  const dx = mouseRef.x - cx
+  const dy = mouseRef.y - cy
   return {
-    x: Math.cos(angle) * moveDistance,
-    y: Math.sin(angle) * moveDistance,
+    faceX: Math.max(-15, Math.min(15, dx / 20)),
+    faceY: Math.max(-10, Math.min(10, dy / 30)),
+    bodySkew: Math.max(-6, Math.min(6, -dx / 120)),
   }
 }
 
-// 动画循环
-const animate = () => {
-  // 平滑插值柱子倾斜
-  smoothState.skewX = lerp(smoothState.skewX, smoothState.targetSkewX, lerpFactor)
-  
-  // 平滑插值柱子水平缩放
-  smoothState.characterScaleX = lerp(smoothState.characterScaleX, smoothState.targetCharacterScaleX, lerpFactor)
-
-  // 平滑插值每个眼睛的偏移
-  Object.keys(smoothState.eyes).forEach(eyeId => {
-    const eye = smoothState.eyes[eyeId]
-    eye.x = lerp(eye.x, eye.targetX, lerpFactor)
-    eye.y = lerp(eye.y, eye.targetY, lerpFactor)
-
-    // 更新DOM
-    const el = document.getElementById(eyeId)
-    if (el) {
-      el.style.transform = `translate(${eye.x}px, ${eye.y}px)`
-    }
-  })
-
-  // 平滑插值黄色柱子面部偏移
-  smoothState.faceOffsetX = lerp(smoothState.faceOffsetX, smoothState.targetFaceOffsetX, lerpFactor)
-  smoothState.faceOffsetY = lerp(smoothState.faceOffsetY, smoothState.targetFaceOffsetY, lerpFactor)
-
-  animationFrameId = requestAnimationFrame(animate)
+const calcEyePos = (el, maxDist) => {
+  const r = el.getBoundingClientRect()
+  const cx = r.left + r.width / 2
+  const cy = r.top + r.height / 2
+  const dx = mouseRef.x - cx
+  const dy = mouseRef.y - cy
+  const dist = Math.min(Math.sqrt(dx ** 2 + dy ** 2), maxDist)
+  const angle = Math.atan2(dy, dx)
+  return { x: Math.cos(angle) * dist, y: Math.sin(angle) * dist }
 }
 
-const onMouseMove = (event) => {
-  updateContainerRect()
+const tick = () => {
+  const container = containerRef.value
+  if (!container) return
 
-  // 计算鼠标相对于容器中心的位置
-  const centerX = containerRect.x + containerRect.width / 2
-  const centerY = containerRect.y + containerRect.height / 2
+  const qt = quickToRef.value
+  if (!qt) return
 
-  mouseOffset.x = event.clientX - centerX
-  mouseOffset.y = event.clientY - centerY
+  const typing = isTyping.value
+  const hiding = isHidingPassword.value
+  const showing = isShowingPassword.value
+  const looking = isLookingRef.value
 
-  // 计算柱子倾斜角度（基于鼠标水平位置）
-  // 原始HTML使用 skew(-6deg, 0deg) 作为基准
-  const baseSkew = -6
-  const maxSkewOffset = 8
-  const skewOffset = (mouseOffset.x / window.innerWidth) * maxSkewOffset
-  smoothState.targetSkewX = baseSkew + skewOffset
+  if (purpleRef.value && !showing) {
+    const pp = calcPos(purpleRef.value)
+    if (typing || hiding) {
+      qt.purpleSkew(pp.bodySkew - 12)
+      qt.purpleX(40)
+      qt.purpleHeight(440)
+    } else {
+      qt.purpleSkew(pp.bodySkew)
+      qt.purpleX(0)
+      qt.purpleHeight(400)
+    }
+  }
 
-  // 密码聚焦时，禁用眼睛跟随鼠标，保持看向左上角
-  if (!isPasswordFocused.value) {
-    // 计算每个眼睛的目标偏移
-    Object.keys(smoothState.eyes).forEach(eyeId => {
-      const offset = calculateEyeOffset(eyeId, event.clientX, event.clientY)
-      smoothState.eyes[eyeId].targetX = offset.x
-      smoothState.eyes[eyeId].targetY = offset.y
+  if (blackRef.value && !showing) {
+    const bp = calcPos(blackRef.value)
+    if (looking) {
+      qt.blackSkew(bp.bodySkew * 1.5 + 10)
+      qt.blackX(20)
+    } else if (typing || hiding) {
+      qt.blackSkew(bp.bodySkew * 1.5)
+      qt.blackX(0)
+    } else {
+      qt.blackSkew(bp.bodySkew)
+      qt.blackX(0)
+    }
+  }
+
+  if (orangeRef.value && !showing) {
+    const op = calcPos(orangeRef.value)
+    qt.orangeSkew(op.bodySkew)
+  }
+
+  if (yellowRef.value && !showing) {
+    const yp = calcPos(yellowRef.value)
+    qt.yellowSkew(yp.bodySkew)
+  }
+
+  if (purpleRef.value && !showing && !looking) {
+    const pp = calcPos(purpleRef.value)
+    const purpleFaceX = pp.faceX >= 0 ? Math.min(25, pp.faceX * 1.5) : pp.faceX
+    qt.purpleFaceLeft(45 + purpleFaceX)
+    qt.purpleFaceTop(40 + pp.faceY)
+  }
+
+  if (blackRef.value && !showing && !looking) {
+    const bp = calcPos(blackRef.value)
+    qt.blackFaceLeft(26 + bp.faceX)
+    qt.blackFaceTop(32 + bp.faceY)
+  }
+
+  if (orangeRef.value && !showing) {
+    const op = calcPos(orangeRef.value)
+    qt.orangeFaceX(op.faceX)
+    qt.orangeFaceY(op.faceY)
+  }
+
+  if (yellowRef.value && !showing) {
+    const yp = calcPos(yellowRef.value)
+    qt.yellowFaceX(yp.faceX)
+    qt.yellowFaceY(yp.faceY)
+  }
+
+  if (yellowRef.value && !showing) {
+    const yp = calcPos(yellowRef.value)
+    qt.mouthX(yp.faceX)
+    qt.mouthY(yp.faceY)
+  }
+
+  if (!showing) {
+    const allPupils = container.querySelectorAll('.pupil')
+    allPupils.forEach((p) => {
+      const el = p
+      const maxDist = Number(el.dataset.maxDistance) || 5
+      const ePos = calcEyePos(el, maxDist)
+      gsap.set(el, { x: ePos.x, y: ePos.y })
     })
 
-    // 计算黄色柱子面部偏移（与原始HTML一致）
-    // 原始：transform: translate(15px, -7.4306px) 等
-    const faceMoveFactor = 0.03
-    smoothState.targetFaceOffsetX = Math.min(Math.max(mouseOffset.x * faceMoveFactor, 0), 20)
-    smoothState.targetFaceOffsetY = Math.min(Math.max(mouseOffset.y * faceMoveFactor * 0.5, -10), 0)
+    if (!looking) {
+      const allEyeballs = container.querySelectorAll('.eyeball')
+      allEyeballs.forEach((eb) => {
+        const el = eb
+        const maxDist = Number(el.dataset.maxDistance) || 10
+        const pupil = el.querySelector('.eyeball-pupil')
+        if (!pupil) return
+        const ePos = calcEyePos(el, maxDist)
+        gsap.set(pupil, { x: ePos.x, y: ePos.y })
+      })
+    }
+  }
+
+  rafIdRef.value = requestAnimationFrame(tick)
+}
+
+const onMove = (e) => {
+  mouseRef.x = e.clientX
+  mouseRef.y = e.clientY
+}
+
+const schedulePurpleBlink = () => {
+  const purpleEyeballs = purpleRef.value?.querySelectorAll('.eyeball')
+  if (!purpleEyeballs?.length) return
+
+  purpleBlinkTimerRef.value = setTimeout(
+    () => {
+      purpleEyeballs.forEach((el) => {
+        gsap.to(el, { height: 2, duration: 0.08, ease: 'power2.in' })
+      })
+      setTimeout(() => {
+        purpleEyeballs.forEach((el) => {
+          gsap.to(el, { height: 18, duration: 0.08, ease: 'power2.out' })
+        })
+        schedulePurpleBlink()
+      }, 150)
+    },
+    Math.random() * 4000 + 3000
+  )
+}
+
+const scheduleBlackBlink = () => {
+  const blackEyeballs = blackRef.value?.querySelectorAll('.eyeball')
+  if (!blackEyeballs?.length) return
+
+  blackBlinkTimerRef.value = setTimeout(
+    () => {
+      blackEyeballs.forEach((el) => {
+        gsap.to(el, { height: 2, duration: 0.08, ease: 'power2.in' })
+      })
+      setTimeout(() => {
+        blackEyeballs.forEach((el) => {
+          gsap.to(el, { height: 16, duration: 0.08, ease: 'power2.out' })
+        })
+        scheduleBlackBlink()
+      }, 150)
+    },
+    Math.random() * 4000 + 3000
+  )
+}
+
+const applyLookAtEachOther = () => {
+  const qt = quickToRef.value
+  if (qt) {
+    qt.purpleFaceLeft(55)
+    qt.purpleFaceTop(65)
+    qt.blackFaceLeft(32)
+    qt.blackFaceTop(12)
+  }
+  purpleRef.value?.querySelectorAll('.eyeball-pupil').forEach((p) => {
+    gsap.to(p, { x: 3, y: 4, duration: 0.3, ease: 'power2.out', overwrite: 'auto' })
+  })
+  blackRef.value?.querySelectorAll('.eyeball-pupil').forEach((p) => {
+    gsap.to(p, { x: 0, y: -4, duration: 0.3, ease: 'power2.out', overwrite: 'auto' })
+  })
+}
+
+const applyHidingPassword = () => {
+  const qt = quickToRef.value
+  if (qt) {
+    qt.purpleFaceLeft(55)
+    qt.purpleFaceTop(65)
   }
 }
 
-// 获取柱子倾斜样式
-const getColumnStyle = (factor = 1) => {
-  return {
-    transform: `scaleX(${smoothState.characterScaleX}) skew(${smoothState.skewX * factor}deg, 0deg)`,
+const applyShowPassword = () => {
+  const qt = quickToRef.value
+  if (qt) {
+    qt.purpleSkew(0)
+    qt.blackSkew(0)
+    qt.orangeSkew(0)
+    qt.yellowSkew(0)
+    qt.purpleX(0)
+    qt.blackX(0)
+    qt.purpleHeight(400)
+
+    qt.purpleFaceLeft(20)
+    qt.purpleFaceTop(35)
+    qt.blackFaceLeft(10)
+    qt.blackFaceTop(28)
+    qt.orangeFaceX(50 - 82)
+    qt.orangeFaceY(85 - 90)
+    qt.yellowFaceX(20 - 52)
+    qt.yellowFaceY(35 - 40)
+    qt.mouthX(10 - 40)
+    qt.mouthY(0)
   }
+
+  purpleRef.value?.querySelectorAll('.eyeball-pupil').forEach((p) => {
+    gsap.to(p, { x: -4, y: -4, duration: 0.3, ease: 'power2.out', overwrite: 'auto' })
+  })
+  blackRef.value?.querySelectorAll('.eyeball-pupil').forEach((p) => {
+    gsap.to(p, { x: -4, y: -4, duration: 0.3, ease: 'power2.out', overwrite: 'auto' })
+  })
+  orangeRef.value?.querySelectorAll('.pupil').forEach((p) => {
+    gsap.to(p, { x: -5, y: -4, duration: 0.3, ease: 'power2.out', overwrite: 'auto' })
+  })
+  yellowRef.value?.querySelectorAll('.pupil').forEach((p) => {
+    gsap.to(p, { x: -5, y: -4, duration: 0.3, ease: 'power2.out', overwrite: 'auto' })
+  })
 }
 
-// 获取黄色柱子面部偏移样式
-const getYellowFaceStyle = () => {
-  return {
-    transform: `translate(${smoothState.faceOffsetX}px, ${smoothState.faceOffsetY}px)`,
-  }
-}
-
-const syncActiveMode = () => {
-  if (isPasswordFocused.value || Boolean(form.password.trim())) {
-    activeMode.value = 'password'
+const schedulePurplePeek = () => {
+  if (!isShowingPassword.value || passwordValue.value.length <= 0) {
+    clearTimeout(purplePeekTimerRef.value)
     return
   }
-  if (isEmailFocused.value || Boolean(form.email.trim())) {
-    activeMode.value = 'email'
-    return
-  }
-  activeMode.value = 'none'
+
+  const purpleEyePupils = purpleRef.value?.querySelectorAll('.eyeball-pupil')
+  if (!purpleEyePupils?.length) return
+
+  purplePeekTimerRef.value = setTimeout(
+    () => {
+      purpleEyePupils.forEach((p) => {
+        gsap.to(p, {
+          x: 4,
+          y: 5,
+          duration: 0.3,
+          ease: 'power2.out',
+          overwrite: 'auto',
+        })
+      })
+      const qt = quickToRef.value
+      if (qt) {
+        qt.purpleFaceLeft(20)
+        qt.purpleFaceTop(35)
+      }
+
+      setTimeout(() => {
+        purpleEyePupils.forEach((p) => {
+          gsap.to(p, {
+            x: -4,
+            y: -4,
+            duration: 0.3,
+            ease: 'power2.out',
+            overwrite: 'auto',
+          })
+        })
+        schedulePurplePeek()
+      }, 800)
+    },
+    Math.random() * 3000 + 2000
+  )
 }
+
+watch(isTyping, (newVal) => {
+  if (newVal && !isShowingPassword.value) {
+    isLookingRef.value = true
+    applyLookAtEachOther()
+
+    clearTimeout(lookingTimerRef.value)
+    lookingTimerRef.value = setTimeout(() => {
+      isLookingRef.value = false
+      purpleRef.value?.querySelectorAll('.eyeball-pupil').forEach((p) => {
+        gsap.killTweensOf(p)
+      })
+      blackRef.value?.querySelectorAll('.eyeball-pupil').forEach((p) => {
+        gsap.killTweensOf(p)
+      })
+    }, 800)
+  } else {
+    clearTimeout(lookingTimerRef.value)
+    isLookingRef.value = false
+  }
+})
+
+watch([isHidingPassword, isShowingPassword], () => {
+  if (isShowingPassword.value) {
+    applyShowPassword()
+    schedulePurplePeek()
+  } else {
+    clearTimeout(purplePeekTimerRef.value)
+    if (isHidingPassword.value) {
+      applyHidingPassword()
+    }
+  }
+})
 
 const normalizeLoginAccount = (value) => {
   const account = String(value || '').trim()
@@ -204,53 +375,19 @@ const normalizeLoginAccount = (value) => {
 }
 
 const handleEmailFocus = () => {
-  isEmailFocused.value = true
-  syncActiveMode()
+  isTyping.value = true
 }
 
 const handleEmailBlur = () => {
-  isEmailFocused.value = false
-  syncActiveMode()
+  isTyping.value = false
 }
 
-const handleEmailInput = () => {
-  syncActiveMode()
+const handlePasswordInput = (value) => {
+  passwordValue.value = value
 }
 
-const handlePasswordFocus = () => {
-  isPasswordFocused.value = true
-  syncActiveMode()
-  // 密码框聚焦时，所有眼睛看向左上角
-  lookAtTopLeft()
-}
-
-const handlePasswordBlur = () => {
-  isPasswordFocused.value = false
-  syncActiveMode()
-  // 恢复鼠标跟随
-  resumeMouseFollow()
-}
-
-// 眼睛看向左上角，柱子背过身
-const lookAtTopLeft = () => {
-  // 眼睛看向左上角
-  Object.keys(smoothState.eyes).forEach(eyeId => {
-    smoothState.eyes[eyeId].targetX = -3
-    smoothState.eyes[eyeId].targetY = -3
-  })
-  // 柱子水平缩放（模拟转身，底部保持不动）
-  smoothState.targetCharacterScaleX = 0.7
-}
-
-// 恢复鼠标跟随（重置目标值，让鼠标移动重新计算）
-const resumeMouseFollow = () => {
-  updateContainerRect()
-  // 恢复柱子水平缩放
-  smoothState.targetCharacterScaleX = 1
-}
-
-const handlePasswordInput = () => {
-  syncActiveMode()
+const handleTogglePassword = () => {
+  showPassword.value = !showPassword.value
 }
 
 const handleLogin = async () => {
@@ -289,48 +426,104 @@ const handleRegister = () => {
   ElMessage.info('注册入口开发中，当前可使用演示账号登录')
 }
 
-// 眨眼动画
-const blink = () => {
-  isBlinking.value = true
-  setTimeout(() => {
-    isBlinking.value = false
-  }, 150)
-}
+onMounted(async () => {
+  await nextTick()
 
-// 启动定时眨眼
-const startBlinking = () => {
-  blinkIntervalId = setInterval(() => {
-    blink()
-  }, 10000) // 每10秒眨一次
-}
+  if (
+    !purpleRef.value ||
+    !blackRef.value ||
+    !orangeRef.value ||
+    !yellowRef.value ||
+    !purpleFaceRef.value ||
+    !blackFaceRef.value ||
+    !orangeFaceRef.value ||
+    !yellowFaceRef.value ||
+    !yellowMouthRef.value
+  )
+    return
 
-// 停止定时眨眼
-const stopBlinking = () => {
-  if (blinkIntervalId) {
-    clearInterval(blinkIntervalId)
-    blinkIntervalId = null
+  quickToRef.value = {
+    purpleSkew: gsap.quickTo(purpleRef.value, 'skewX', {
+      duration: 0.3,
+      ease: 'power2.out',
+    }),
+    blackSkew: gsap.quickTo(blackRef.value, 'skewX', {
+      duration: 0.3,
+      ease: 'power2.out',
+    }),
+    orangeSkew: gsap.quickTo(orangeRef.value, 'skewX', {
+      duration: 0.3,
+      ease: 'power2.out',
+    }),
+    yellowSkew: gsap.quickTo(yellowRef.value, 'skewX', {
+      duration: 0.3,
+      ease: 'power2.out',
+    }),
+    purpleX: gsap.quickTo(purpleRef.value, 'x', { duration: 0.3, ease: 'power2.out' }),
+    blackX: gsap.quickTo(blackRef.value, 'x', { duration: 0.3, ease: 'power2.out' }),
+    purpleHeight: gsap.quickTo(purpleRef.value, 'height', {
+      duration: 0.3,
+      ease: 'power2.out',
+    }),
+    purpleFaceLeft: gsap.quickTo(purpleFaceRef.value, 'left', {
+      duration: 0.3,
+      ease: 'power2.out',
+    }),
+    purpleFaceTop: gsap.quickTo(purpleFaceRef.value, 'top', {
+      duration: 0.3,
+      ease: 'power2.out',
+    }),
+    blackFaceLeft: gsap.quickTo(blackFaceRef.value, 'left', {
+      duration: 0.3,
+      ease: 'power2.out',
+    }),
+    blackFaceTop: gsap.quickTo(blackFaceRef.value, 'top', {
+      duration: 0.3,
+      ease: 'power2.out',
+    }),
+    orangeFaceX: gsap.quickTo(orangeFaceRef.value, 'x', {
+      duration: 0.2,
+      ease: 'power2.out',
+    }),
+    orangeFaceY: gsap.quickTo(orangeFaceRef.value, 'y', {
+      duration: 0.2,
+      ease: 'power2.out',
+    }),
+    yellowFaceX: gsap.quickTo(yellowFaceRef.value, 'x', {
+      duration: 0.2,
+      ease: 'power2.out',
+    }),
+    yellowFaceY: gsap.quickTo(yellowFaceRef.value, 'y', {
+      duration: 0.2,
+      ease: 'power2.out',
+    }),
+    mouthX: gsap.quickTo(yellowMouthRef.value, 'x', {
+      duration: 0.2,
+      ease: 'power2.out',
+    }),
+    mouthY: gsap.quickTo(yellowMouthRef.value, 'y', {
+      duration: 0.2,
+      ease: 'power2.out',
+    }),
   }
-}
 
-onMounted(() => {
-  window.addEventListener('mousemove', onMouseMove)
-  window.addEventListener('resize', updateContainerRect)
-  updateContainerRect()
-  // 启动动画循环
-  animate()
-  // 启动定时眨眼
-  startBlinking()
+  gsap.set('.pupil', { x: 0, y: 0 })
+  gsap.set('.eyeball-pupil', { x: 0, y: 0 })
+
+  window.addEventListener('mousemove', onMove, { passive: true })
+  rafIdRef.value = requestAnimationFrame(tick)
+
+  schedulePurpleBlink()
+  scheduleBlackBlink()
 })
 
 onUnmounted(() => {
-  window.removeEventListener('mousemove', onMouseMove)
-  window.removeEventListener('resize', updateContainerRect)
-  // 停止动画循环
-  if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId)
-  }
-  // 停止定时眨眼
-  stopBlinking()
+  window.removeEventListener('mousemove', onMove)
+  cancelAnimationFrame(rafIdRef.value)
+  clearTimeout(purpleBlinkTimerRef.value)
+  clearTimeout(blackBlinkTimerRef.value)
+  clearTimeout(purplePeekTimerRef.value)
+  clearTimeout(lookingTimerRef.value)
 })
 </script>
 
@@ -340,60 +533,67 @@ onUnmounted(() => {
       <div ref="containerRef" class="characters-stage">
         <!-- 紫色柱子 -->
         <div
+          ref="purpleRef"
           class="character purple"
-          :style="getColumnStyle(1)"
         >
-          <div class="eyes-container">
-            <div class="eyeball" :class="{ 'is-blinking': isBlinking }">
-              <div id="purple-eye-1" class="eyeball-pupil"></div>
+          <div
+            ref="purpleFaceRef"
+            class="eyes-container"
+          >
+            <div class="eyeball" data-max-distance="5">
+              <div class="eyeball-pupil"></div>
             </div>
-            <div class="eyeball" :class="{ 'is-blinking': isBlinking }">
-              <div id="purple-eye-2" class="eyeball-pupil"></div>
+            <div class="eyeball" data-max-distance="5">
+              <div class="eyeball-pupil"></div>
             </div>
           </div>
         </div>
 
         <!-- 黑色柱子 -->
         <div
+          ref="blackRef"
           class="character black"
-          :style="getColumnStyle(1)"
         >
-          <div class="eyes-container">
-            <div class="eyeball small" :class="{ 'is-blinking': isBlinking }">
-              <div id="black-eye-1" class="eyeball-pupil small"></div>
+          <div
+            ref="blackFaceRef"
+            class="eyes-container"
+          >
+            <div class="eyeball small" data-max-distance="4">
+              <div class="eyeball-pupil small"></div>
             </div>
-            <div class="eyeball small" :class="{ 'is-blinking': isBlinking }">
-              <div id="black-eye-2" class="eyeball-pupil small"></div>
+            <div class="eyeball small" data-max-distance="4">
+              <div class="eyeball-pupil small"></div>
             </div>
           </div>
         </div>
 
         <!-- 橙色柱子 -->
         <div
+          ref="orangeRef"
           class="character orange"
-          :style="getColumnStyle(1)"
         >
-          <div class="eyes-container orange-eyes" :style="getYellowFaceStyle()">
-            <div class="pupil" :class="{ 'is-blinking': isBlinking }" id="orange-eye-1"></div>
-            <div class="pupil" :class="{ 'is-blinking': isBlinking }" id="orange-eye-2"></div>
+          <div
+            ref="orangeFaceRef"
+            class="eyes-container orange-eyes"
+          >
+            <div class="pupil" data-max-distance="5"></div>
+            <div class="pupil" data-max-distance="5"></div>
           </div>
         </div>
 
         <!-- 黄色柱子 -->
         <div
+          ref="yellowRef"
           class="character yellow"
-          :style="getColumnStyle(1)"
         >
-          <div 
-            class="face-container"
-            :style="getYellowFaceStyle()"
+          <div
+            ref="yellowFaceRef"
+            class="eyes-container yellow-eyes"
           >
-            <div class="eyes-container yellow-eyes">
-              <div class="pupil" :class="{ 'is-blinking': isBlinking }" id="yellow-eye-1"></div>
-              <div class="pupil" :class="{ 'is-blinking': isBlinking }" id="yellow-eye-2"></div>
-            </div>
-            <div class="mouth"></div>
+            <div class="pupil" data-max-distance="5"></div>
+            <div class="pupil" data-max-distance="5"></div>
           </div>
+          <div ref="yellowMouthRef" class="mouth"></div>
         </div>
       </div>
     </section>
@@ -405,13 +605,30 @@ onUnmounted(() => {
 
         <el-form :model="form" @keyup.enter="handleLogin">
           <el-form-item label="Email" label-position="top">
-            <el-input v-model="form.email" placeholder="you@example.com" size="large" @focus="handleEmailFocus"
-              @blur="handleEmailBlur" @input="handleEmailInput" />
+            <el-input
+              v-model="form.email"
+              placeholder="you@example.com"
+              size="large"
+              @focus="handleEmailFocus"
+              @blur="handleEmailBlur"
+            />
           </el-form-item>
 
           <el-form-item label="Password" label-position="top">
-            <el-input v-model="form.password" type="password" show-password placeholder="请输入密码" size="large"
-              @focus="handlePasswordFocus" @blur="handlePasswordBlur" @input="handlePasswordInput" />
+            <el-input
+              v-model="form.password"
+              :type="showPassword ? 'text' : 'password'"
+              placeholder="请输入密码"
+              size="large"
+              @input="handlePasswordInput"
+            >
+              <template #suffix>
+                <span class="eye-toggle" @click="handleTogglePassword">
+                  <el-icon v-if="showPassword"><View /></el-icon>
+                  <el-icon v-else><Hide /></el-icon>
+                </span>
+              </template>
+            </el-input>
           </el-form-item>
 
           <div class="helper-row">
@@ -444,7 +661,7 @@ onUnmounted(() => {
   .left-panel {
     position: relative;
     overflow: hidden;
-    background: radial-gradient(circle at 18% 20%, #5a667a 0%, #465267 45%, #3f4b60 100%);
+    background: linear-gradient(145deg, #0f172a 0%, #1e3a8a 50%, #1e40af 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -488,6 +705,18 @@ onUnmounted(() => {
         border-radius: 999px;
         min-height: 46px;
         background: #f6f9fc;
+      }
+
+      .eye-toggle {
+        cursor: pointer;
+        color: #6b7280;
+        display: flex;
+        align-items: center;
+        transition: color 0.2s;
+
+        &:hover {
+          color: #374151;
+        }
       }
 
       .helper-row {
@@ -554,18 +783,17 @@ onUnmounted(() => {
   }
 }
 
-// 角色基础样式
 .character {
   position: absolute;
   bottom: 0;
-  transform-origin: center bottom;
+  transform-origin: bottom center;
   will-change: transform;
-  transition: transform 0.1s ease-out;
 
   .eyes-container {
     position: absolute;
     display: flex;
     gap: 32px;
+    will-change: left, top;
 
     .eyeball {
       width: 18px;
@@ -576,24 +804,18 @@ onUnmounted(() => {
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      will-change: transform;
-      transition: transform 0.05s ease-out;
-      transform-origin: center;
+      will-change: height;
 
       &.small {
         width: 16px;
         height: 16px;
       }
 
-      &.is-blinking {
-        animation: blink-animation 0.15s ease-in-out;
-      }
-
       .eyeball-pupil {
         width: 7px;
         height: 7px;
         border-radius: 50%;
-        background-color: rgb(45, 45, 45);
+        background-color: #2D2D2D;
         will-change: transform;
 
         &.small {
@@ -607,19 +829,8 @@ onUnmounted(() => {
       width: 12px;
       height: 12px;
       border-radius: 50%;
-      background-color: rgb(45, 45, 45);
+      background-color: #2D2D2D;
       will-change: transform;
-      transition: transform 0.05s ease-out;
-      transform-origin: center;
-
-      &.is-blinking {
-        animation: blink-animation 0.15s ease-in-out;
-      }
-    }
-
-    @keyframes blink-animation {
-      0%, 100% { transform: scaleY(1); }
-      50% { transform: scaleY(0.1); }
     }
 
     &.orange-eyes {
@@ -632,44 +843,41 @@ onUnmounted(() => {
   }
 }
 
-// 紫色柱子
 .purple {
   left: 70px;
   width: 180px;
   height: 400px;
-  background-color: rgb(108, 63, 245);
-  border-radius: 10px 10px 0px 0px;
+  background-color: #6C3FF5;
+  border-radius: 10px 10px 0 0;
   z-index: 1;
 
   .eyes-container {
-    left: 67px;
-    top: 36px;
+    left: 45px;
+    top: 40px;
   }
 }
 
-// 黑色柱子
 .black {
   left: 240px;
   width: 120px;
   height: 310px;
-  background-color: rgb(45, 45, 45);
-  border-radius: 8px 8px 0px 0px;
+  background-color: #2D2D2D;
+  border-radius: 8px 8px 0 0;
   z-index: 2;
 
   .eyes-container {
-    left: 41px;
-    top: 26px;
+    left: 26px;
+    top: 32px;
     gap: 24px;
   }
 }
 
-// 橙色柱子
 .orange {
-  left: 0px;
+  left: 0;
   width: 240px;
   height: 200px;
-  background-color: rgb(255, 155, 107);
-  border-radius: 120px 120px 0px 0px;
+  background-color: #FF9B6B;
+  border-radius: 120px 120px 0 0;
   z-index: 3;
 
   .eyes-container {
@@ -678,36 +886,30 @@ onUnmounted(() => {
   }
 }
 
-// 黄色柱子
 .yellow {
   left: 310px;
   width: 140px;
   height: 230px;
-  background-color: rgb(232, 215, 84);
-  border-radius: 70px 70px 0px 0px;
+  background-color: #E8D754;
+  border-radius: 70px 70px 0 0;
   z-index: 4;
 
-  .face-container {
+  .eyes-container.yellow-eyes {
     position: absolute;
     left: 52px;
     top: 40px;
-    transition: transform 0.1s ease-out;
+    gap: 24px;
+  }
 
-    .eyes-container {
-      position: relative;
-      left: 0;
-      top: 0;
-    }
-
-    .mouth {
-      position: absolute;
-      width: 80px;
-      height: 4px;
-      background-color: rgb(45, 45, 45);
-      border-radius: 999px;
-      left: -12px;
-      top: 48px;
-    }
+  .mouth {
+    position: absolute;
+    width: 80px;
+    height: 4px;
+    background-color: #2D2D2D;
+    border-radius: 999px;
+    left: 40px;
+    top: 88px;
+    will-change: transform;
   }
 }
 
