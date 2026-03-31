@@ -1,141 +1,134 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useUserStore } from '../stores/user'
-import { useLevelStore } from '../stores/level'
 
 const userStore = useUserStore()
-const levelStore = useLevelStore()
 
+const activeSection = ref('overview')
 const chatMessages = ref([])
 const inputMessage = ref('')
 const isTyping = ref(false)
 const chatContainerRef = ref(null)
-const activeTab = ref('chat')
 
-const wrongQuestions = ref([
-  { id: 1, title: '动态规划-背包问题', errorType: '状态转移错误', count: 3, lastError: '2024-01-15' },
-  { id: 2, title: '二叉树遍历', errorType: '边界条件遗漏', count: 2, lastError: '2024-01-14' },
-  { id: 3, title: '图的最短路径', errorType: '算法选择不当', count: 4, lastError: '2024-01-13' },
-  { id: 4, title: '字符串匹配', errorType: '复杂度分析错误', count: 1, lastError: '2024-01-12' },
-])
-
-const habits = ref({
-  avgTimePerQuestion: 12.5,
-  preferredTime: '晚间 20:00-22:00',
-  weakAreas: ['动态规划', '图论'],
-  strongAreas: ['数组', '字符串'],
-  streakDays: 7,
-  weeklyTrend: 'up',
+const errorAnalysis = ref({
+  totalErrors: 0,
+  categories: [],
+  recentErrors: [],
+  improvementTrend: '',
 })
 
-const aiSuggestions = ref([
-  { icon: '🎯', title: '重点突破动态规划', desc: '根据错题分析，建议本周完成3道DP专题训练' },
-  { icon: '⏰', title: '优化做题节奏', desc: '平均用时偏长，建议先完成思路梳理再编码' },
-  { icon: '🔥', title: '保持连续学习', desc: '已连续学习7天，继续保持！' },
-])
+const studyHabits = ref({
+  weeklyStudyTime: 0,
+  averageTimePerQuestion: 0,
+  preferredTimeSlot: '',
+  consistencyScore: 0,
+  strongTopics: [],
+  weakTopics: [],
+})
 
-const quickActions = [
-  { label: '分析我的错题', action: 'analyze_errors' },
-  { label: '生成学习计划', action: 'generate_plan' },
-  { label: '推荐练习题目', action: 'recommend' },
-  { label: '解释这个概念', action: 'explain' },
+const learningPlan = ref({
+  weekGoals: [],
+  dailyTasks: [],
+  recommendations: [],
+  generatedAt: null,
+})
+
+const quickPrompts = [
+  { text: '分析我最近的错题', icon: '🔍' },
+  { text: '帮我制定学习计划', icon: '📋' },
+  { text: '推荐练习题目', icon: '💡' },
+  { text: '解答我的疑问', icon: '❓' },
 ]
 
-const predefinedResponses = {
-  analyze_errors: `📊 **错题分析报告**
-
-根据您最近的做题记录，我发现以下规律：
-
-**高频错误类型：**
-1. **状态转移错误** (占比40%) - 主要出现在DP问题中
-2. **边界条件遗漏** (占比30%) - 树和图的遍历问题
-3. **算法选择不当** (占比20%) - 复杂问题拆解不足
-
-**建议改进方向：**
-- 写代码前先画状态转移图
-- 养成检查边界条件的习惯
-- 多练习算法复杂度分析
-
-需要我针对某个具体问题详细讲解吗？`,
-  generate_plan: `📅 **本周个性化学习计划**
-
-**周一-周二：巩固基础**
-- 完成数组专题2题（预计用时30分钟）
-- 复习二分查找模板
-
-**周三-周四：重点突破**
-- 动态规划专题训练3题
-- 观看DP状态定义讲解视频
-
-**周五-周六：综合提升**
-- 完成1道中等难度综合题
-- 参与周赛模拟
-
-**周日：复盘总结**
-- 整理本周错题笔记
-- 预习下周内容
-
-是否需要我调整计划难度或时间安排？`,
-  recommend: `🎯 **为您推荐的练习题目**
-
-**适合当前水平：**
-1. **LeetCode 300. 最长递增子序列** - DP入门经典
-2. **LeetCode 1143. 最长公共子序列** - 二维DP练习
-3. **LeetCode 139. 单词拆分** - DP+记忆化
-
-**挑战提升：**
-4. **LeetCode 322. 零钱兑换** - 完全背包变体
-5. **LeetCode 72. 编辑距离** - 经典DP难题
-
-每道题都配有详细的思路引导，需要我讲解哪一题？`,
-  explain: `💡 我可以为您解释各种算法概念：
-
-**当前推荐：动态规划核心思想**
-
-动态规划的本质是将复杂问题分解为重叠子问题，通过存储子问题的解来避免重复计算。
-
-**三要素：**
-1. **最优子结构** - 问题的最优解包含子问题的最优解
-2. **重叠子问题** - 子问题会被多次计算
-3. **状态转移方程** - 描述子问题之间的关系
-
-您想深入了解哪个方面？或者有其他概念需要解释？`,
-}
-
-const handleQuickAction = (action) => {
-  inputMessage.value = quickActions.find(a => a.action === action)?.label || ''
-  sendMessage(action)
-}
-
-const sendMessage = async (quickAction = null) => {
-  const messageText = inputMessage.value.trim()
-  if (!messageText && !quickAction) return
-
-  const action = quickAction || quickActions.find(a => a.label === messageText)?.action
-
-  if (messageText && !quickAction) {
-    chatMessages.value.push({
-      role: 'user',
-      content: messageText,
-      time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-    })
+const fetchErrorAnalysis = async () => {
+  errorAnalysis.value = {
+    totalErrors: 23,
+    categories: [
+      { name: '动态规划', count: 8, percentage: 35 },
+      { name: '图论', count: 6, percentage: 26 },
+      { name: '二叉树', count: 5, percentage: 22 },
+      { name: '字符串', count: 4, percentage: 17 },
+    ],
+    recentErrors: [
+      { id: 1, title: '背包问题', reason: '状态转移方程错误', time: '2小时前' },
+      { id: 2, title: '最短路径', reason: '边界条件遗漏', time: '昨天' },
+      { id: 3, title: '二叉树遍历', reason: '递归终止条件错误', time: '2天前' },
+    ],
+    improvementTrend: 'up',
   }
+  return errorAnalysis.value
+}
+
+const fetchStudyHabits = async () => {
+  studyHabits.value = {
+    weeklyStudyTime: 12.5,
+    averageTimePerQuestion: 15,
+    preferredTimeSlot: '晚间 20:00-22:00',
+    consistencyScore: 78,
+    strongTopics: ['数组', '字符串', '链表'],
+    weakTopics: ['动态规划', '图论'],
+  }
+  return studyHabits.value
+}
+
+const generateLearningPlan = async (preferences = {}) => {
+  const today = new Date()
+  learningPlan.value = {
+    weekGoals: [
+      { id: 1, title: '掌握动态规划基础', progress: 0, target: 5 },
+      { id: 2, title: '完成图论入门', progress: 0, target: 3 },
+      { id: 3, title: '每日坚持练习', progress: 0, target: 7 },
+    ],
+    dailyTasks: [
+      { day: '今天', tasks: [{ title: '背包问题入门', duration: 30, type: 'learn' }] },
+      { day: '明天', tasks: [{ title: 'DP练习题2道', duration: 45, type: 'practice' }] },
+      { day: '后天', tasks: [{ title: '错题复盘', duration: 20, type: 'review' }] },
+    ],
+    recommendations: [
+      { type: 'video', title: '动态规划入门讲解', source: '推荐' },
+      { type: 'article', title: '背包问题详解', source: '必读' },
+    ],
+    generatedAt: today.toISOString(),
+  }
+  return learningPlan.value
+}
+
+const analyzeErrors = async () => {
+  const errors = await fetchErrorAnalysis()
+  const habits = await fetchStudyHabits()
+  return {
+    errorAnalysis: errors,
+    studyHabits: habits,
+    summary: generateAnalysisSummary(errors, habits),
+  }
+}
+
+const generateAnalysisSummary = (errors, habits) => {
+  const topErrorCategory = errors.categories[0]?.name || '未知'
+  return {
+    mainIssue: `${topErrorCategory}是你的主要薄弱点`,
+    suggestion: `建议本周重点攻克${topErrorCategory}，每天练习2-3题`,
+    encouragement: `你已经连续学习${Math.floor(habits.consistencyScore / 10)}天，继续保持！`,
+  }
+}
+
+const sendMessage = async (message) => {
+  if (!message?.trim()) return
+
+  chatMessages.value.push({
+    role: 'user',
+    content: message,
+    time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+  })
 
   inputMessage.value = ''
   isTyping.value = true
-
   await nextTick()
   scrollToBottom()
 
-  await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 700))
+  await new Promise(r => setTimeout(r, 600))
 
-  let response = ''
-  if (action && predefinedResponses[action]) {
-    response = predefinedResponses[action]
-  } else {
-    response = generateAIResponse(messageText)
-  }
-
+  const response = generateResponse(message)
   chatMessages.value.push({
     role: 'assistant',
     content: response,
@@ -147,13 +140,46 @@ const sendMessage = async (quickAction = null) => {
   scrollToBottom()
 }
 
-const generateAIResponse = (input) => {
-  const responses = [
-    `我理解您的问题："${input}"。\n\n让我为您分析一下...根据您的学习数据，我建议您先从基础概念入手，然后逐步提升难度。需要我提供更具体的指导吗？`,
-    `这是一个很好的问题！\n\n"${input}"\n\n根据您的做题习惯分析，我建议采用"先思考后编码"的方式。您可以先尝试用伪代码描述思路，然后再实现。`,
-    `关于"${input}"，我注意到您在这个领域还有一些提升空间。\n\n要不要我为您生成一份针对性的练习计划？`,
-  ]
-  return responses[Math.floor(Math.random() * responses.length)]
+const generateResponse = (input) => {
+  if (input.includes('错题') || input.includes('分析')) {
+    return `根据你的做题记录，我发现：
+
+**主要问题集中在：**
+- 动态规划（8次错误）- 状态转移方程定义不准确
+- 图论（6次错误）- 边界条件容易遗漏
+
+**建议改进方向：**
+1. 做题前先画状态转移图
+2. 写完代码后检查边界情况
+3. 每天复习一道错题
+
+需要我帮你制定针对性的练习计划吗？`
+  }
+  if (input.includes('计划') || input.includes('学习')) {
+    return `好的，这是为你定制的本周学习计划：
+
+**周一至周三：动态规划突破**
+- 每天完成2道DP入门题
+- 重点理解状态定义和转移
+
+**周四至周五：图论基础**
+- BFS/DFS模板练习
+- 最短路径入门
+
+**周末：综合练习**
+- 参加周赛模拟
+- 整理错题笔记
+
+你觉得这个安排怎么样？`
+  }
+  return `我理解你的问题。让我想想...
+
+根据你的学习数据，我建议：
+- 先从基础概念入手
+- 循序渐进提升难度
+- 保持每日练习的习惯
+
+有什么具体想了解的吗？`
 }
 
 const scrollToBottom = () => {
@@ -162,324 +188,291 @@ const scrollToBottom = () => {
   }
 }
 
-const habitScore = computed(() => {
-  let score = 50
-  if (habits.value.streakDays >= 7) score += 20
-  if (habits.value.weeklyTrend === 'up') score += 15
-  if (habits.value.avgTimePerQuestion < 15) score += 15
-  return Math.min(100, score)
+const updateErrorAnalysis = (data) => {
+  errorAnalysis.value = { ...errorAnalysis.value, ...data }
+}
+
+const updateStudyHabits = (data) => {
+  studyHabits.value = { ...studyHabits.value, ...data }
+}
+
+const updateLearningPlan = (data) => {
+  learningPlan.value = { ...learningPlan.value, ...data }
+}
+
+const resetData = () => {
+  errorAnalysis.value = { totalErrors: 0, categories: [], recentErrors: [], improvementTrend: '' }
+  studyHabits.value = { weeklyStudyTime: 0, averageTimePerQuestion: 0, preferredTimeSlot: '', consistencyScore: 0, strongTopics: [], weakTopics: [] }
+  learningPlan.value = { weekGoals: [], dailyTasks: [], recommendations: [], generatedAt: null }
+}
+
+defineExpose({
+  fetchErrorAnalysis,
+  fetchStudyHabits,
+  generateLearningPlan,
+  analyzeErrors,
+  sendMessage,
+  updateErrorAnalysis,
+  updateStudyHabits,
+  updateLearningPlan,
+  resetData,
 })
 
-onMounted(() => {
+onMounted(async () => {
+  await fetchErrorAnalysis()
+  await fetchStudyHabits()
   chatMessages.value.push({
     role: 'assistant',
-    content: `👋 你好，${userStore.userInfo?.name || '同学'}！\n\n我是你的AI学习助手，我可以帮你：\n\n• 📊 分析错题原因和薄弱环节\n• 📅 生成个性化学习计划\n• 🎯 推荐适合的练习题目\n• 💡 解释算法概念和解题思路\n\n有什么我可以帮助你的吗？`,
+    content: `你好，${userStore.userInfo?.name || '同学'}！👋
+
+我是你的学习小助手，可以帮你：
+- 📊 分析错题，找出薄弱点
+- 📋 制定个性化学习计划
+- 💡 推荐适合的练习题目
+
+有什么我可以帮你的吗？`,
     time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
   })
 })
 </script>
 
 <template>
-  <section class="ai-assistant">
-    <div class="assistant-header">
-      <div class="header-glow"></div>
-      <div class="header-content">
-        <div class="ai-avatar">
-          <div class="avatar-ring">
-            <svg class="ring-svg" viewBox="0 0 100 100">
-              <defs>
-                <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#63b3ed" />
-                  <stop offset="50%" stop-color="#805ad5" />
-                  <stop offset="100%" stop-color="#63b3ed" />
-                </linearGradient>
-              </defs>
-              <circle class="ring-track" cx="50" cy="50" r="45" />
-              <circle class="ring-progress" cx="50" cy="50" r="45" />
-            </svg>
-          </div>
-          <div class="avatar-core">
-            <svg class="brain-icon" viewBox="0 0 32 32" width="28" height="28">
-              <defs>
-                <linearGradient id="brainGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#63b3ed" />
-                  <stop offset="50%" stop-color="#805ad5" />
-                  <stop offset="100%" stop-color="#63b3ed" />
-                </linearGradient>
-              </defs>
-              <g fill="none" stroke="url(#brainGrad)" stroke-width="1.5" stroke-linecap="round">
-                <circle cx="16" cy="10" r="3" class="node node-1" />
-                <circle cx="8" cy="16" r="2.5" class="node node-2" />
-                <circle cx="24" cy="16" r="2.5" class="node node-3" />
-                <circle cx="12" cy="22" r="2" class="node node-4" />
-                <circle cx="20" cy="22" r="2" class="node node-5" />
-                <circle cx="16" cy="16" r="4" class="node node-center" />
-                <path d="M16 10 L16 12" class="connection c1" />
-                <path d="M8 16 L12 16" class="connection c2" />
-                <path d="M24 16 L20 16" class="connection c3" />
-                <path d="M12 22 L14 18" class="connection c4" />
-                <path d="M20 22 L18 18" class="connection c5" />
-                <path d="M14 14 L12 22" class="connection c6" opacity="0.5" />
-                <path d="M18 14 L20 22" class="connection c7" opacity="0.5" />
-              </g>
-            </svg>
-            <div class="pulse-rings">
-              <span class="pulse-ring"></span>
-              <span class="pulse-ring"></span>
-            </div>
-          </div>
+  <section class="study-helper">
+    <div class="helper-header">
+      <div class="header-left">
+        <div class="helper-icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+          </svg>
         </div>
-        <div class="header-text">
-          <h3>AI 学习助手</h3>
-          <p>智能分析 · 个性化指导</p>
+        <div class="header-info">
+          <h3>学习助手</h3>
+          <p>陪你一起进步</p>
         </div>
       </div>
-      <div class="header-tabs">
-        <button :class="['tab-btn', { active: activeTab === 'chat' }]" @click="activeTab = 'chat'">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-          对话
-        </button>
-        <button :class="['tab-btn', { active: activeTab === 'analysis' }]" @click="activeTab = 'analysis'">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"/>
-          </svg>
-          分析
-        </button>
-        <button :class="['tab-btn', { active: activeTab === 'plan' }]" @click="activeTab = 'plan'">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-            <line x1="16" y1="2" x2="16" y2="6"/>
-            <line x1="8" y1="2" x2="8" y2="6"/>
-            <line x1="3" y1="10" x2="21" y2="10"/>
-          </svg>
-          计划
-        </button>
+      <div class="section-tabs">
+        <button :class="['tab', { active: activeSection === 'overview' }]" @click="activeSection = 'overview'">总览</button>
+        <button :class="['tab', { active: activeSection === 'errors' }]" @click="activeSection = 'errors'">错题</button>
+        <button :class="['tab', { active: activeSection === 'plan' }]" @click="activeSection = 'plan'">计划</button>
+        <button :class="['tab', { active: activeSection === 'chat' }]" @click="activeSection = 'chat'">对话</button>
       </div>
     </div>
 
-    <div class="assistant-body">
-      <div v-show="activeTab === 'chat'" class="chat-panel">
-        <div ref="chatContainerRef" class="chat-messages">
-          <div v-for="(msg, idx) in chatMessages" :key="idx" :class="['message', msg.role]">
-            <div class="message-avatar">
-              <template v-if="msg.role === 'assistant'">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <circle cx="12" cy="12" r="10"/>
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
-                </svg>
-              </template>
-              <template v-else>
-                <span>{{ (userStore.userInfo?.name || '同学').slice(0, 1) }}</span>
-              </template>
+    <div class="helper-content">
+      <div v-show="activeSection === 'overview'" class="overview-section">
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-icon errors">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
             </div>
-            <div class="message-content">
+            <div class="stat-info">
+              <span class="stat-value">{{ errorAnalysis.totalErrors }}</span>
+              <span class="stat-label">累计错题</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon time">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-value">{{ studyHabits.weeklyStudyTime }}h</span>
+              <span class="stat-label">本周学习</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon score">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-value">{{ studyHabits.consistencyScore }}</span>
+              <span class="stat-label">坚持指数</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="overview-grid">
+          <div class="overview-card">
+            <h4>薄弱环节</h4>
+            <div class="topic-list">
+              <div v-for="topic in studyHabits.weakTopics" :key="topic" class="topic-item weak">
+                <span class="topic-dot"></span>
+                {{ topic }}
+              </div>
+              <div v-if="!studyHabits.weakTopics.length" class="empty-hint">暂无数据</div>
+            </div>
+          </div>
+          <div class="overview-card">
+            <h4>擅长领域</h4>
+            <div class="topic-list">
+              <div v-for="topic in studyHabits.strongTopics" :key="topic" class="topic-item strong">
+                <span class="topic-dot"></span>
+                {{ topic }}
+              </div>
+              <div v-if="!studyHabits.strongTopics.length" class="empty-hint">暂无数据</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="quick-actions">
+          <h4>快速开始</h4>
+          <div class="action-buttons">
+            <button class="action-btn" @click="activeSection = 'errors'">
+              <span class="action-icon">📊</span>
+              <span>查看错题分析</span>
+            </button>
+            <button class="action-btn" @click="activeSection = 'plan'">
+              <span class="action-icon">📋</span>
+              <span>生成学习计划</span>
+            </button>
+            <button class="action-btn" @click="activeSection = 'chat'">
+              <span class="action-icon">💬</span>
+              <span>开始对话</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-show="activeSection === 'errors'" class="errors-section">
+        <div class="section-title">
+          <h3>错题分析</h3>
+          <p>找出薄弱环节，针对性提升</p>
+        </div>
+
+        <div class="error-categories">
+          <h4>错误类型分布</h4>
+          <div class="category-bars">
+            <div v-for="cat in errorAnalysis.categories" :key="cat.name" class="category-bar">
+              <div class="bar-header">
+                <span class="bar-label">{{ cat.name }}</span>
+                <span class="bar-value">{{ cat.count }}次</span>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill" :style="{ width: cat.percentage + '%' }"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="recent-errors">
+          <h4>最近错题</h4>
+          <div class="error-list">
+            <div v-for="err in errorAnalysis.recentErrors" :key="err.id" class="error-item">
+              <div class="error-main">
+                <span class="error-title">{{ err.title }}</span>
+                <span class="error-reason">{{ err.reason }}</span>
+              </div>
+              <span class="error-time">{{ err.time }}</span>
+            </div>
+            <div v-if="!errorAnalysis.recentErrors.length" class="empty-hint">暂无错题记录</div>
+          </div>
+        </div>
+      </div>
+
+      <div v-show="activeSection === 'plan'" class="plan-section">
+        <div class="section-title">
+          <h3>学习计划</h3>
+          <p>根据你的情况定制</p>
+        </div>
+
+        <div class="week-goals">
+          <h4>本周目标</h4>
+          <div class="goal-list">
+            <div v-for="goal in learningPlan.weekGoals" :key="goal.id" class="goal-item">
+              <div class="goal-check">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                </svg>
+              </div>
+              <div class="goal-content">
+                <span class="goal-title">{{ goal.title }}</span>
+                <div class="goal-progress">
+                  <div class="progress-bar">
+                    <div class="progress-fill" :style="{ width: (goal.progress / goal.target * 100) + '%' }"></div>
+                  </div>
+                  <span class="progress-text">{{ goal.progress }}/{{ goal.target }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="!learningPlan.weekGoals.length" class="empty-hint">
+              <button class="generate-btn" @click="generateLearningPlan()">生成学习计划</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="daily-tasks">
+          <h4>每日安排</h4>
+          <div class="task-timeline">
+            <div v-for="day in learningPlan.dailyTasks" :key="day.day" class="timeline-day">
+              <div class="day-marker">{{ day.day }}</div>
+              <div class="day-tasks">
+                <div v-for="task in day.tasks" :key="task.title" class="task-card">
+                  <span class="task-type">{{ task.type === 'learn' ? '学习' : task.type === 'practice' ? '练习' : '复习' }}</span>
+                  <span class="task-title">{{ task.title }}</span>
+                  <span class="task-duration">{{ task.duration }}分钟</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="!learningPlan.dailyTasks.length" class="empty-hint">暂无计划</div>
+          </div>
+        </div>
+
+        <div class="plan-actions">
+          <button class="plan-btn primary" @click="generateLearningPlan()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6a2 2 0 0 0-2 2z"/>
+            </svg>
+            保存计划
+          </button>
+          <button class="plan-btn secondary" @click="generateLearningPlan()">重新生成</button>
+        </div>
+      </div>
+
+      <div v-show="activeSection === 'chat'" class="chat-section">
+        <div ref="chatContainerRef" class="chat-messages">
+          <div v-for="(msg, idx) in chatMessages" :key="idx" :class="['chat-message', msg.role]">
+            <div class="message-avatar">
+              <span v-if="msg.role === 'assistant'">学</span>
+              <span v-else>{{ (userStore.userInfo?.name || '我').slice(0, 1) }}</span>
+            </div>
+            <div class="message-body">
               <div class="message-text" v-html="msg.content.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')"></div>
               <div class="message-time">{{ msg.time }}</div>
             </div>
           </div>
-          <div v-if="isTyping" class="message assistant">
-            <div class="message-avatar">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5">
-                <circle cx="12" cy="12" r="10"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-            </div>
-            <div class="message-content">
-              <div class="typing-indicator">
+          <div v-if="isTyping" class="chat-message assistant">
+            <div class="message-avatar"><span>学</span></div>
+            <div class="message-body">
+              <div class="typing-dots">
                 <span></span><span></span><span></span>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="quick-actions">
-          <button v-for="action in quickActions" :key="action.action" class="quick-btn" @click="handleQuickAction(action.action)">
-            {{ action.label }}
+        <div class="quick-prompts">
+          <button v-for="prompt in quickPrompts" :key="prompt.text" class="prompt-btn" @click="sendMessage(prompt.text)">
+            <span>{{ prompt.icon }}</span>
+            {{ prompt.text }}
           </button>
         </div>
 
-        <div class="chat-input-wrap">
-          <input v-model="inputMessage" type="text" class="chat-input" placeholder="输入你的问题..." @keyup.enter="sendMessage()" />
-          <button class="send-btn" :disabled="!inputMessage.trim() && !isTyping" @click="sendMessage()">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+        <div class="chat-input-area">
+          <input v-model="inputMessage" type="text" class="chat-input" placeholder="输入你的问题..." @keyup.enter="sendMessage(inputMessage)" />
+          <button class="send-btn" :disabled="!inputMessage.trim()" @click="sendMessage(inputMessage)">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="22" y1="2" x2="11" y2="13"/>
               <polygon points="22 2 15 22 11 13 2 9 22 2"/>
             </svg>
-          </button>
-        </div>
-      </div>
-
-      <div v-show="activeTab === 'analysis'" class="analysis-panel">
-        <div class="analysis-grid">
-          <div class="analysis-card habit-card">
-            <div class="card-header">
-              <h4>学习习惯评分</h4>
-              <div class="score-badge">{{ habitScore }}分</div>
-            </div>
-            <div class="habit-stats">
-              <div class="stat-row">
-                <span class="stat-label">平均做题时间</span>
-                <span class="stat-value">{{ habits.avgTimePerQuestion }}分钟</span>
-              </div>
-              <div class="stat-row">
-                <span class="stat-label">最佳学习时段</span>
-                <span class="stat-value">{{ habits.preferredTime }}</span>
-              </div>
-              <div class="stat-row">
-                <span class="stat-label">连续学习天数</span>
-                <span class="stat-value highlight">{{ habits.streakDays }}天 🔥</span>
-              </div>
-            </div>
-            <div class="habit-areas">
-              <div class="area-item">
-                <span class="area-label">优势领域</span>
-                <div class="area-tags strong">
-                  <span v-for="area in habits.strongAreas" :key="area" class="tag">{{ area }}</span>
-                </div>
-              </div>
-              <div class="area-item">
-                <span class="area-label">待提升领域</span>
-                <div class="area-tags weak">
-                  <span v-for="area in habits.weakAreas" :key="area" class="tag">{{ area }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="analysis-card errors-card">
-            <div class="card-header">
-              <h4>错题分析</h4>
-              <span class="error-count">{{ wrongQuestions.length }}类问题</span>
-            </div>
-            <div class="error-list">
-              <div v-for="item in wrongQuestions" :key="item.id" class="error-item">
-                <div class="error-info">
-                  <div class="error-title">{{ item.title }}</div>
-                  <div class="error-type">{{ item.errorType }}</div>
-                </div>
-                <div class="error-meta">
-                  <span class="error-count-badge">{{ item.count }}次</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="analysis-card suggestions-card">
-            <div class="card-header">
-              <h4>AI 建议</h4>
-            </div>
-            <div class="suggestions-list">
-              <div v-for="(suggestion, idx) in aiSuggestions" :key="idx" class="suggestion-item">
-                <span class="suggestion-icon">{{ suggestion.icon }}</span>
-                <div class="suggestion-content">
-                  <div class="suggestion-title">{{ suggestion.title }}</div>
-                  <div class="suggestion-desc">{{ suggestion.desc }}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div v-show="activeTab === 'plan'" class="plan-panel">
-        <div class="plan-header">
-          <h4>AI 生成的学习计划</h4>
-          <p>基于你的学习数据和目标智能生成</p>
-        </div>
-        <div class="plan-timeline">
-          <div class="timeline-item">
-            <div class="timeline-marker">
-              <span class="marker-day">周一</span>
-            </div>
-            <div class="timeline-content">
-              <div class="plan-task">
-                <span class="task-icon">📚</span>
-                <div class="task-info">
-                  <div class="task-title">动态规划基础</div>
-                  <div class="task-desc">完成斐波那契、爬楼梯等入门题目</div>
-                </div>
-                <span class="task-time">30分钟</span>
-              </div>
-            </div>
-          </div>
-          <div class="timeline-item">
-            <div class="timeline-marker">
-              <span class="marker-day">周二</span>
-            </div>
-            <div class="timeline-content">
-              <div class="plan-task">
-                <span class="task-icon">🎯</span>
-                <div class="task-info">
-                  <div class="task-title">背包问题专题</div>
-                  <div class="task-desc">0-1背包、完全背包模板练习</div>
-                </div>
-                <span class="task-time">45分钟</span>
-              </div>
-            </div>
-          </div>
-          <div class="timeline-item">
-            <div class="timeline-marker">
-              <span class="marker-day">周三</span>
-            </div>
-            <div class="timeline-content">
-              <div class="plan-task">
-                <span class="task-icon">🔄</span>
-                <div class="task-info">
-                  <div class="task-title">错题复盘</div>
-                  <div class="task-desc">重做本周错题，总结错误原因</div>
-                </div>
-                <span class="task-time">30分钟</span>
-              </div>
-            </div>
-          </div>
-          <div class="timeline-item">
-            <div class="timeline-marker">
-              <span class="marker-day">周四</span>
-            </div>
-            <div class="timeline-content">
-              <div class="plan-task">
-                <span class="task-icon">🧩</span>
-                <div class="task-info">
-                  <div class="task-title">图论基础</div>
-                  <div class="task-desc">BFS、DFS遍历与最短路径入门</div>
-                </div>
-                <span class="task-time">40分钟</span>
-              </div>
-            </div>
-          </div>
-          <div class="timeline-item">
-            <div class="timeline-marker">
-              <span class="marker-day">周五</span>
-            </div>
-            <div class="timeline-content">
-              <div class="plan-task highlight">
-                <span class="task-icon">🏆</span>
-                <div class="task-info">
-                  <div class="task-title">周赛模拟</div>
-                  <div class="task-desc">限时完成3道题目，模拟真实比赛</div>
-                </div>
-                <span class="task-time">90分钟</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="plan-actions">
-          <button class="plan-btn primary">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 4v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6a2 2 0 0 0-2 2z"/>
-              <polyline points="14 2 14 8 20 8"/>
-            </svg>
-            保存计划
-          </button>
-          <button class="plan-btn secondary">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="23 4 23 10 17 10"/>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-            重新生成
           </button>
         </div>
       </div>
@@ -488,627 +481,329 @@ onMounted(() => {
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
 
-.ai-assistant {
-  background: linear-gradient(145deg, #ffffff 0%, #f8fafc 50%, #f1f5f9 100%);
-  border-radius: 20px;
+.study-helper {
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: linear-gradient(135deg, #fefce8 0%, #fef9c3 30%, #fef08a 100%);
+  border-radius: 24px;
   overflow: hidden;
-  position: relative;
-  font-family: 'Noto Sans SC', sans-serif;
-  border: 1px solid rgba(99, 179, 237, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.2);
+  box-shadow: 0 8px 32px rgba(234, 179, 8, 0.12);
 }
 
-.ai-assistant::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 200px;
-  background: radial-gradient(ellipse at 50% 0%, rgba(99, 179, 237, 0.1) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-.assistant-header {
-  position: relative;
+.helper-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid rgba(99, 179, 237, 0.15);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background: linear-gradient(180deg, rgba(255,255,255,0.8) 0%, rgba(254,249,195,0.6) 100%);
+  border-bottom: 1px solid rgba(234, 179, 8, 0.15);
 }
 
-.header-glow {
-  position: absolute;
-  top: -50px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 400px;
-  height: 120px;
-  background: radial-gradient(ellipse, rgba(99, 179, 237, 0.12) 0%, rgba(128, 90, 213, 0.08) 40%, transparent 70%);
-  pointer-events: none;
-  animation: glowPulse 4s ease-in-out infinite;
-}
-
-@keyframes glowPulse {
-  0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
-  50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
-}
-
-.header-content {
+.header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
-.ai-avatar {
-  position: relative;
-  width: 56px;
-  height: 56px;
-  background: linear-gradient(135deg, #e0f2fe 0%, #ede9fe 100%);
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 
-    0 4px 16px rgba(99, 179, 237, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  overflow: visible;
-  border: 1px solid rgba(99, 179, 237, 0.2);
-}
-
-.avatar-ring {
-  position: absolute;
-  inset: -4px;
-  border-radius: 20px;
-  pointer-events: none;
-}
-
-.ring-svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.ring-track {
-  fill: none;
-  stroke: rgba(99, 179, 237, 0.1);
-  stroke-width: 2;
-}
-
-.ring-progress {
-  fill: none;
-  stroke: url(#ringGrad);
-  stroke-width: 2;
-  stroke-dasharray: 283;
-  stroke-dashoffset: 283;
-  stroke-linecap: round;
-  animation: ringDraw 3s ease-in-out infinite;
-}
-
-@keyframes ringDraw {
-  0%, 100% { 
-    stroke-dashoffset: 283; 
-    opacity: 0.3;
-  }
-  50% { 
-    stroke-dashoffset: 70; 
-    opacity: 1;
-  }
-}
-
-.avatar-core {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.brain-icon {
-  position: relative;
-  z-index: 2;
-}
-
-.brain-icon .node {
-  fill: rgba(99, 179, 237, 0.2);
-  animation: nodeGlow 2s ease-in-out infinite;
-}
-
-.brain-icon .node-center {
-  fill: rgba(128, 90, 213, 0.3);
-  animation: nodeGlow 2s ease-in-out infinite 0.3s;
-}
-
-.brain-icon .node-1 { animation-delay: 0s; }
-.brain-icon .node-2 { animation-delay: 0.1s; }
-.brain-icon .node-3 { animation-delay: 0.2s; }
-.brain-icon .node-4 { animation-delay: 0.3s; }
-.brain-icon .node-5 { animation-delay: 0.4s; }
-
-@keyframes nodeGlow {
-  0%, 100% { 
-    opacity: 0.6;
-    filter: drop-shadow(0 0 2px rgba(99, 179, 237, 0.5));
-  }
-  50% { 
-    opacity: 1;
-    filter: drop-shadow(0 0 6px rgba(99, 179, 237, 0.8));
-  }
-}
-
-.brain-icon .connection {
-  stroke-dasharray: 20;
-  stroke-dashoffset: 20;
-  animation: connectionFlow 2.5s ease-in-out infinite;
-}
-
-.brain-icon .c1 { animation-delay: 0s; }
-.brain-icon .c2 { animation-delay: 0.15s; }
-.brain-icon .c3 { animation-delay: 0.3s; }
-.brain-icon .c4 { animation-delay: 0.45s; }
-.brain-icon .c5 { animation-delay: 0.6s; }
-.brain-icon .c6 { animation-delay: 0.75s; }
-.brain-icon .c7 { animation-delay: 0.9s; }
-
-@keyframes connectionFlow {
-  0%, 100% { 
-    stroke-dashoffset: 20;
-    opacity: 0.3;
-  }
-  50% { 
-    stroke-dashoffset: 0;
-    opacity: 1;
-  }
-}
-
-.pulse-rings {
-  position: absolute;
-  inset: -8px;
-  pointer-events: none;
-}
-
-.pulse-ring {
-  position: absolute;
-  inset: 0;
-  border: 1px solid rgba(99, 179, 237, 0.4);
-  border-radius: 20px;
-  animation: pulseExpand 3s ease-out infinite;
-}
-
-.pulse-ring:nth-child(2) {
-  animation-delay: 1.5s;
-}
-
-@keyframes pulseExpand {
-  0% {
-    transform: scale(1);
-    opacity: 0.6;
-  }
-  100% {
-    transform: scale(1.4);
-    opacity: 0;
-  }
-}
-
-.header-text h3 {
-  font-size: 20px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0;
-  letter-spacing: 0.5px;
-}
-
-.header-text p {
-  font-size: 13px;
-  color: #64748b;
-  margin: 4px 0 0;
-}
-
-.header-tabs {
-  display: flex;
-  gap: 8px;
-  margin-top: 16px;
-}
-
-.tab-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: #f8fafc;
-  border: 1px solid rgba(99, 179, 237, 0.15);
-  border-radius: 10px;
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.tab-btn:hover {
-  background: #f1f5f9;
-  color: #475569;
-  border-color: rgba(99, 179, 237, 0.3);
-}
-
-.tab-btn.active {
-  background: linear-gradient(135deg, #dbeafe 0%, #ede9fe 100%);
-  border-color: rgba(99, 179, 237, 0.4);
-  color: #2563eb;
-}
-
-.assistant-body {
-  position: relative;
-  min-height: 480px;
-}
-
-.chat-panel {
-  display: flex;
-  flex-direction: column;
-  height: 480px;
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  background: 
-    radial-gradient(ellipse at 20% 80%, rgba(99, 179, 237, 0.05) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(128, 90, 213, 0.04) 0%, transparent 50%),
-    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  position: relative;
-}
-
-.chat-messages::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-  opacity: 0.02;
-  pointer-events: none;
-}
-
-.chat-messages::-webkit-scrollbar {
-  width: 6px;
-}
-
-.chat-messages::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.chat-messages::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-}
-
-.message {
-  display: flex;
-  gap: 12px;
-  max-width: 85%;
-}
-
-.message.user {
-  flex-direction: row-reverse;
-  margin-left: auto;
-}
-
-.message-avatar {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+.helper-icon {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.message.assistant .message-avatar {
-  background: linear-gradient(135deg, #dbeafe 0%, #ede9fe 100%);
-  border: 1px solid rgba(99, 179, 237, 0.3);
-  color: #2563eb;
-}
-
-.message.user .message-avatar {
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
-  border: 1px solid rgba(99, 179, 237, 0.3);
-  color: #ffffff;
-}
-
-.message-content {
-  flex: 1;
-}
-
-.message-text {
-  padding: 14px 18px;
-  border-radius: 16px;
-  font-size: 14px;
-  line-height: 1.7;
-  color: #334155;
-}
-
-.message.assistant .message-text {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid rgba(99, 179, 237, 0.2);
-  border-radius: 16px 16px 16px 4px;
-}
-
-.message.user .message-text {
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
-  border: 1px solid rgba(99, 179, 237, 0.3);
-  border-radius: 16px 16px 4px 16px;
-  color: #ffffff;
-}
-
-.message-text :deep(strong) {
-  color: #2563eb;
-  font-weight: 600;
-}
-
-.message-time {
-  font-size: 11px;
-  color: #94a3b8;
-  margin-top: 6px;
-  padding: 0 4px;
-}
-
-.message.user .message-time {
-  text-align: right;
-}
-
-.typing-indicator {
-  display: flex;
-  gap: 4px;
-  padding: 14px 18px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid rgba(99, 179, 237, 0.2);
-  border-radius: 16px;
-  width: fit-content;
-}
-
-.typing-indicator span {
-  width: 8px;
-  height: 8px;
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
-  border-radius: 50%;
-  animation: typingBounce 1.4s ease-in-out infinite;
-  box-shadow: 0 0 8px rgba(99, 179, 237, 0.4);
-}
-
-.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes typingBounce {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-  30% { transform: translateY(-6px); opacity: 1; }
-}
-
-.quick-actions {
-  display: flex;
-  gap: 8px;
-  padding: 12px 20px;
-  flex-wrap: wrap;
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-  border-top: 1px solid rgba(99, 179, 237, 0.1);
-}
-
-.quick-btn {
-  padding: 8px 14px;
-  background: linear-gradient(135deg, #dbeafe 0%, #ede9fe 100%);
-  border: 1px solid rgba(99, 179, 237, 0.25);
-  border-radius: 20px;
-  color: #2563eb;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.quick-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, #bfdbfe 0%, #ddd6fe 100%);
-  opacity: 0;
-  transition: opacity 0.25s ease;
-}
-
-.quick-btn:hover {
-  border-color: rgba(99, 179, 237, 0.5);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(99, 179, 237, 0.2);
-  color: #1d4ed8;
-}
-
-.quick-btn:hover::before {
-  opacity: 1;
-}
-
-.chat-input-wrap {
-  display: flex;
-  gap: 12px;
-  padding: 16px 20px;
-  border-top: 1px solid rgba(99, 179, 237, 0.1);
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-  position: relative;
-}
-
-.chat-input-wrap::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 20px;
-  right: 20px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgba(99, 179, 237, 0.3) 50%, transparent 100%);
-}
-
-.chat-input {
-  flex: 1;
-  padding: 12px 18px;
-  background: #ffffff;
-  border: 1px solid rgba(99, 179, 237, 0.2);
-  border-radius: 14px;
-  color: #1e293b;
-  font-size: 14px;
-  outline: none;
-  transition: all 0.25s ease;
-}
-
-.chat-input::placeholder {
-  color: #94a3b8;
-}
-
-.chat-input:focus {
-  border-color: #3b82f6;
-  background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.send-btn {
-  width: 46px;
-  height: 46px;
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
-  border: none;
-  border-radius: 14px;
   color: white;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.25s ease;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 
-.send-btn:hover:not(:disabled) {
-  transform: scale(1.05);
-  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
-}
-
-.send-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.analysis-panel {
-  padding: 20px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-}
-
-.analysis-grid {
-  display: grid;
-  gap: 16px;
-}
-
-.analysis-card {
-  background: #ffffff;
-  border: 1px solid rgba(99, 179, 237, 0.15);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.card-header h4 {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1e293b;
+.header-info h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #78350f;
   margin: 0;
 }
 
-.score-badge {
-  padding: 4px 12px;
-  background: linear-gradient(135deg, #dcfce7 0%, #d1fae5 100%);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  border-radius: 20px;
-  color: #16a34a;
-  font-size: 14px;
-  font-weight: 600;
-  font-family: 'JetBrains Mono', monospace;
+.header-info p {
+  font-size: 12px;
+  color: #a16207;
+  margin: 2px 0 0;
 }
 
-.habit-stats {
+.section-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.tab {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(234, 179, 8, 0.2);
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #92400e;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.tab.active {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.helper-content {
+  min-height: 400px;
+  padding: 24px;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 16px;
+  border: 1px solid rgba(234, 179, 8, 0.15);
+}
+
+.stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-icon.errors {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.stat-icon.time {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.stat-icon.score {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.stat-info {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.stat-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  background: #f8fafc;
-  border-radius: 10px;
-  border: 1px solid rgba(99, 179, 237, 0.1);
-}
-
-.stat-label {
-  color: #64748b;
-  font-size: 13px;
 }
 
 .stat-value {
-  color: #334155;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 20px;
+  font-weight: 700;
+  color: #78350f;
 }
 
-.stat-value.highlight {
-  color: #f59e0b;
+.stat-label {
+  font-size: 12px;
+  color: #a16207;
 }
 
-.habit-areas {
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.overview-card {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 16px;
+  border: 1px solid rgba(234, 179, 8, 0.15);
+}
+
+.overview-card h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #78350f;
+  margin: 0 0 12px;
+}
+
+.topic-list {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+
+.topic-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.topic-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.topic-item.weak .topic-dot {
+  background: #f59e0b;
+}
+
+.topic-item.strong .topic-dot {
+  background: #10b981;
+}
+
+.empty-hint {
+  color: #a16207;
+  font-size: 13px;
+  opacity: 0.7;
+  text-align: center;
+  padding: 12px;
+}
+
+.quick-actions h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #78350f;
+  margin: 0 0 12px;
+}
+
+.action-buttons {
+  display: flex;
   gap: 12px;
 }
 
-.area-label {
-  display: block;
-  font-size: 12px;
-  color: #64748b;
-  margin-bottom: 6px;
-}
-
-.area-tags {
+.action-btn {
+  flex: 1;
   display: flex;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
-  flex-wrap: wrap;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(234, 179, 8, 0.2);
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #78350f;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.area-tags .tag {
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 12px;
+.action-btn:hover {
+  background: white;
+  border-color: rgba(234, 179, 8, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(234, 179, 8, 0.15);
+}
+
+.action-icon {
+  font-size: 16px;
+}
+
+.section-title {
+  margin-bottom: 20px;
+}
+
+.section-title h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #78350f;
+  margin: 0;
+}
+
+.section-title p {
+  font-size: 13px;
+  color: #a16207;
+  margin: 4px 0 0;
+}
+
+.error-categories {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 16px;
+  border: 1px solid rgba(234, 179, 8, 0.15);
+  margin-bottom: 16px;
+}
+
+.error-categories h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #78350f;
+  margin: 0 0 16px;
+}
+
+.category-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.category-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bar-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.bar-label {
+  color: #78350f;
   font-weight: 500;
 }
 
-.area-tags.strong .tag {
-  background: #dcfce7;
-  color: #16a34a;
+.bar-value {
+  color: #a16207;
 }
 
-.area-tags.weak .tag {
-  background: #ffedd5;
-  color: #ea580c;
+.bar-track {
+  height: 8px;
+  background: rgba(234, 179, 8, 0.15);
+  border-radius: 4px;
+  overflow: hidden;
 }
 
-.error-count {
-  font-size: 12px;
-  color: #64748b;
+.bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.recent-errors {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 16px;
+  border: 1px solid rgba(234, 179, 8, 0.15);
+}
+
+.recent-errors h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #78350f;
+  margin: 0 0 14px;
 }
 
 .error-list {
@@ -1119,283 +814,449 @@ onMounted(() => {
 
 .error-item {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
   padding: 12px 14px;
-  background: #fef2f2;
-  border-radius: 12px;
-  border-left: 3px solid #ef4444;
+  background: #fef3c7;
+  border-radius: 10px;
+  border-left: 3px solid #f59e0b;
+}
+
+.error-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .error-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #78350f;
+}
+
+.error-reason {
+  font-size: 11px;
+  color: #a16207;
+}
+
+.error-time {
+  font-size: 11px;
+  color: #a16207;
+}
+
+.week-goals {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 16px;
+  border: 1px solid rgba(234, 179, 8, 0.15);
+  margin-bottom: 16px;
+}
+
+.week-goals h4 {
   font-size: 14px;
-  font-weight: 500;
-  color: #1e293b;
+  font-weight: 600;
+  color: #78350f;
+  margin: 0 0 14px;
 }
 
-.error-type {
-  font-size: 12px;
-  color: #64748b;
-  margin-top: 2px;
-}
-
-.error-count-badge {
-  padding: 4px 10px;
-  background: #fee2e2;
-  border-radius: 20px;
-  color: #dc2626;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.suggestions-list {
+.goal-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.suggestion-item {
+.goal-item {
   display: flex;
+  align-items: flex-start;
   gap: 12px;
-  padding: 14px;
-  background: #f8fafc;
-  border-radius: 12px;
-  border: 1px solid rgba(99, 179, 237, 0.1);
-  transition: all 0.2s ease;
 }
 
-.suggestion-item:hover {
-  background: #f1f5f9;
-  border-color: rgba(99, 179, 237, 0.2);
+.goal-check {
+  color: #a16207;
+  margin-top: 2px;
 }
 
-.suggestion-icon {
-  font-size: 24px;
-  line-height: 1;
-}
-
-.suggestion-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.suggestion-desc {
-  font-size: 12px;
-  color: #64748b;
-  margin-top: 4px;
-}
-
-.plan-panel {
-  padding: 20px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-}
-
-.plan-header {
-  text-align: center;
-  margin-bottom: 24px;
-}
-
-.plan-header h4 {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0 0 6px;
-}
-
-.plan-header p {
-  font-size: 13px;
-  color: #64748b;
-  margin: 0;
-}
-
-.plan-timeline {
-  position: relative;
-  padding-left: 80px;
-}
-
-.plan-timeline::before {
-  content: '';
-  position: absolute;
-  left: 60px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: linear-gradient(180deg, #3b82f6 0%, #8b5cf6 100%);
-}
-
-.timeline-item {
-  position: relative;
-  margin-bottom: 16px;
-}
-
-.timeline-marker {
-  position: absolute;
-  left: -80px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 50px;
-  text-align: right;
-}
-
-.marker-day {
-  font-size: 12px;
-  font-weight: 600;
-  color: #64748b;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.timeline-item::before {
-  content: '';
-  position: absolute;
-  left: -26px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 12px;
-  height: 12px;
-  background: #ffffff;
-  border: 2px solid #3b82f6;
-  border-radius: 50%;
-  z-index: 1;
-}
-
-.timeline-content {
-  padding-left: 20px;
-}
-
-.plan-task {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 18px;
-  background: #ffffff;
-  border: 1px solid rgba(99, 179, 237, 0.15);
-  border-radius: 14px;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-.plan-task:hover {
-  background: #f8fafc;
-  border-color: rgba(59, 130, 246, 0.3);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
-}
-
-.plan-task.highlight {
-  background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
-  border-color: rgba(59, 130, 246, 0.3);
-}
-
-.task-icon {
-  font-size: 24px;
-  line-height: 1;
-}
-
-.task-info {
+.goal-content {
   flex: 1;
 }
 
-.task-title {
+.goal-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #78350f;
+}
+
+.goal-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(234, 179, 8, 0.2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%);
+  border-radius: 3px;
+}
+
+.progress-text {
+  font-size: 11px;
+  color: #a16207;
+  min-width: 40px;
+}
+
+.generate-btn {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.daily-tasks {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 16px;
+  border: 1px solid rgba(234, 179, 8, 0.15);
+  margin-bottom: 16px;
+}
+
+.daily-tasks h4 {
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: #78350f;
+  margin: 0 0 14px;
 }
 
-.task-desc {
-  font-size: 12px;
-  color: #64748b;
-  margin-top: 3px;
+.task-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.task-time {
-  padding: 4px 10px;
-  background: #dbeafe;
-  border-radius: 20px;
-  color: #2563eb;
+.timeline-day {
+  display: flex;
+  gap: 14px;
+}
+
+.day-marker {
+  width: 50px;
   font-size: 12px;
+  font-weight: 600;
+  color: #a16207;
+  padding-top: 8px;
+}
+
+.day-tasks {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: white;
+  border: 1px solid rgba(234, 179, 8, 0.15);
+  border-radius: 10px;
+}
+
+.task-type {
+  padding: 2px 8px;
+  background: #fef3c7;
+  border-radius: 4px;
+  font-size: 10px;
   font-weight: 500;
-  font-family: 'JetBrains Mono', monospace;
+  color: #92400e;
+}
+
+.task-title {
+  flex: 1;
+  font-size: 13px;
+  color: #78350f;
+}
+
+.task-duration {
+  font-size: 11px;
+  color: #a16207;
 }
 
 .plan-actions {
   display: flex;
   gap: 12px;
   justify-content: center;
-  margin-top: 24px;
 }
 
 .plan-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 12px 24px;
-  border-radius: 12px;
-  font-size: 14px;
+  border-radius: 10px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .plan-btn.primary {
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
   border: none;
   color: white;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 
 .plan-btn.primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
 }
 
 .plan-btn.secondary {
-  background: #ffffff;
-  border: 1px solid rgba(99, 179, 237, 0.2);
-  color: #475569;
+  background: white;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  color: #78350f;
 }
 
 .plan-btn.secondary:hover {
-  background: #f8fafc;
-  border-color: rgba(59, 130, 246, 0.3);
-  color: #3b82f6;
+  background: #fefce8;
+}
+
+.chat-section {
+  display: flex;
+  flex-direction: column;
+  height: 380px;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(234, 179, 8, 0.3);
+  border-radius: 2px;
+}
+
+.chat-message {
+  display: flex;
+  gap: 10px;
+  max-width: 85%;
+}
+
+.chat-message.user {
+  flex-direction: row-reverse;
+  margin-left: auto;
+}
+
+.message-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.chat-message.assistant .message-avatar {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: white;
+}
+
+.chat-message.user .message-avatar {
+  background: #fef3c7;
+  color: #78350f;
+}
+
+.message-body {
+  flex: 1;
+}
+
+.message-text {
+  padding: 12px 16px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #451a03;
+}
+
+.chat-message.assistant .message-text {
+  background: white;
+  border: 1px solid rgba(234, 179, 8, 0.2);
+  border-radius: 14px 14px 14px 4px;
+}
+
+.chat-message.user .message-text {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-radius: 14px 14px 4px 14px;
+}
+
+.message-text :deep(strong) {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.message-time {
+  font-size: 10px;
+  color: #a16207;
+  margin-top: 4px;
+  opacity: 0.7;
+}
+
+.chat-message.user .message-time {
+  text-align: right;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid rgba(234, 179, 8, 0.2);
+  border-radius: 14px;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  background: #f59e0b;
+  border-radius: 50%;
+  animation: bounce 1s ease-in-out infinite;
+}
+
+.typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.quick-prompts {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.prompt-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(234, 179, 8, 0.2);
+  border-radius: 16px;
+  font-size: 12px;
+  color: #78350f;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.prompt-btn:hover {
+  background: white;
+  border-color: rgba(234, 179, 8, 0.4);
+}
+
+.chat-input-area {
+  display: flex;
+  gap: 10px;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid rgba(234, 179, 8, 0.2);
+  border-radius: 12px;
+  font-size: 13px;
+  color: #451a03;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.chat-input::placeholder {
+  color: #a16207;
+}
+
+.chat-input:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+}
+
+.send-btn {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.send-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @media (max-width: 640px) {
-  .header-tabs {
+  .helper-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .section-tabs {
+    width: 100%;
     overflow-x: auto;
-    padding-bottom: 4px;
   }
 
-  .tab-btn {
-    padding: 6px 12px;
-    font-size: 12px;
+  .stats-row {
+    grid-template-columns: 1fr;
   }
 
-  .quick-actions {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 16px;
+  .overview-grid {
+    grid-template-columns: 1fr;
   }
 
-  .quick-btn {
-    flex-shrink: 0;
-  }
-
-  .plan-timeline {
-    padding-left: 60px;
-  }
-
-  .timeline-marker {
-    left: -60px;
-    width: 40px;
-  }
-
-  .plan-timeline::before {
-    left: 40px;
-  }
-
-  .timeline-item::before {
-    left: -46px;
+  .action-buttons {
+    flex-direction: column;
   }
 }
 </style>
