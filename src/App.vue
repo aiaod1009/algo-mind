@@ -143,9 +143,22 @@ const clearNavSearch = () => {
           <el-tag type="success" effect="light">积分 {{ userStore.points }}</el-tag>
           <el-dropdown trigger="click" @command="handleUserCommand">
             <div class="user-entry">
-              <el-avatar :size="34" :src="userStore.userInfo?.avatar || ''">
-                {{ (userStore.userInfo?.name || '同学').slice(0, 1) }}
-              </el-avatar>
+              <div class="avatar-with-pendant">
+                <el-avatar :size="34" :src="userStore.userInfo?.avatar || ''" class="animated-avatar">
+                  {{ (userStore.userInfo?.name || '同学').slice(0, 1) }}
+                </el-avatar>
+                <div class="avatar-pendant">
+                  <svg viewBox="0 0 24 24" class="pendant-icon">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor"/>
+                  </svg>
+                </div>
+                <div class="avatar-ring"></div>
+                <div class="avatar-sparkles">
+                  <span class="sparkle s1">✦</span>
+                  <span class="sparkle s2">✦</span>
+                  <span class="sparkle s3">✦</span>
+                </div>
+              </div>
               <span class="user-name">{{ userStore.userInfo?.name || '同学' }}</span>
             </div>
             <template #dropdown>
@@ -424,6 +437,121 @@ const clearNavSearch = () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 头像动态挂件效果 */
+.avatar-with-pendant {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.animated-avatar {
+  transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.user-entry:hover .animated-avatar {
+  transform: scale(1.1);
+}
+
+/* 星星挂件 */
+.avatar-pendant {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  color: #fbbf24;
+  z-index: 10;
+  animation: pendantTwinkle 1.5s ease-in-out infinite;
+  filter: drop-shadow(0 2px 4px rgba(251, 191, 36, 0.4));
+}
+
+.pendant-icon {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes pendantTwinkle {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.2) rotate(15deg); }
+}
+
+/* 光环效果 */
+.avatar-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.avatar-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  padding: 2px;
+  background: conic-gradient(from 0deg, #4a6f9d, #6672cb, #8b5cf6, #4a6f9d);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: ringRotate 3s linear infinite;
+}
+
+.user-entry:hover .avatar-ring {
+  opacity: 1;
+}
+
+@keyframes ringRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 闪烁星星 */
+.avatar-sparkles {
+  position: absolute;
+  inset: -10px;
+  pointer-events: none;
+}
+
+.sparkle {
+  position: absolute;
+  font-size: 10px;
+  color: #fbbf24;
+  opacity: 0;
+  animation: sparkleFloat 2s ease-in-out infinite;
+}
+
+.sparkle.s1 {
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  animation-delay: 0s;
+}
+
+.sparkle.s2 {
+  bottom: 0;
+  left: 0;
+  animation-delay: 0.6s;
+}
+
+.sparkle.s3 {
+  bottom: 0;
+  right: 0;
+  animation-delay: 1.2s;
+}
+
+.user-entry:hover .sparkle {
+  opacity: 1;
+}
+
+@keyframes sparkleFloat {
+  0%, 100% { transform: translateY(0) scale(0.8); opacity: 0; }
+  50% { transform: translateY(-8px) scale(1.2); opacity: 1; }
 }
 
 :deep(.main-menu.el-menu--horizontal > .el-menu-item) {

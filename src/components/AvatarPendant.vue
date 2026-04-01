@@ -152,19 +152,9 @@ const bubbleConfigs = {
   },
 }
 
-const bgConfigs = {
-  gradient1: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  gradient2: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-  gradient3: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-  gradient4: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-  gradient5: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-  gradient6: 'linear-gradient(135deg, #d299c2 0%, #fef9d7 100%)',
-}
-
 const currentPendant = computed(() => pendantConfigs[props.pendant] || pendantConfigs.star)
 const currentFrame = computed(() => frameConfigs[props.frame] || frameConfigs.neon)
 const currentBubble = computed(() => bubbleConfigs[props.bubble] || bubbleConfigs.ring)
-const currentBg = computed(() => bgConfigs[props.background] || bgConfigs.gradient1)
 
 const containerSize = computed(() => props.size + 40)
 const avatarSize = computed(() => props.size)
@@ -172,8 +162,7 @@ const avatarSize = computed(() => props.size)
 
 <template>
   <div class="avatar-pendant-wrap" :style="{ width: containerSize + 'px', height: containerSize + 'px' }">
-    <div class="avatar-bg" :style="{ background: currentBg }">
-      <div v-if="currentBubble.type === 'ring'" class="bubble-ring"></div>
+    <div class="avatar-bg">
       <div v-if="currentBubble.type === 'stars'" class="bubble-stars">
         <span v-for="i in 8" :key="i" class="orbit-star" :style="{ '--i': i }">✦</span>
       </div>
@@ -262,19 +251,6 @@ const avatarSize = computed(() => props.size)
   align-items: center;
   justify-content: center;
   overflow: visible;
-}
-
-.bubble-ring {
-  position: absolute;
-  inset: -8px;
-  border: 3px solid rgba(74, 111, 157, 0.3);
-  border-radius: 50%;
-  animation: ringPulse 2s ease-in-out infinite;
-}
-
-@keyframes ringPulse {
-  0%, 100% { transform: scale(1); opacity: 0.3; }
-  50% { transform: scale(1.08); opacity: 0.6; }
 }
 
 .bubble-stars {

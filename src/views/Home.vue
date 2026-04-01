@@ -86,7 +86,11 @@ if (!levelStore.levels.length) {
       <el-progress :percentage="weeklyStatus.ratio" :stroke-width="14" />
     </section>
 
-    <AIAssistant />
+    <AIAssistant
+      :selected-track="selectedTrack"
+      :weekly-goal="weeklyGoal"
+      :track-options="trackOptions"
+    />
   </div>
 </template>
 

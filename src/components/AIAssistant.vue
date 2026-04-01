@@ -1,10 +1,30 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useUserStore } from '../stores/user'
 
 const userStore = useUserStore()
 
+const props = defineProps({
+  selectedTrack: {
+    type: String,
+    default: 'algo'
+  },
+  weeklyGoal: {
+    type: Number,
+    default: 10
+  },
+  trackOptions: {
+    type: Array,
+    default: () => [
+      { label: '算法思维赛道', value: 'algo' },
+      { label: '数据结构赛道', value: 'ds' },
+      { label: '竞赛冲刺赛道', value: 'contest' }
+    ]
+  }
+})
+
 const activeSection = ref('overview')
+const isJumping = ref(false)
 const chatMessages = ref([])
 const inputMessage = ref('')
 const isTyping = ref(false)
@@ -71,27 +91,139 @@ const fetchStudyHabits = async () => {
   return studyHabits.value
 }
 
+const getTrackLabel = (value) => {
+  const option = props.trackOptions.find(opt => opt.value === value)
+  return option?.label || '算法思维赛道'
+}
+
+const getTrackPlan = (track) => {
+  const plans = {
+    algo: {
+      weekGoals: [
+        { id: 1, title: '掌握动态规划基础', progress: 0, target: Math.ceil(props.weeklyGoal * 0.4) },
+        { id: 2, title: '完成贪心算法入门', progress: 0, target: Math.ceil(props.weeklyGoal * 0.3) },
+        { id: 3, title: '每日坚持练习', progress: 0, target: props.weeklyGoal },
+      ],
+      dailyTasks: [
+        { day: '今天', tasks: [
+          { title: '动态规划基础概念', duration: 30, type: 'learn' },
+          { title: '斐波那契数列DP解法', duration: 25, type: 'practice' }
+        ]},
+        { day: '明天', tasks: [
+          { title: '背包问题入门', duration: 40, type: 'learn' },
+          { title: '01背包练习题', duration: 35, type: 'practice' }
+        ]},
+        { day: '后天', tasks: [
+          { title: '贪心算法思想', duration: 30, type: 'learn' },
+          { title: '区间调度问题', duration: 30, type: 'practice' }
+        ]},
+      ],
+      recommendations: [
+        { type: 'video', title: '动态规划入门讲解', source: '推荐' },
+        { type: 'article', title: '背包问题详解', source: '必读' },
+        { type: 'practice', title: 'DP经典50题', source: '练习' },
+      ]
+    },
+    ds: {
+      weekGoals: [
+        { id: 1, title: '掌握链表与栈队列', progress: 0, target: Math.ceil(props.weeklyGoal * 0.35) },
+        { id: 2, title: '完成二叉树基础', progress: 0, target: Math.ceil(props.weeklyGoal * 0.35) },
+        { id: 3, title: '每日坚持练习', progress: 0, target: props.weeklyGoal },
+      ],
+      dailyTasks: [
+        { day: '今天', tasks: [
+          { title: '链表基础操作', duration: 35, type: 'learn' },
+          { title: '反转链表实现', duration: 30, type: 'practice' }
+        ]},
+        { day: '明天', tasks: [
+          { title: '栈与队列应用', duration: 30, type: 'learn' },
+          { title: '括号匹配问题', duration: 25, type: 'practice' }
+        ]},
+        { day: '后天', tasks: [
+          { title: '二叉树遍历', duration: 40, type: 'learn' },
+          { title: '前中后序遍历实现', duration: 35, type: 'practice' }
+        ]},
+      ],
+      recommendations: [
+        { type: 'video', title: '数据结构基础', source: '推荐' },
+        { type: 'article', title: '链表操作技巧', source: '必读' },
+        { type: 'practice', title: '树结构专项训练', source: '练习' },
+      ]
+    },
+    contest: {
+      weekGoals: [
+        { id: 1, title: '掌握高频竞赛题型', progress: 0, target: Math.ceil(props.weeklyGoal * 0.4) },
+        { id: 2, title: '提升解题速度', progress: 0, target: Math.ceil(props.weeklyGoal * 0.3) },
+        { id: 3, title: '完成模拟赛训练', progress: 0, target: Math.ceil(props.weeklyGoal * 0.3) },
+      ],
+      dailyTasks: [
+        { day: '今天', tasks: [
+          { title: '竞赛技巧与策略', duration: 30, type: 'learn' },
+          { title: '快速排序优化', duration: 25, type: 'practice' }
+        ]},
+        { day: '明天', tasks: [
+          { title: '二分查找进阶', duration: 35, type: 'learn' },
+          { title: '二分答案专题', duration: 40, type: 'practice' }
+        ]},
+        { day: '后天', tasks: [
+          { title: '模拟竞赛训练', duration: 60, type: 'practice' },
+          { title: '赛后复盘总结', duration: 20, type: 'review' }
+        ]},
+      ],
+      recommendations: [
+        { type: 'video', title: '竞赛算法精讲', source: '推荐' },
+        { type: 'article', title: 'ACM竞赛经验', source: '必读' },
+        { type: 'practice', title: 'Codeforces真题', source: '练习' },
+      ]
+    }
+  }
+  return plans[track] || plans.algo
+}
+
 const generateLearningPlan = async (preferences = {}) => {
   const today = new Date()
+  const trackPlan = getTrackPlan(props.selectedTrack)
+  
   learningPlan.value = {
-    weekGoals: [
-      { id: 1, title: '掌握动态规划基础', progress: 0, target: 5 },
-      { id: 2, title: '完成图论入门', progress: 0, target: 3 },
-      { id: 3, title: '每日坚持练习', progress: 0, target: 7 },
-    ],
-    dailyTasks: [
-      { day: '今天', tasks: [{ title: '背包问题入门', duration: 30, type: 'learn' }] },
-      { day: '明天', tasks: [{ title: 'DP练习题2道', duration: 45, type: 'practice' }] },
-      { day: '后天', tasks: [{ title: '错题复盘', duration: 20, type: 'review' }] },
-    ],
-    recommendations: [
-      { type: 'video', title: '动态规划入门讲解', source: '推荐' },
-      { type: 'article', title: '背包问题详解', source: '必读' },
-    ],
+    weekGoals: trackPlan.weekGoals,
+    dailyTasks: trackPlan.dailyTasks,
+    recommendations: trackPlan.recommendations,
     generatedAt: today.toISOString(),
+    track: props.selectedTrack,
+    trackLabel: getTrackLabel(props.selectedTrack),
+    weeklyGoal: props.weeklyGoal
   }
   return learningPlan.value
 }
+
+// 监听赛道和目标变化，自动更新计划
+watch(() => props.selectedTrack, async (newTrack, oldTrack) => {
+  if (newTrack !== oldTrack && learningPlan.value.generatedAt) {
+    await generateLearningPlan()
+    // 添加系统消息通知用户计划已更新
+    chatMessages.value.push({
+      role: 'assistant',
+      content: `已切换至 **${getTrackLabel(newTrack)}**，学习计划已根据新赛道自动更新！\n\n本周目标：完成 ${props.weeklyGoal} 个关卡\n建议按照生成的每日安排进行学习。`,
+      time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    })
+    await nextTick()
+    scrollToBottom()
+  }
+}, { immediate: false })
+
+watch(() => props.weeklyGoal, async (newGoal, oldGoal) => {
+  if (newGoal !== oldGoal && learningPlan.value.generatedAt) {
+    await generateLearningPlan()
+    // 更新目标数值
+    chatMessages.value.push({
+      role: 'assistant',
+      content: `周目标已更新为 **${newGoal} 个关卡**，学习计划已重新调整！`,
+      time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    })
+    await nextTick()
+    scrollToBottom()
+  }
+}, { immediate: false })
 
 const analyzeErrors = async () => {
   const errors = await fetchErrorAnalysis()
@@ -141,6 +273,8 @@ const sendMessage = async (message) => {
 }
 
 const generateResponse = (input) => {
+  const trackLabel = getTrackLabel(props.selectedTrack)
+  
   if (input.includes('错题') || input.includes('分析')) {
     return `根据你的做题记录，我发现：
 
@@ -156,25 +290,36 @@ const generateResponse = (input) => {
 需要我帮你制定针对性的练习计划吗？`
   }
   if (input.includes('计划') || input.includes('学习')) {
-    return `好的，这是为你定制的本周学习计划：
+    const plan = getTrackPlan(props.selectedTrack)
+    return `好的，这是为你定制的 **${trackLabel}** 学习计划：
 
-**周一至周三：动态规划突破**
-- 每天完成2道DP入门题
-- 重点理解状态定义和转移
+**本周目标：完成 ${props.weeklyGoal} 个关卡**
 
-**周四至周五：图论基础**
-- BFS/DFS模板练习
-- 最短路径入门
+**每日安排：**
+${plan.dailyTasks.map((day, idx) => `
+**${day.day}：**
+${day.tasks.map(t => `- ${t.title} (${t.duration}分钟)`).join('\n')}`).join('\n')}
 
-**周末：综合练习**
-- 参加周赛模拟
-- 整理错题笔记
+**推荐资源：**
+${plan.recommendations.map(r => `- ${r.title} (${r.source})`).join('\n')}
 
-你觉得这个安排怎么样？`
+点击"计划"标签可以查看详细安排，加油！💪`
+  }
+  if (input.includes('推荐') || input.includes('题目')) {
+    const recommendations = {
+      algo: '推荐你从动态规划入门题开始：爬楼梯、斐波那契数列、零钱兑换',
+      ds: '推荐你练习链表基础题：反转链表、合并有序链表、环形链表',
+      contest: '推荐你挑战竞赛高频题：两数之和、三数之和、最长无重复子串'
+    }
+    return `根据 **${trackLabel}** 的特点，${recommendations[props.selectedTrack] || recommendations.algo}
+
+本周目标 ${props.weeklyGoal} 个关卡，建议每天完成 ${Math.ceil(props.weeklyGoal / 7)} 题左右。
+
+需要我帮你生成具体的学习计划吗？`
   }
   return `我理解你的问题。让我想想...
 
-根据你的学习数据，我建议：
+根据你在 **${trackLabel}** 的学习数据（周目标 ${props.weeklyGoal} 关），我建议：
 - 先从基础概念入手
 - 循序渐进提升难度
 - 保持每日练习的习惯
@@ -186,6 +331,34 @@ const scrollToBottom = () => {
   if (chatContainerRef.value) {
     chatContainerRef.value.scrollTop = chatContainerRef.value.scrollHeight
   }
+}
+
+const handleJump = (e) => {
+  // 如果点击的是内部交互元素，不触发跳转
+  if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) {
+    return
+  }
+  
+  if (isJumping.value) return
+  isJumping.value = true
+  
+  // 获取当前元素位置
+  const section = document.querySelector('.study-helper')
+  if (section) {
+    const rect = section.getBoundingClientRect()
+    const scrollY = window.scrollY + rect.top - 20 // 留出20px边距
+    
+    // 平滑滚动到页面顶部
+    window.scrollTo({
+      top: scrollY,
+      behavior: 'smooth'
+    })
+  }
+  
+  // 动画结束后重置状态
+  setTimeout(() => {
+    isJumping.value = false
+  }, 600)
 }
 
 const updateErrorAnalysis = (data) => {
@@ -221,6 +394,8 @@ defineExpose({
 onMounted(async () => {
   await fetchErrorAnalysis()
   await fetchStudyHabits()
+  
+  const trackLabel = getTrackLabel(props.selectedTrack)
   chatMessages.value.push({
     role: 'assistant',
     content: `你好，${userStore.userInfo?.name || '同学'}！👋
@@ -230,6 +405,9 @@ onMounted(async () => {
 - 📋 制定个性化学习计划
 - 💡 推荐适合的练习题目
 
+当前赛道：**${trackLabel}**
+周目标：**${props.weeklyGoal} 个关卡**
+
 有什么我可以帮你的吗？`,
     time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
   })
@@ -237,7 +415,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="study-helper">
+  <section class="study-helper" :class="{ jumping: isJumping }" @click="handleJump">
     <div class="helper-header">
       <div class="header-left">
         <div class="helper-icon">
@@ -381,7 +559,8 @@ onMounted(async () => {
       <div v-show="activeSection === 'plan'" class="plan-section">
         <div class="section-title">
           <h3>学习计划</h3>
-          <p>根据你的情况定制</p>
+          <p v-if="learningPlan.trackLabel">{{ learningPlan.trackLabel }} · 周目标 {{ learningPlan.weeklyGoal || weeklyGoal }} 关</p>
+          <p v-else>根据你的情况定制</p>
         </div>
 
         <div class="week-goals">
@@ -490,6 +669,60 @@ onMounted(async () => {
   overflow: hidden;
   border: 1px solid rgba(74, 111, 157, 0.15);
   box-shadow: 0 8px 32px rgba(74, 111, 157, 0.08);
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55), box-shadow 0.3s ease;
+  position: relative;
+}
+
+.study-helper:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 48px rgba(74, 111, 157, 0.15);
+}
+
+.study-helper.jumping {
+  animation: jumpToTop 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes jumpToTop {
+  0% {
+    transform: scale(1) translateY(0);
+  }
+  30% {
+    transform: scale(0.95) translateY(10px);
+  }
+  50% {
+    transform: scale(1.02) translateY(-20px);
+  }
+  70% {
+    transform: scale(0.98) translateY(-10px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+
+.study-helper::before {
+  content: '点击跳转到顶部';
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #4a6f9d 0%, #6672cb 100%);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(74, 111, 157, 0.3);
+}
+
+.study-helper:hover::before {
+  opacity: 1;
+  top: -50px;
 }
 
 .helper-header {

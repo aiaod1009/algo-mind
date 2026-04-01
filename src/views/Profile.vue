@@ -1,87 +1,224 @@
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/user'
 import { useLevelStore } from '../stores/level'
-import AvatarPendant from '../components/AvatarPendant.vue'
+import api from '../api'
 
 const userStore = useUserStore()
 const levelStore = useLevelStore()
 
-const showAccessoryShop = ref(false)
-const showBackgroundShop = ref(false)
-const activeAccessoryTab = ref('pendant')
+// 当前选中的题库标签
+const activeRepoTab = ref('created') // 'created' | 'solved'
 
-const trackOptions = [
-  { label: '算法思维赛道', value: 'algo' },
-  { label: '数据结构赛道', value: 'ds' },
-  { label: '竞赛冲刺赛道', value: 'contest' },
-]
+// 我的题目（用户自己创建的题目）
+const myProblems = ref([
+  {
+    id: 1,
+    name: '自定义动态规划题',
+    description: '我创建的DP练习题 - 爬楼梯变种',
+    difficulty: '中等',
+    difficultyColor: '#d4a373',
+    solvedCount: 56,
+    createdAt: '2026-03-15',
+    isPublic: true
+  },
+  {
+    id: 2,
+    name: '二叉树遍历挑战',
+    description: '非递归实现前中后序遍历',
+    difficulty: '困难',
+    difficultyColor: '#e74c3c',
+    solvedCount: 23,
+    createdAt: '2026-03-10',
+    isPublic: true
+  },
+  {
+    id: 3,
+    name: '图论最短路径',
+    description: 'Dijkstra算法实现与应用',
+    difficulty: '困难',
+    difficultyColor: '#e74c3c',
+    solvedCount: 18,
+    createdAt: '2026-02-28',
+    isPublic: false
+  },
+  {
+    id: 4,
+    name: '数组去重技巧',
+    description: '多种方法实现数组去重',
+    difficulty: '简单',
+    difficultyColor: '#27ae60',
+    solvedCount: 128,
+    createdAt: '2026-02-20',
+    isPublic: true
+  }
+])
 
-const genderOptions = [
-  { label: '男', value: 'male' },
-  { label: '女', value: 'female' },
-  { label: '不便透露', value: 'unknown' },
-]
+// 做过的题目（用户完成的别人的题目）
+const solvedProblems = ref([
+  {
+    id: 101,
+    name: '两数之和',
+    description: 'LeetCode 经典入门题',
+    difficulty: '简单',
+    difficultyColor: '#27ae60',
+    author: '官方题库',
+    solvedAt: '2026-04-01',
+    attempts: 1
+  },
+  {
+    id: 102,
+    name: '三数之和',
+    description: '双指针技巧应用',
+    difficulty: '中等',
+    difficultyColor: '#d4a373',
+    author: '官方题库',
+    solvedAt: '2026-04-01',
+    attempts: 2
+  },
+  {
+    id: 103,
+    name: '最长回文子串',
+    description: '中心扩展法',
+    difficulty: '中等',
+    difficultyColor: '#d4a373',
+    author: '算法达人',
+    solvedAt: '2026-03-30',
+    attempts: 3
+  },
+  {
+    id: 104,
+    name: '最长递增子序列',
+    description: '动态规划 + 二分查找',
+    difficulty: '中等',
+    difficultyColor: '#d4a373',
+    author: '竞赛专区',
+    solvedAt: '2026-03-28',
+    attempts: 2
+  }
+])
 
-const avatarPresets = [
-  'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte',
-  'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Graph',
-  'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Queue',
-  'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Tree',
-]
-
-const accessories = ref({
-  pendants: [
-    { id: 'star', name: '闪烁星星', price: 50, owned: true, icon: '⭐', animation: 'twinkle' },
-    { id: 'crown', name: '皇冠', price: 100, owned: false, icon: '👑', animation: 'float' },
-    { id: 'flower', name: '樱花飘落', price: 80, owned: false, icon: '🌸', animation: 'petal' },
-    { id: 'lightning', name: '闪电', price: 60, owned: true, icon: '⚡', animation: 'flash' },
-    { id: 'fire', name: '火焰', price: 70, owned: false, icon: '🔥', animation: 'burn' },
-    { id: 'diamond', name: '钻石', price: 150, owned: false, icon: '💎', animation: 'sparkle' },
-    { id: 'music', name: '音符', price: 40, owned: true, icon: '🎵', animation: 'bounce' },
-    { id: 'heart', name: '爱心', price: 30, owned: true, icon: '❤️', animation: 'pulse' },
-    { id: 'comet', name: '彗星', price: 180, owned: false, icon: '☄️', animation: 'orbit' },
-    { id: 'halo', name: '光环', price: 200, owned: false, icon: '😇', animation: 'rotate' },
-  ],
-  frames: [
-    { id: 'gold', name: '金色边框', price: 120, owned: false, color: '#fbbf24', style: 'solid' },
-    { id: 'rainbow', name: '彩虹边框', price: 200, owned: false, color: 'rainbow', style: 'gradient' },
-    { id: 'neon', name: '霓虹边框', price: 180, owned: true, color: '#4a6f9d', style: 'glow' },
-    { id: 'pixel', name: '像素边框', price: 90, owned: false, color: '#6672cb', style: 'pixel' },
-    { id: 'crystal', name: '水晶边框', price: 250, owned: false, color: '#67e8f9', style: 'crystal' },
-    { id: 'flame', name: '火焰边框', price: 280, owned: false, color: '#f97316', style: 'flame' },
-  ],
-  bubbles: [
-    { id: 'ring', name: '光环环绕', price: 100, owned: true, type: 'ring' },
-    { id: 'stars', name: '星星环绕', price: 120, owned: false, type: 'stars' },
-    { id: 'particles', name: '粒子环绕', price: 150, owned: false, type: 'particles' },
-    { id: 'orbit', name: '轨道环绕', price: 180, owned: false, type: 'orbit' },
-    { id: 'petals', name: '花瓣环绕', price: 200, owned: false, type: 'petals' },
-  ],
+// 做题统计数据（从后端获取）
+const problemStats = ref({
+  totalSolved: 0,
+  totalCreated: 0,
+  streakDays: 0,
+  todaySolved: 0,
+  weeklySolved: 0,
+  monthlySolved: 0
 })
 
-const backgrounds = ref({
-  page: [
-    { id: 'page1', name: '纯净白', price: 0, owned: true, type: 'static', value: '#f8fafc' },
-    { id: 'page2', name: '星空', price: 200, owned: false, type: 'animated', value: 'starry' },
-    { id: 'page3', name: '流动渐变', price: 180, owned: false, type: 'animated', value: 'flow' },
-    { id: 'page4', name: '几何图案', price: 150, owned: false, type: 'pattern', value: 'geometric' },
-    { id: 'page5', name: '气泡浮动', price: 220, owned: false, type: 'animated', value: 'bubbles' },
-  ],
+// 做题热力图数据
+const contributionYear = ref(2026)
+const contributionData = ref([])
+
+// 从后端获取做题热力图数据
+const fetchProblemHeatmap = async (year) => {
+  try {
+    const response = await api.getUserProblemHeatmap(year)
+    if (response.success) {
+      contributionData.value = response.data.map(item => ({
+        date: item.date,
+        level: item.count === 0 ? 0 : item.count <= 2 ? 1 : item.count <= 5 ? 2 : item.count <= 8 ? 3 : 4,
+        count: item.count
+      }))
+    }
+  } catch (error) {
+    console.error('获取做题数据失败:', error)
+    // 使用模拟数据
+    generateMockContributionData()
+  }
+}
+
+// 生成模拟做题数据 (60周 = 420天)
+const generateMockContributionData = () => {
+  const data = []
+  const startDate = new Date(contributionYear.value, 0, 1)
+  const totalDays = 60 * 7 // 60周
+  
+  for (let i = 0; i < totalDays; i++) {
+    const date = new Date(startDate)
+    date.setDate(startDate.getDate() + i)
+    
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6
+    const baseLevel = isWeekend ? 0.4 : 0.2
+    const random = Math.random()
+    
+    let level = 0
+    if (random < baseLevel) level = 1
+    else if (random < baseLevel + 0.2) level = 2
+    else if (random < baseLevel + 0.35) level = 3
+    else if (random < baseLevel + 0.45) level = 4
+    
+    data.push({
+      date: date.toISOString().split('T')[0],
+      level: level,
+      count: level === 0 ? 0 : Math.floor(Math.random() * 10) + 1
+    })
+  }
+  contributionData.value = data
+}
+
+// 从后端获取统计数据
+const fetchProblemStats = async () => {
+  try {
+    const response = await api.getUserProblemStats()
+    if (response.success) {
+      problemStats.value = response.data
+    }
+  } catch (error) {
+    console.error('获取统计数据失败:', error)
+    // 使用本地计算的数据
+    problemStats.value = {
+      totalSolved: solvedProblems.value.length,
+      totalCreated: myProblems.value.length,
+      streakDays: 12,
+      todaySolved: 2,
+      weeklySolved: 15,
+      monthlySolved: 58
+    }
+  }
+}
+
+const totalContributions = computed(() => {
+  return contributionData.value.reduce((sum, day) => sum + day.count, 0)
 })
 
-const form = reactive({
-  name: userStore.userInfo?.name || '',
-  bio: userStore.userInfo?.bio || '',
-  gender: userStore.userInfo?.gender || 'unknown',
-  avatar: userStore.userInfo?.avatar || avatarPresets[0],
-  targetTrack: userStore.userInfo?.targetTrack || userStore.selectedTrack,
-  weeklyGoal: Number(userStore.userInfo?.weeklyGoal || 10),
-  equippedPendant: userStore.userInfo?.equippedPendant || 'star',
-  equippedFrame: userStore.userInfo?.equippedFrame || 'neon',
-  equippedBubble: userStore.userInfo?.equippedBubble || 'ring',
-  pageBg: userStore.userInfo?.pageBg || 'page1',
+const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const weekDaysShort = ['', 'Mon', '', 'Wed', '', 'Fri', '']
+
+// 获取月份标签位置（只显示当前年份的月份）
+const monthPositions = computed(() => {
+  const positions = []
+  const weeksToShow = 60
+  const daysPerWeek = 7
+  
+  const startDate = new Date(contributionYear.value, 0, 1)
+  let lastMonth = -1
+  
+  for (let weekIndex = 0; weekIndex < weeksToShow; weekIndex++) {
+    const dayIndex = weekIndex * daysPerWeek
+    const date = new Date(startDate)
+    date.setDate(startDate.getDate() + dayIndex)
+    
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    
+    // 只显示当前年份的月份，跳过其他年份
+    if (year !== contributionYear.value) continue
+    
+    // 只在月份变化时添加
+    if (month !== lastMonth) {
+      lastMonth = month
+      positions.push({
+        month: months[month],
+        weekIndex: weekIndex
+      })
+    }
+  }
+  
+  return positions
 })
 
 const solvedLevels = computed(() => {
@@ -99,431 +236,686 @@ const levelTitle = computed(() => {
   return '新手起步'
 })
 
-const currentPendant = computed(() => {
-  return accessories.value.pendants.find(p => p.id === form.equippedPendant)
+// 活动数据（从后端获取）
+const recentActivities = ref([])
+
+// 从后端获取活动数据
+const fetchActivities = async () => {
+  try {
+    const response = await api.getUserActivities()
+    if (response.success) {
+      recentActivities.value = response.data.map(activity => ({
+        type: activity.type,
+        title: activity.title,
+        time: formatTime(activity.createdAt),
+        icon: getActivityIcon(activity.type)
+      }))
+    }
+  } catch (error) {
+    console.error('获取活动数据失败:', error)
+    // 使用模拟数据
+    recentActivities.value = [
+      { type: 'solve', title: '完成了 两数之和', time: '2小时前', icon: '✅' },
+      { type: 'solve', title: '完成了 三数之和', time: '5小时前', icon: '✅' },
+      { type: 'create', title: '创建了题目 动态规划进阶', time: '昨天', icon: '📝' },
+      { type: 'star', title: '收藏了 动态规划专题', time: '昨天', icon: '⭐' },
+      { type: 'solve', title: '完成了 最长回文子串', time: '3天前', icon: '✅' },
+    ]
+  }
+}
+
+// 格式化时间
+const formatTime = (timestamp) => {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diff = now - date
+  const hours = Math.floor(diff / (1000 * 60 * 60))
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+  
+  if (hours < 1) return '刚刚'
+  if (hours < 24) return `${hours}小时前`
+  if (days < 7) return `${days}天前`
+  return date.toLocaleDateString('zh-CN')
+}
+
+// 获取活动图标
+const getActivityIcon = (type) => {
+  const icons = {
+    solve: '✅',
+    create: '📝',
+    star: '⭐',
+    fork: '📦',
+    comment: '💬',
+    share: '📤'
+  }
+  return icons[type] || '📌'
+}
+
+// 显示编辑弹窗
+const showEditModal = ref(false)
+
+// 显示详细编辑页面
+const showDetailEdit = ref(false)
+
+// 显示心情设置弹窗
+const showStatusModal = ref(false)
+
+// 用户状态设置
+const userStatus = ref({
+  emoji: '😊',
+  mood: 'happy',
+  isBusy: false,
+  busyAutoReply: '我现在有点忙，稍后回复你~',
+  busyEndTime: null
 })
 
-const currentFrame = computed(() => {
-  return accessories.value.frames.find(f => f.id === form.equippedFrame)
+// 可选的心情emoji列表
+const moodEmojis = [
+  { emoji: '😊', label: '开心', value: 'happy' },
+  { emoji: '😎', label: '酷', value: 'cool' },
+  { emoji: '🤔', label: '思考', value: 'thinking' },
+  { emoji: '😴', label: '困倦', value: 'sleepy' },
+  { emoji: '🔥', label: '热血', value: 'fire' },
+  { emoji: '💪', label: '加油', value: 'strong' },
+  { emoji: '📚', label: '学习', value: 'study' },
+  { emoji: '🎯', label: '专注', value: 'focus' },
+  { emoji: '☕', label: '休息', value: 'coffee' },
+  { emoji: '🎮', label: '游戏', value: 'game' },
+  { emoji: '🏃', label: '运动', value: 'run' },
+  { emoji: '🌙', label: '晚安', value: 'night' }
+]
+
+// 忙碌时长选项
+const busyDurationOptions = [
+  { label: '30分钟', value: 30 },
+  { label: '1小时', value: 60 },
+  { label: '2小时', value: 120 },
+  { label: '4小时', value: 240 },
+  { label: '8小时', value: 480 },
+  { label: '自定义', value: 'custom' }
+]
+
+const selectedBusyDuration = ref(60)
+const customBusyMinutes = ref(30)
+
+// 选择心情
+const selectMood = (mood) => {
+  userStatus.value.emoji = mood.emoji
+  userStatus.value.mood = mood.value
+}
+
+// 切换忙碌状态
+const toggleBusy = () => {
+  userStatus.value.isBusy = !userStatus.value.isBusy
+  if (userStatus.value.isBusy) {
+    const duration = selectedBusyDuration.value === 'custom' 
+      ? customBusyMinutes.value 
+      : selectedBusyDuration.value
+    const endTime = new Date(Date.now() + duration * 60 * 1000)
+    userStatus.value.busyEndTime = endTime
+    ElMessage.success(`已开启忙碌模式，将在 ${duration} 分钟后自动关闭`)
+  } else {
+    userStatus.value.busyEndTime = null
+    ElMessage.info('已关闭忙碌模式')
+  }
+}
+
+// 检查忙碌状态是否过期
+const checkBusyStatus = () => {
+  if (userStatus.value.isBusy && userStatus.value.busyEndTime) {
+    if (new Date() >= new Date(userStatus.value.busyEndTime)) {
+      userStatus.value.isBusy = false
+      userStatus.value.busyEndTime = null
+      ElMessage.info('忙碌模式已自动关闭')
+    }
+  }
+}
+
+// 格式化剩余时间
+const formatRemainingTime = computed(() => {
+  if (!userStatus.value.isBusy || !userStatus.value.busyEndTime) return ''
+  const remaining = new Date(userStatus.value.busyEndTime) - new Date()
+  if (remaining <= 0) return ''
+  const hours = Math.floor(remaining / (1000 * 60 * 60))
+  const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60))
+  if (hours > 0) {
+    return `${hours}小时${minutes}分钟`
+  }
+  return `${minutes}分钟`
 })
 
-const currentPageBg = computed(() => {
-  return backgrounds.value.page.find(b => b.id === form.pageBg)
+// 点击状态emoji
+const handleStatusClick = () => {
+  showStatusModal.value = true
+}
+
+// 保存状态设置
+const saveStatusSettings = () => {
+  localStorage.setItem('userStatus', JSON.stringify(userStatus.value))
+  showStatusModal.value = false
+  ElMessage.success('状态设置已保存')
+}
+
+const editForm = ref({
+  name: userStore.userInfo?.name || '',
+  bio: userStore.userInfo?.bio || '先把基础打扎实，再冲更高难度。',
+  avatar: userStore.userInfo?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte',
+  email: userStore.userInfo?.email || '',
+  github: userStore.userInfo?.github || '',
+  website: userStore.userInfo?.website || ''
 })
 
-const buyAccessory = async (item, type) => {
-  if (item.owned) {
-    if (type === 'pendant') form.equippedPendant = item.id
-    else if (type === 'frame') form.equippedFrame = item.id
-    else if (type === 'bubble') form.equippedBubble = item.id
-    ElMessage.success(`已装备 ${item.name}`)
-    return
+const handleSave = async () => {
+  try {
+    const response = await api.updateUserProfile({
+      name: editForm.value.name,
+      bio: editForm.value.bio,
+      avatar: editForm.value.avatar,
+      email: editForm.value.email,
+      github: editForm.value.github,
+      website: editForm.value.website
+    })
+    
+    if (response.success) {
+      userStore.updateProfile({
+        name: editForm.value.name,
+        bio: editForm.value.bio,
+        avatar: editForm.value.avatar,
+        email: editForm.value.email,
+        github: editForm.value.github,
+        website: editForm.value.website
+      })
+      showEditModal.value = false
+      showDetailEdit.value = false
+      ElMessage.success('个人资料已更新')
+    }
+  } catch (error) {
+    console.error('更新资料失败:', error)
+    ElMessage.error('更新失败，请重试')
   }
-  
-  if (userStore.points < item.price) {
-    ElMessage.warning('积分不足，继续加油哦！')
-    return
+}
+
+const changeYear = (year) => {
+  contributionYear.value = year
+  fetchProblemHeatmap(year)
+}
+
+const handleAvatarClick = () => {
+  showDetailEdit.value = true
+}
+
+// 加载更多活动
+const loadMoreActivities = async () => {
+  try {
+    const response = await api.getUserActivities({ page: 2, limit: 10 })
+    if (response.success) {
+      const newActivities = response.data.map(activity => ({
+        type: activity.type,
+        title: activity.title,
+        time: formatTime(activity.createdAt),
+        icon: getActivityIcon(activity.type)
+      }))
+      recentActivities.value.push(...newActivities)
+    }
+  } catch (error) {
+    console.error('加载更多活动失败:', error)
+    ElMessage.info('没有更多活动了')
   }
-  
-  item.owned = true
-  userStore.points -= item.price
-  
-  if (type === 'pendant') form.equippedPendant = item.id
-  else if (type === 'frame') form.equippedFrame = item.id
-  else if (type === 'bubble') form.equippedBubble = item.id
-  
-  ElMessage.success(`购买成功！已装备 ${item.name}`)
 }
 
-const buyBackground = async (item) => {
-  if (item.owned) {
-    form.pageBg = item.id
-    ElMessage.success(`已应用 ${item.name}`)
-    return
+onMounted(() => {
+  if (!levelStore.levels.length) {
+    levelStore.fetchLevels()
   }
-  
-  if (userStore.points < item.price) {
-    ElMessage.warning('积分不足，继续加油哦！')
-    return
-  }
-  
-  item.owned = true
-  userStore.points -= item.price
-  form.pageBg = item.id
-  
-  ElMessage.success(`购买成功！已应用 ${item.name}`)
-}
-
-const handleSave = () => {
-  if (!form.name.trim()) {
-    ElMessage.warning('昵称不能为空')
-    return
-  }
-  userStore.updateProfile({
-    name: form.name.trim(),
-    bio: form.bio.trim(),
-    gender: form.gender,
-    avatar: form.avatar,
-    targetTrack: form.targetTrack,
-    weeklyGoal: Number(form.weeklyGoal || 10),
-    equippedPendant: form.equippedPendant,
-    equippedFrame: form.equippedFrame,
-    equippedBubble: form.equippedBubble,
-    pageBg: form.pageBg,
-  })
-  userStore.setTrack(form.targetTrack)
-  ElMessage.success('个人信息已更新')
-}
-
-const choosePresetAvatar = (url) => {
-  form.avatar = url
-}
-
-const handleAvatarUpload = (uploadFile) => {
-  const file = uploadFile.raw
-  if (!file) return false
-  if (!file.type.startsWith('image/')) {
-    ElMessage.warning('请上传图片文件')
-    return false
-  }
-  if (file.size > 2 * 1024 * 1024) {
-    ElMessage.warning('头像大小不能超过 2MB')
-    return false
-  }
-
-  const reader = new FileReader()
-  reader.onload = () => {
-    form.avatar = String(reader.result || '')
-  }
-  reader.readAsDataURL(file)
-  return false
-}
-
-const fetchAccessories = async () => {
-  return accessories.value
-}
-
-const fetchBackgrounds = async () => {
-  return backgrounds.value
-}
-
-const updateAccessories = (data) => {
-  accessories.value = { ...accessories.value, ...data }
-}
-
-const updateBackgrounds = (data) => {
-  backgrounds.value = { ...backgrounds.value, ...data }
-}
-
-defineExpose({
-  fetchAccessories,
-  fetchBackgrounds,
-  updateAccessories,
-  updateBackgrounds,
+  fetchProblemHeatmap(contributionYear.value)
+  fetchProblemStats()
+  fetchActivities()
 })
-
-if (!levelStore.levels.length) {
-  levelStore.fetchLevels()
-}
 </script>
 
 <template>
-  <div class="profile-page" :class="`page-bg-${form.pageBg}`">
-    <div v-if="form.pageBg === 'page2'" class="starry-bg"></div>
-    <div v-if="form.pageBg === 'page3'" class="flow-bg"></div>
-    <div v-if="form.pageBg === 'page5'" class="bubbles-bg">
-      <span v-for="i in 15" :key="i" class="bubble" :style="{ '--delay': i * 0.3 + 's', '--size': 10 + Math.random() * 30 + 'px' }"></span>
-    </div>
-
-    <div class="page-header">
-      <h2 class="section-title">个人主页</h2>
-      <div class="header-actions">
-        <button class="shop-btn" @click="showAccessoryShop = true">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-            <line x1="7" y1="7" x2="7.01" y2="7"/>
-          </svg>
-          挂件商城
-        </button>
-        <button class="shop-btn" @click="showBackgroundShop = true">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-            <circle cx="8.5" cy="8.5" r="1.5"/>
-            <polyline points="21 15 16 10 5 21"/>
-          </svg>
-          背景商城
-        </button>
-      </div>
-    </div>
-
-    <section class="summary-grid">
-      <div class="stat-card">
-        <div class="stat-icon points">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-          </svg>
-        </div>
-        <div class="stat-info">
-          <div class="stat-value">{{ userStore.points }}</div>
-          <div class="stat-label">当前积分</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon title">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="8" r="7"/>
-            <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>
-          </svg>
-        </div>
-        <div class="stat-info">
-          <div class="stat-value">{{ levelTitle }}</div>
-          <div class="stat-label">当前称号</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon progress">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-            <polyline points="22 4 12 14.01 9 11.01"/>
-          </svg>
-        </div>
-        <div class="stat-info">
-          <div class="stat-value">{{ solvedLevels }} / {{ totalLevels }}</div>
-          <div class="stat-label">关卡进度</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="profile-card">
-      <div class="card-header">
-        <h3>学习档案</h3>
-      </div>
-
-      <div class="avatar-section">
-        <div class="avatar-preview">
-          <AvatarPendant
-            :avatar="form.avatar"
-            :name="form.name"
-            :pendant="form.equippedPendant"
-            :frame="form.equippedFrame"
-            :bubble="form.equippedBubble"
-            :background="form.avatarBg"
-            :size="100"
-          />
-        </div>
-
-        <div class="avatar-controls">
-          <div class="control-group">
-            <span class="control-label">头像</span>
-            <el-upload class="avatar-uploader" :show-file-list="false" :auto-upload="false" :on-change="handleAvatarUpload">
-              <button class="upload-btn">上传头像</button>
-            </el-upload>
+  <div class="github-profile-page">
+    <div class="profile-container">
+      <!-- 左侧个人信息 -->
+      <aside class="profile-sidebar">
+        <div class="avatar-section">
+          <div class="avatar-wrapper" @click="handleAvatarClick">
+            <img 
+              :src="userStore.userInfo?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'" 
+              :alt="userStore.userInfo?.name"
+              class="profile-avatar"
+            />
+            <div class="status-emoji" @click.stop="handleStatusClick" :class="{ busy: userStatus.isBusy }">
+              {{ userStatus.emoji }}
+              <span v-if="userStatus.isBusy" class="busy-indicator"></span>
+            </div>
+            <p class="avatar-hint">更改你的头像</p>
           </div>
-          <div class="control-group">
-            <span class="control-label">预设头像</span>
-            <div class="preset-row">
-              <button v-for="item in avatarPresets" :key="item" type="button" class="preset-btn" :class="{ active: form.avatar === item }" @click="choosePresetAvatar(item)">
-                <el-avatar :size="32" :src="item" />
+        </div>
+        
+        <div class="profile-info">
+          <h1 class="profile-name">{{ userStore.userInfo?.name || '同学' }}</h1>
+          <p class="profile-username">{{ userStore.userInfo?.name || 'user' }}</p>
+          <p class="profile-bio">{{ userStore.userInfo?.bio || '先把基础打扎实，再冲更高难度。' }}</p>
+        </div>
+        
+        <button class="edit-profile-btn" @click="showEditModal = true">
+          编辑个人资料
+        </button>
+        
+        <div class="profile-stats">
+          <div class="stat-item">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+            <span>{{ userStore.points }}</span>
+            <span class="stat-label">积分</span>
+          </div>
+          <div class="stat-item">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+            <span>{{ solvedLevels }}</span>
+            <span class="stat-label">已通关</span>
+          </div>
+          <div class="stat-item">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+            </svg>
+            <span>{{ problemStats.totalSolved }}</span>
+            <span class="stat-label">题目</span>
+          </div>
+        </div>
+        
+        <div class="profile-details">
+          <div class="detail-item">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            <span>{{ levelTitle }}</span>
+          </div>
+          <div class="detail-item">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+              <circle cx="12" cy="10" r="3"/>
+            </svg>
+            <span>中国</span>
+          </div>
+          <div class="detail-item">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            <span>加入于 {{ new Date().getFullYear() }}年</span>
+          </div>
+        </div>
+      </aside>
+      
+      <!-- 右侧内容区 -->
+      <main class="profile-main">
+        <!-- 热门题库 - 分为我的题目和做过的题 -->
+        <section class="repositories-section">
+          <div class="section-header">
+            <div class="repo-tabs">
+              <button 
+                class="repo-tab" 
+                :class="{ active: activeRepoTab === 'created' }"
+                @click="activeRepoTab = 'created'"
+              >
+                我的题目
+                <span class="tab-count">{{ myProblems.length }}</span>
+              </button>
+              <button 
+                class="repo-tab" 
+                :class="{ active: activeRepoTab === 'solved' }"
+                @click="activeRepoTab = 'solved'"
+              >
+                做过的题
+                <span class="tab-count">{{ solvedProblems.length }}</span>
+              </button>
+            </div>
+            <a href="#" class="customize-link">自定义您的徽章。</a>
+          </div>
+          
+          <!-- 我的题目 -->
+          <div v-if="activeRepoTab === 'created'" class="repo-grid">
+            <div v-for="problem in myProblems" :key="problem.id" class="repo-card">
+              <div class="repo-header">
+                <a href="#" class="repo-name">{{ problem.name }}</a>
+                <span class="repo-badge">{{ problem.isPublic ? '公开' : '私有' }}</span>
+              </div>
+              <p class="repo-description">{{ problem.description }}</p>
+              <div class="repo-footer">
+                <span class="repo-difficulty">
+                  <span class="difficulty-dot" :style="{ backgroundColor: problem.difficultyColor }"></span>
+                  {{ problem.difficulty }}
+                </span>
+                <span class="repo-meta">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                  {{ problem.solvedCount }} 人完成
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 做过的题 -->
+          <div v-else class="repo-grid">
+            <div v-for="problem in solvedProblems" :key="problem.id" class="repo-card">
+              <div class="repo-header">
+                <a href="#" class="repo-name">{{ problem.name }}</a>
+              </div>
+              <p class="repo-description">{{ problem.description }}</p>
+              <div class="repo-footer">
+                <span class="repo-difficulty">
+                  <span class="difficulty-dot" :style="{ backgroundColor: problem.difficultyColor }"></span>
+                  {{ problem.difficulty }}
+                </span>
+                <span class="repo-meta">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                  尝试 {{ problem.attempts }} 次
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+        
+        <!-- 做题统计热力图 -->
+        <section class="contributions-section">
+          <div class="contributions-header">
+            <h3>{{ contributionYear }}年 已做 {{ totalContributions }} 题</h3>
+            <div class="stats-summary">
+              <span class="stat-badge">今日 {{ problemStats.todaySolved }} 题</span>
+              <span class="stat-badge">本周 {{ problemStats.weeklySolved }} 题</span>
+              <span class="stat-badge">本月 {{ problemStats.monthlySolved }} 题</span>
+            </div>
+          </div>
+          
+          <div class="contributions-content">
+            <div class="contributions-calendar">
+              <!-- 月份标签 -->
+              <div class="months-row">
+                <div v-for="(pos, index) in monthPositions" :key="index" 
+                     class="month-label" 
+                     :style="{ left: (pos.weekIndex * 14 + 30) + 'px' }">
+                  {{ pos.month }}
+                </div>
+              </div>
+              
+              <div class="calendar-body">
+                <!-- 星期标签 -->
+                <div class="weekdays-col">
+                  <div v-for="(day, index) in weekDaysShort" :key="index" class="weekday-label">
+                    {{ day }}
+                  </div>
+                </div>
+                
+                <!-- 做题格子 (60周) -->
+                <div class="contributions-grid">
+                  <div v-for="week in 60" :key="week" class="week-column">
+                    <div 
+                      v-for="day in 7" :key="day"
+                      class="contribution-cell"
+                      :class="'level-' + (contributionData[(week-1)*7 + (day-1)]?.level || 0)"
+                      :title="contributionData[(week-1)*7 + (day-1)]?.date + ': 完成 ' + (contributionData[(week-1)*7 + (day-1)]?.count || 0) + ' 题'"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- 图例 -->
+              <div class="contributions-legend">
+                <span class="legend-label">较少</span>
+                <div class="legend-cells">
+                  <div class="legend-cell level-0"></div>
+                  <div class="legend-cell level-1"></div>
+                  <div class="legend-cell level-2"></div>
+                  <div class="legend-cell level-3"></div>
+                  <div class="legend-cell level-4"></div>
+                </div>
+                <span class="legend-label">较多</span>
+              </div>
+            </div>
+            
+            <!-- 年份选择器 -->
+            <div class="year-selector">
+              <button 
+                v-for="year in [2026, 2025, 2024, 2023, 2022]" 
+                :key="year"
+                class="year-btn"
+                :class="{ active: contributionYear === year }"
+                @click="changeYear(year)"
+              >
+                {{ year }}
               </button>
             </div>
           </div>
-          <div class="control-group">
-            <span class="control-label">当前挂件</span>
-            <div class="equipped-items">
-              <span class="equipped-tag">{{ currentPendant?.name || '无' }}</span>
-              <span class="equipped-tag">{{ currentFrame?.name || '无' }}</span>
+        </section>
+        
+        <!-- 活动 -->
+        <section class="activity-section">
+          <h3>活动</h3>
+          <div class="activity-timeline">
+            <div class="activity-date">
+              <span>{{ new Date().getFullYear() }}年 {{ new Date().getMonth() + 1 }}月{{ new Date().getDate() }}日</span>
+            </div>
+            <div class="activity-list">
+              <div v-if="recentActivities.length === 0" class="empty-activity">
+                <p>{{ userStore.userInfo?.name || '用户' }} 在此期间尚无任何活动。</p>
+              </div>
+              <div v-else v-for="(activity, index) in recentActivities" :key="index" class="activity-item">
+                <span class="activity-icon">{{ activity.icon }}</span>
+                <span class="activity-text">{{ activity.title }}</span>
+                <span class="activity-time">{{ activity.time }}</span>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div class="form-section">
-        <div class="form-row">
-          <label class="form-label">昵称</label>
-          <input v-model="form.name" type="text" class="form-input" maxlength="20" :placeholder="'请输入昵称'" />
-        </div>
-        <div class="form-row">
-          <label class="form-label">性别</label>
-          <div class="radio-group">
-            <label v-for="item in genderOptions" :key="item.value" class="radio-item" :class="{ active: form.gender === item.value }">
-              <input v-model="form.gender" type="radio" :value="item.value" />
-              <span>{{ item.label }}</span>
-            </label>
-          </div>
-        </div>
-        <div class="form-row">
-          <label class="form-label">个性签名</label>
-          <textarea v-model="form.bio" class="form-textarea" maxlength="60" :placeholder="'写点什么介绍自己吧'" ></textarea>
-        </div>
-        <div class="form-row">
-          <label class="form-label">目标赛道</label>
-          <select v-model="form.targetTrack" class="form-select">
-            <option v-for="option in trackOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label class="form-label">每周目标题量</label>
-          <div class="number-input">
-            <button class="num-btn" @click="form.weeklyGoal = Math.max(3, form.weeklyGoal - 1)">-</button>
-            <input v-model.number="form.weeklyGoal" type="number" class="num-value" min="3" max="40" />
-            <button class="num-btn" @click="form.weeklyGoal = Math.min(40, form.weeklyGoal + 1)">+</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="submit-row">
-        <button class="submit-btn" @click="handleSave">保存设置</button>
-      </div>
-    </section>
-
+          <button class="show-more-btn" @click="loadMoreActivities">显示更多活动</button>
+        </section>
+      </main>
+    </div>
+    
+    <!-- 快速编辑弹窗 -->
     <Transition name="modal">
-      <div v-if="showAccessoryShop" class="shop-modal" @click.self="showAccessoryShop = false">
-        <div class="shop-container">
-          <button class="close-btn" @click="showAccessoryShop = false">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-          <div class="shop-header">
-            <h3>挂件商城</h3>
-            <span class="points-display">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+      <div v-if="showEditModal" class="edit-modal" @click.self="showEditModal = false">
+        <div class="edit-container">
+          <div class="edit-header">
+            <h3>编辑个人资料</h3>
+            <button class="close-btn" @click="showEditModal = false">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
-              {{ userStore.points }} 积分
-            </span>
+            </button>
           </div>
-          <div class="shop-tabs">
-            <button :class="['tab', { active: activeAccessoryTab === 'pendant' }]" @click="activeAccessoryTab = 'pendant'">挂件</button>
-            <button :class="['tab', { active: activeAccessoryTab === 'frame' }]" @click="activeAccessoryTab = 'frame'">边框</button>
-            <button :class="['tab', { active: activeAccessoryTab === 'bubble' }]" @click="activeAccessoryTab = 'bubble'">环绕</button>
+          <div class="edit-body">
+            <div class="form-group">
+              <label>昵称</label>
+              <input v-model="editForm.name" type="text" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label>个人简介</label>
+              <textarea v-model="editForm.bio" class="form-textarea" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+              <label>头像链接</label>
+              <input v-model="editForm.avatar" type="text" class="form-input" />
+            </div>
           </div>
-          <div class="shop-content">
-            <div v-if="activeAccessoryTab === 'pendant'" class="items-grid">
-              <div v-for="item in accessories.pendants" :key="item.id" class="shop-item" :class="{ owned: item.owned, equipped: form.equippedPendant === item.id }">
-                <div class="item-preview">
-                  <span class="item-icon" :class="item.animation">{{ item.icon }}</span>
-                </div>
-                <div class="item-info">
-                  <span class="item-name">{{ item.name }}</span>
-                  <span class="item-price">
-                    <template v-if="item.owned">
-                      <span v-if="form.equippedPendant === item.id" class="equipped-label">使用中</span>
-                      <span v-else class="owned-label">已拥有</span>
-                    </template>
-                    <template v-else>
-                      <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                      </svg>
-                      {{ item.price }}
-                    </template>
-                  </span>
-                </div>
-                <button class="buy-btn" :class="{ owned: item.owned }" @click="buyAccessory(item, 'pendant')">
-                  {{ item.owned ? (form.equippedPendant === item.id ? '使用中' : '装备') : '购买' }}
-                </button>
-              </div>
-            </div>
-            <div v-if="activeAccessoryTab === 'frame'" class="items-grid">
-              <div v-for="item in accessories.frames" :key="item.id" class="shop-item" :class="{ owned: item.owned, equipped: form.equippedFrame === item.id }">
-                <div class="item-preview">
-                  <div class="frame-preview" :class="item.style" :style="{ borderColor: item.color }"></div>
-                </div>
-                <div class="item-info">
-                  <span class="item-name">{{ item.name }}</span>
-                  <span class="item-price">
-                    <template v-if="item.owned">
-                      <span v-if="form.equippedFrame === item.id" class="equipped-label">使用中</span>
-                      <span v-else class="owned-label">已拥有</span>
-                    </template>
-                    <template v-else>
-                      <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                      </svg>
-                      {{ item.price }}
-                    </template>
-                  </span>
-                </div>
-                <button class="buy-btn" :class="{ owned: item.owned }" @click="buyAccessory(item, 'frame')">
-                  {{ item.owned ? (form.equippedFrame === item.id ? '使用中' : '装备') : '购买' }}
-                </button>
-              </div>
-            </div>
-            <div v-if="activeAccessoryTab === 'bubble'" class="items-grid">
-              <div v-for="item in accessories.bubbles" :key="item.id" class="shop-item" :class="{ owned: item.owned, equipped: form.equippedBubble === item.id }">
-                <div class="item-preview">
-                  <div class="bubble-preview" :class="item.type"></div>
-                </div>
-                <div class="item-info">
-                  <span class="item-name">{{ item.name }}</span>
-                  <span class="item-price">
-                    <template v-if="item.owned">
-                      <span v-if="form.equippedBubble === item.id" class="equipped-label">使用中</span>
-                      <span v-else class="owned-label">已拥有</span>
-                    </template>
-                    <template v-else>
-                      <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                      </svg>
-                      {{ item.price }}
-                    </template>
-                  </span>
-                </div>
-                <button class="buy-btn" :class="{ owned: item.owned }" @click="buyAccessory(item, 'bubble')">
-                  {{ item.owned ? (form.equippedBubble === item.id ? '使用中' : '装备') : '购买' }}
-                </button>
-              </div>
-            </div>
+          <div class="edit-footer">
+            <button class="save-btn" @click="handleSave">保存</button>
+            <button class="detail-btn" @click="showDetailEdit = true; showEditModal = false">详细设置</button>
           </div>
         </div>
       </div>
     </Transition>
-
-    <Transition name="modal">
-      <div v-if="showBackgroundShop" class="shop-modal" @click.self="showBackgroundShop = false">
-        <div class="shop-container">
-          <button class="close-btn" @click="showBackgroundShop = false">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-          <div class="shop-header">
-            <h3>背景商城</h3>
-            <span class="points-display">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+    
+    <!-- 详细编辑页面 -->
+    <Transition name="slide">
+      <div v-if="showDetailEdit" class="detail-edit-page">
+        <div class="detail-edit-container">
+          <div class="detail-edit-header">
+            <h2>编辑个人资料</h2>
+            <button class="close-btn" @click="showDetailEdit = false">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
-              {{ userStore.points }} 积分
-            </span>
+            </button>
           </div>
-          <div class="shop-content">
-            <div class="items-grid bg-grid">
-              <div v-for="item in backgrounds.page" :key="item.id" class="shop-item bg-item" :class="{ owned: item.owned, equipped: form.pageBg === item.id }">
-                <div class="bg-preview" :style="{ background: item.type === 'static' ? item.value : '#f8fafc' }">
-                  <div v-if="item.type === 'animated'" class="animated-preview" :class="item.value"></div>
-                </div>
-                <div class="item-info">
-                  <span class="item-name">{{ item.name }}</span>
-                  <span class="item-price">
-                    <template v-if="item.owned">
-                      <span v-if="form.pageBg === item.id" class="equipped-label">使用中</span>
-                      <span v-else class="owned-label">已拥有</span>
-                    </template>
-                    <template v-else>
-                      <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                      </svg>
-                      {{ item.price }}
-                    </template>
-                  </span>
-                </div>
-                <button class="buy-btn" :class="{ owned: item.owned }" @click="buyBackground(item)">
-                  {{ item.owned ? (form.pageBg === item.id ? '使用中' : '应用') : '购买' }}
-                </button>
+          
+          <div class="detail-edit-body">
+            <!-- 头像编辑 -->
+            <div class="avatar-edit-section">
+              <div class="avatar-preview-large">
+                <img :src="editForm.avatar" alt="头像预览" />
+              </div>
+              <div class="avatar-actions">
+                <button class="avatar-btn primary">上传新头像</button>
+                <button class="avatar-btn secondary">选择预设头像</button>
               </div>
             </div>
+            
+            <!-- 表单 -->
+            <div class="detail-form">
+              <div class="form-row">
+                <div class="form-group half">
+                  <label>昵称</label>
+                  <input v-model="editForm.name" type="text" class="form-input" placeholder="你的昵称" />
+                </div>
+                <div class="form-group half">
+                  <label>邮箱</label>
+                  <input v-model="editForm.email" type="email" class="form-input" placeholder="your@email.com" />
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label>个人简介</label>
+                <textarea v-model="editForm.bio" class="form-textarea" rows="4" placeholder="介绍一下你自己..."></textarea>
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group half">
+                  <label>GitHub</label>
+                  <input v-model="editForm.github" type="text" class="form-input" placeholder="github.com/username" />
+                </div>
+                <div class="form-group half">
+                  <label>个人网站</label>
+                  <input v-model="editForm.website" type="text" class="form-input" placeholder="yourwebsite.com" />
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label>头像链接</label>
+                <input v-model="editForm.avatar" type="text" class="form-input" placeholder="https://..." />
+              </div>
+            </div>
+          </div>
+          
+          <div class="detail-edit-footer">
+            <button class="cancel-btn" @click="showDetailEdit = false">取消</button>
+            <button class="save-btn large" @click="handleSave">保存更改</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+    
+    <!-- 心情设置弹窗 -->
+    <Transition name="modal">
+      <div v-if="showStatusModal" class="status-modal" @click.self="showStatusModal = false">
+        <div class="status-modal-container">
+          <div class="status-modal-header">
+            <h3>设置状态</h3>
+            <button class="close-btn" @click="showStatusModal = false">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          
+          <div class="status-modal-body">
+            <!-- 心情选择 -->
+            <div class="status-section">
+              <h4>选择心情</h4>
+              <div class="mood-grid">
+                <div 
+                  v-for="mood in moodEmojis" 
+                  :key="mood.value"
+                  class="mood-item"
+                  :class="{ active: userStatus.mood === mood.value }"
+                  @click="selectMood(mood)"
+                >
+                  <span class="mood-emoji">{{ mood.emoji }}</span>
+                  <span class="mood-label">{{ mood.label }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 忙碌模式 -->
+            <div class="status-section">
+              <div class="busy-header">
+                <h4>忙碌模式</h4>
+                <label class="busy-switch">
+                  <input type="checkbox" v-model="userStatus.isBusy" @change="toggleBusy" />
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+              <p class="busy-desc">开启后将暂时取消所有消息提醒，并自动回复发送消息的用户</p>
+              
+              <div v-if="userStatus.isBusy" class="busy-settings">
+                <div class="busy-duration">
+                  <label>忙碌时长</label>
+                  <div class="duration-options">
+                    <button 
+                      v-for="opt in busyDurationOptions" 
+                      :key="opt.value"
+                      class="duration-btn"
+                      :class="{ active: selectedBusyDuration === opt.value }"
+                      @click="selectedBusyDuration = opt.value"
+                    >
+                      {{ opt.label }}
+                    </button>
+                  </div>
+                  <input 
+                    v-if="selectedBusyDuration === 'custom'"
+                    v-model.number="customBusyMinutes"
+                    type="number"
+                    class="custom-duration-input"
+                    min="1"
+                    max="480"
+                    placeholder="分钟"
+                  />
+                </div>
+                
+                <div class="auto-reply">
+                  <label>自动回复语</label>
+                  <textarea 
+                    v-model="userStatus.busyAutoReply" 
+                    class="auto-reply-input"
+                    rows="3"
+                    placeholder="设置自动回复的内容..."
+                  ></textarea>
+                  <p class="auto-reply-hint">当其他用户给你发送消息时，将自动回复此内容</p>
+                </div>
+                
+                <div v-if="formatRemainingTime" class="remaining-time">
+                  <span class="time-icon">⏱️</span>
+                  <span>剩余时间：{{ formatRemainingTime }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="status-modal-footer">
+            <button class="cancel-btn" @click="showStatusModal = false">取消</button>
+            <button class="save-btn" @click="saveStatusSettings">保存设置</button>
           </div>
         </div>
       </div>
@@ -532,1019 +924,1163 @@ if (!levelStore.levels.length) {
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
-
-.profile-page {
-  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
-  padding: 24px;
+.github-profile-page {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', Helvetica, Arial, sans-serif;
+  background: #ffffff;
   min-height: 100vh;
-  position: relative;
-  overflow: hidden;
+  padding: 24px 32px;
 }
 
-.starry-bg {
-  position: fixed;
-  inset: 0;
-  background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
-  z-index: -1;
-}
-
-.starry-bg::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: 
-    radial-gradient(2px 2px at 20px 30px, white, transparent),
-    radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
-    radial-gradient(1px 1px at 90px 40px, white, transparent),
-    radial-gradient(2px 2px at 130px 80px, rgba(255,255,255,0.6), transparent),
-    radial-gradient(1px 1px at 160px 120px, white, transparent);
-  background-repeat: repeat;
-  background-size: 200px 150px;
-  animation: twinkleBg 4s ease-in-out infinite;
-}
-
-@keyframes twinkleBg {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.flow-bg {
-  position: fixed;
-  inset: 0;
-  background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
-  background-size: 400% 400%;
-  animation: gradientFlow 15s ease infinite;
-  z-index: -1;
-}
-
-@keyframes gradientFlow {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-.bubbles-bg {
-  position: fixed;
-  inset: 0;
-  overflow: hidden;
-  z-index: -1;
-}
-
-.bubbles-bg .bubble {
-  position: absolute;
-  bottom: -50px;
-  left: calc(var(--delay) * 10);
-  width: var(--size);
-  height: var(--size);
-  background: rgba(74, 111, 157, 0.15);
-  border-radius: 50%;
-  animation: bubbleRise 8s ease-in-out infinite;
-  animation-delay: var(--delay);
-}
-
-@keyframes bubbleRise {
-  0% { transform: translateY(0) scale(1); opacity: 0.5; }
-  50% { opacity: 0.8; }
-  100% { transform: translateY(-100vh) scale(0.5); opacity: 0; }
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-  position: relative;
-  z-index: 1;
-}
-
-.section-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0;
-}
-
-.header-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.shop-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 18px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #4a6f9d;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.shop-btn:hover {
-  background: linear-gradient(135deg, #4a6f9d 0%, #6672cb 100%);
-  border-color: transparent;
-  color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(74, 111, 157, 0.3);
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
-  position: relative;
-  z-index: 1;
-}
-
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-  background: white;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  transition: all 0.2s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(74, 111, 157, 0.1);
-}
-
-.stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.stat-icon.points {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  color: #f59e0b;
-}
-
-.stat-icon.title {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-  color: #4a6f9d;
-}
-
-.stat-icon.progress {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-  color: #10b981;
-}
-
-.stat-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: #64748b;
-}
-
-.profile-card {
-  background: white;
-  border-radius: 20px;
-  padding: 24px;
-  border: 1px solid #e2e8f0;
-  position: relative;
-  z-index: 1;
-}
-
-.card-header {
-  margin-bottom: 24px;
-}
-
-.card-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0;
-}
-
-.avatar-section {
+.profile-container {
+  max-width: 1280px;
+  margin: 0 auto;
   display: flex;
   gap: 32px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid #f1f5f9;
-  margin-bottom: 24px;
 }
 
-.avatar-preview {
+/* 左侧边栏 */
+.profile-sidebar {
+  width: 296px;
   flex-shrink: 0;
 }
 
-.avatar-container {
+.avatar-section {
+  margin-bottom: 16px;
+}
+
+.avatar-wrapper {
   position: relative;
-  width: 140px;
-  height: 140px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: visible;
+  display: inline-block;
+  cursor: pointer;
 }
 
-.ring-bubble {
+.profile-avatar {
+  width: 296px;
+  height: 296px;
+  border-radius: 50%;
+  border: 1px solid #d0d7de;
+  object-fit: cover;
+  transition: filter 0.3s ease;
+}
+
+.avatar-wrapper:hover .profile-avatar {
+  filter: brightness(1);
+}
+
+.avatar-hint {
   position: absolute;
-  inset: -10px;
-  border: 3px solid rgba(74, 111, 157, 0.3);
-  border-radius: 50%;
-  animation: ringPulse 2s ease-in-out infinite;
-}
-
-@keyframes ringPulse {
-  0%, 100% { transform: scale(1); opacity: 0.3; }
-  50% { transform: scale(1.1); opacity: 0.6; }
-}
-
-.avatar-frame {
-  padding: 4px;
-  border-radius: 50%;
-}
-
-.avatar-frame.solid {
-  border: 3px solid;
-}
-
-.avatar-frame.gradient {
-  border: 3px solid transparent;
-  background: linear-gradient(white, white) padding-box, linear-gradient(45deg, #f59e0b, #ef4444, #8b5cf6, #3b82f6) border-box;
-  border-radius: 50%;
-}
-
-.avatar-frame.glow {
-  border: 2px solid #4a6f9d;
-  box-shadow: 0 0 20px rgba(74, 111, 157, 0.5), inset 0 0 20px rgba(74, 111, 157, 0.1);
-  animation: glowPulse 2s ease-in-out infinite;
-}
-
-@keyframes glowPulse {
-  0%, 100% { box-shadow: 0 0 20px rgba(74, 111, 157, 0.5), inset 0 0 20px rgba(74, 111, 157, 0.1); }
-  50% { box-shadow: 0 0 30px rgba(74, 111, 157, 0.7), inset 0 0 25px rgba(74, 111, 157, 0.15); }
-}
-
-.avatar-frame.pixel {
-  border: 4px solid;
-  border-image: repeating-linear-gradient(90deg, #6672cb 0, #6672cb 4px, transparent 4px, transparent 8px) 4;
-  border-radius: 0;
-}
-
-.pendant {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  font-size: 28px;
-  z-index: 10;
-}
-
-.pendant.twinkle {
-  animation: twinkle 1.5s ease-in-out infinite;
-}
-
-@keyframes twinkle {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.2); opacity: 0.7; }
-}
-
-.pendant.float {
-  animation: float 2s ease-in-out infinite;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
-.pendant.petal {
-  animation: petalFall 3s ease-in-out infinite;
-}
-
-@keyframes petalFall {
-  0% { transform: rotate(0deg) translateY(0); }
-  50% { transform: rotate(180deg) translateY(5px); }
-  100% { transform: rotate(360deg) translateY(0); }
-}
-
-.pendant.flash {
-  animation: flash 0.8s ease-in-out infinite;
-}
-
-@keyframes flash {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.pendant.burn {
-  animation: burn 0.5s ease-in-out infinite alternate;
-}
-
-@keyframes burn {
-  0% { transform: scale(1) rotate(-5deg); }
-  100% { transform: scale(1.1) rotate(5deg); }
-}
-
-.pendant.sparkle {
-  animation: sparkle 1s ease-in-out infinite;
-}
-
-@keyframes sparkle {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.5); }
-}
-
-.pendant.bounce {
-  animation: bounce 0.6s ease-in-out infinite;
-}
-
-@keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-.pendant.pulse {
-  animation: pulse 1s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.3); }
-}
-
-.avatar-controls {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.control-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.control-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: #64748b;
-}
-
-.upload-btn {
-  padding: 10px 20px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 13px;
-  color: #475569;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  width: fit-content;
-}
-
-.upload-btn:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-}
-
-.preset-row {
-  display: flex;
-  gap: 8px;
-}
-
-.preset-btn {
-  width: 40px;
-  height: 40px;
-  border: 2px solid #e2e8f0;
-  background: white;
-  border-radius: 50%;
-  padding: 2px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.preset-btn:hover {
-  border-color: #4a6f9d;
-}
-
-.preset-btn.active {
-  border-color: #4a6f9d;
-  box-shadow: 0 0 0 3px rgba(74, 111, 157, 0.2);
-}
-
-.equipped-items {
-  display: flex;
-  gap: 8px;
-}
-
-.equipped-tag {
-  padding: 6px 12px;
-  background: linear-gradient(135deg, #dbeafe 0%, #ede9fe 100%);
-  border-radius: 8px;
-  font-size: 12px;
-  color: #4a6f9d;
-}
-
-.form-section {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  margin-bottom: 24px;
-}
-
-.form-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: #64748b;
-}
-
-.form-input {
-  padding: 12px 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 14px;
-  color: #1e293b;
-  outline: none;
-  transition: all 0.2s ease;
-}
-
-.form-input:focus {
-  border-color: #4a6f9d;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(74, 111, 157, 0.1);
-}
-
-.form-textarea {
-  padding: 12px 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 14px;
-  color: #1e293b;
-  outline: none;
-  resize: vertical;
-  min-height: 80px;
-  font-family: inherit;
-  transition: all 0.2s ease;
-}
-
-.form-textarea:focus {
-  border-color: #4a6f9d;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(74, 111, 157, 0.1);
-}
-
-.form-select {
-  padding: 12px 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 14px;
-  color: #1e293b;
-  outline: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.form-select:focus {
-  border-color: #4a6f9d;
-  background: white;
-}
-
-.radio-group {
-  display: flex;
-  gap: 12px;
-}
-
-.radio-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.radio-item input {
-  display: none;
-}
-
-.radio-item:hover {
-  background: #f1f5f9;
-}
-
-.radio-item.active {
-  background: linear-gradient(135deg, #dbeafe 0%, #ede9fe 100%);
-  border-color: #4a6f9d;
-}
-
-.number-input {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.num-btn {
-  width: 36px;
-  height: 36px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 18px;
-  color: #475569;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.num-btn:hover {
-  background: #4a6f9d;
-  border-color: #4a6f9d;
-  color: white;
-}
-
-.num-value {
-  width: 60px;
+  bottom: -24px;
+  left: 50%;
+  transform: translateX(-50%);
   text-align: center;
-  font-size: 16px;
-  font-weight: 600;
-  color: #1e293b;
-  background: transparent;
-  border: none;
-}
-
-.submit-row {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.submit-btn {
-  padding: 12px 32px;
-  background: linear-gradient(135deg, #4a6f9d 0%, #6672cb 100%);
-  border: none;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  color: white;
+  font-size: 12px;
+  color: #656d76;
+  margin: 0;
   cursor: pointer;
   transition: all 0.2s ease;
+  opacity: 0;
+  white-space: nowrap;
 }
 
-.submit-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(74, 111, 157, 0.4);
+.avatar-wrapper:hover .avatar-hint {
+  opacity: 1;
 }
 
-.shop-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
+.avatar-hint:hover {
+  color: #0969da;
+}
+
+.status-emoji:hover {
+  transform: scale(1.1);
+}
+
+.profile-info {
+  margin-bottom: 16px;
+}
+
+.profile-name {
+  font-size: 26px;
+  font-weight: 600;
+  color: #1f2328;
+  margin: 0 0 4px;
+  line-height: 1.25;
+}
+
+.profile-username {
+  font-size: 20px;
+  font-weight: 300;
+  color: #656d76;
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.profile-bio {
+  font-size: 16px;
+  color: #1f2328;
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.edit-profile-btn {
+  width: 100%;
+  padding: 10px 16px;
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #24292f;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 16px;
+}
+
+.edit-profile-btn:hover {
+  background: #f3f4f6;
+  border-color: #d0d7de;
+}
+
+.profile-stats {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  z-index: 100;
-  padding: 24px;
+  gap: 4px;
+  font-size: 14px;
+  color: #1f2328;
 }
 
-.shop-container {
-  position: relative;
-  background: white;
-  border-radius: 24px;
-  width: 100%;
-  max-width: 700px;
-  max-height: 80vh;
-  overflow: hidden;
+.stat-item svg {
+  color: #656d76;
+}
+
+.stat-label {
+  color: #656d76;
+}
+
+.profile-details {
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
 
-.close-btn {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 36px;
-  height: 36px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+.detail-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 10;
-  transition: all 0.2s ease;
+  gap: 8px;
+  font-size: 14px;
+  color: #1f2328;
 }
 
-.close-btn:hover {
-  background: #f1f5f9;
+.detail-item svg {
+  color: #656d76;
 }
 
-.shop-header {
+/* 右侧主内容 */
+.profile-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 题库部分 */
+.repositories-section {
+  margin-bottom: 32px;
+}
+
+.section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 16px;
 }
 
-.shop-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0;
+.repo-tabs {
+  display: flex;
+  gap: 8px;
 }
 
-.points-display {
+.repo-tab {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #656d76;
+  cursor: pointer;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #b45309;
 }
 
-.points-display svg {
-  color: #f59e0b;
+.repo-tab:hover {
+  background: #f6f8fa;
+  color: #1f2328;
 }
 
-.shop-tabs {
-  display: flex;
-  gap: 8px;
-  padding: 16px 24px;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.tab {
-  padding: 10px 20px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #64748b;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.tab:hover {
-  background: #f1f5f9;
-}
-
-.tab.active {
-  background: linear-gradient(135deg, #4a6f9d 0%, #6672cb 100%);
-  border-color: transparent;
+.repo-tab.active {
+  background: #0969da;
   color: white;
 }
 
-.shop-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 24px;
+.tab-count {
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  font-size: 12px;
 }
 
-.items-grid {
+.repo-tab.active .tab-count {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.customize-link {
+  font-size: 12px;
+  color: #0969da;
+  text-decoration: none;
+}
+
+.customize-link:hover {
+  text-decoration: underline;
+}
+
+.repo-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
 }
 
-.bg-grid {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.shop-item {
-  display: flex;
-  flex-direction: column;
+.repo-card {
   padding: 16px;
-  background: #f8fafc;
-  border: 2px solid #e2e8f0;
-  border-radius: 16px;
-  transition: all 0.2s ease;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #ffffff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.shop-item:hover {
-  border-color: #cbd5e1;
-  transform: translateY(-2px);
+.repo-card:hover {
+  border-color: #0969da;
+  box-shadow: 0 2px 8px rgba(9, 105, 218, 0.1);
 }
 
-.shop-item.owned {
-  border-color: #4a6f9d;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-}
-
-.shop-item.equipped {
-  border-color: #6672cb;
-  box-shadow: 0 0 0 3px rgba(102, 114, 203, 0.2);
-}
-
-.item-preview {
-  height: 60px;
+.repo-header {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 12px;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
 }
 
-.item-icon {
-  font-size: 36px;
-}
-
-.item-icon.twinkle { animation: twinkle 1.5s ease-in-out infinite; }
-.item-icon.float { animation: float 2s ease-in-out infinite; }
-.item-icon.flash { animation: flash 0.8s ease-in-out infinite; }
-.item-icon.burn { animation: burn 0.5s ease-in-out infinite alternate; }
-.item-icon.bounce { animation: bounce 0.6s ease-in-out infinite; }
-.item-icon.pulse { animation: pulse 1s ease-in-out infinite; }
-
-.frame-preview {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  border: 4px solid;
-}
-
-.frame-preview.solid {
-  border-color: #fbbf24;
-}
-
-.frame-preview.gradient {
-  border: 4px solid transparent;
-  background: linear-gradient(white, white) padding-box, linear-gradient(45deg, #ef4444, #f59e0b, #eab308, #22c55e, #3b82f6, #8b5cf6) border-box;
-  border-radius: 50%;
-  animation: gradientShift 3s linear infinite;
-}
-
-@keyframes gradientShift {
-  0% { background: linear-gradient(white, white) padding-box, linear-gradient(0deg, #ef4444, #f59e0b, #eab308, #22c55e, #3b82f6, #8b5cf6) border-box; }
-  25% { background: linear-gradient(white, white) padding-box, linear-gradient(90deg, #ef4444, #f59e0b, #eab308, #22c55e, #3b82f6, #8b5cf6) border-box; }
-  50% { background: linear-gradient(white, white) padding-box, linear-gradient(180deg, #ef4444, #f59e0b, #eab308, #22c55e, #3b82f6, #8b5cf6) border-box; }
-  75% { background: linear-gradient(white, white) padding-box, linear-gradient(270deg, #ef4444, #f59e0b, #eab308, #22c55e, #3b82f6, #8b5cf6) border-box; }
-  100% { background: linear-gradient(white, white) padding-box, linear-gradient(360deg, #ef4444, #f59e0b, #eab308, #22c55e, #3b82f6, #8b5cf6) border-box; }
-}
-
-.frame-preview.glow {
-  border-color: #4a6f9d;
-  box-shadow: 0 0 15px rgba(74, 111, 157, 0.5);
-  animation: glowPulse 2s ease-in-out infinite;
-}
-
-.frame-preview.pixel {
-  border-radius: 0;
-  border-color: #6672cb;
-}
-
-.frame-preview.crystal {
-  border-color: rgba(103, 232, 249, 0.5);
-  background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, rgba(103, 232, 249, 0.1) 50%, rgba(255,255,255,0.3) 100%);
-  box-shadow: 0 0 15px rgba(103, 232, 249, 0.3);
-  animation: crystalShimmer 3s ease-in-out infinite;
-}
-
-@keyframes crystalShimmer {
-  0%, 100% { box-shadow: 0 0 15px rgba(103, 232, 249, 0.3); }
-  50% { box-shadow: 0 0 25px rgba(103, 232, 249, 0.5); }
-}
-
-.frame-preview.flame {
-  border: 4px solid transparent;
-  background: linear-gradient(white, white) padding-box, linear-gradient(180deg, #fbbf24 0%, #f97316 50%, #ef4444 100%) border-box;
-  box-shadow: 0 0 15px rgba(249, 115, 22, 0.4);
-  animation: flameFlicker 0.5s ease-in-out infinite alternate;
-}
-
-@keyframes flameFlicker {
-  0% { box-shadow: 0 0 15px rgba(249, 115, 22, 0.4), 0 -5px 15px rgba(251, 191, 36, 0.3); }
-  100% { box-shadow: 0 0 20px rgba(249, 115, 22, 0.6), 0 -8px 20px rgba(251, 191, 36, 0.4); }
-}
-
-.bubble-preview {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  border: 3px solid rgba(74, 111, 157, 0.3);
-  position: relative;
-}
-
-.bubble-preview.ring {
-  animation: ringPulse 2s ease-in-out infinite;
-}
-
-.bubble-preview.stars {
-  border: none;
-  background: transparent;
-}
-
-.bubble-preview.stars::before {
-  content: '✦✦✦';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  color: #fbbf24;
-  animation: starSpin 4s linear infinite;
-}
-
-@keyframes starSpin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.bubble-preview.particles {
-  border: none;
-  background: radial-gradient(circle, #8b5cf6 2px, transparent 2px);
-  background-size: 8px 8px;
-  animation: particleGlow 1.5s ease-in-out infinite;
-}
-
-@keyframes particleGlow {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
-}
-
-.bubble-preview.orbit {
-  border: 2px dashed rgba(74, 111, 157, 0.4);
-  animation: orbitRotate 4s linear infinite;
-}
-
-.bubble-preview.orbit::before {
-  content: '';
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  background: #4a6f9d;
-  border-radius: 50%;
-  top: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.bubble-preview.petals {
-  border: none;
-  background: transparent;
-}
-
-.bubble-preview.petals::before {
-  content: '❀';
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  color: #f472b6;
-  animation: petalRotate 5s linear infinite;
-}
-
-@keyframes petalRotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.bg-item .item-preview {
-  height: 50px;
-}
-
-.bg-preview {
-  width: 100%;
-  height: 50px;
-  border-radius: 10px;
-  position: relative;
-  overflow: hidden;
-}
-
-.animated-preview.particles {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-}
-
-.animated-preview.particles::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(2px 2px at 10px 10px, white, transparent);
-  background-size: 20px 20px;
-  animation: twinkleBg 2s ease-in-out infinite;
-}
-
-.animated-preview.aurora {
-  background: linear-gradient(-45deg, #12c2e9, #c471ed, #f64f59);
-  background-size: 200% 200%;
-  animation: gradientFlow 5s ease infinite;
-}
-
-.animated-preview.starry {
-  background: linear-gradient(135deg, #0f0c29 0%, #302b63 100%);
-}
-
-.animated-preview.starry::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(1px 1px at 5px 5px, white, transparent);
-  background-size: 15px 15px;
-}
-
-.animated-preview.flow {
-  background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
-  background-size: 200% 200%;
-  animation: gradientFlow 3s ease infinite;
-}
-
-.animated-preview.bubbles {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.item-name {
+.repo-name {
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: #0969da;
+  text-decoration: none;
 }
 
-.item-price {
+.repo-name:hover {
+  text-decoration: underline;
+}
+
+.repo-badge {
+  padding: 2px 8px;
+  border: 1px solid #d0d7de;
+  border-radius: 12px;
+  font-size: 12px;
+  color: #656d76;
+  font-weight: 500;
+}
+
+.repo-description {
+  font-size: 12px;
+  color: #656d76;
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.repo-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.repo-difficulty {
   display: flex;
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #64748b;
+  color: #656d76;
 }
 
-.item-price svg {
-  color: #f59e0b;
+.difficulty-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
 }
 
-.owned-label {
-  color: #10b981;
+.repo-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #656d76;
 }
 
-.equipped-label {
-  color: #6672cb;
+.repo-meta svg {
+  color: #656d76;
+}
+
+/* 做题统计部分 */
+.contributions-section {
+  margin-bottom: 32px;
+}
+
+.contributions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.contributions-header h3 {
+  font-size: 16px;
+  font-weight: 400;
+  color: #1f2328;
+  margin: 0;
+}
+
+.stats-summary {
+  display: flex;
+  gap: 8px;
+}
+
+.stat-badge {
+  padding: 4px 10px;
+  background: #ddf4ff;
+  border-radius: 12px;
+  font-size: 12px;
+  color: #0969da;
   font-weight: 500;
 }
 
-.buy-btn {
-  padding: 10px 16px;
+.contributions-content {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.contributions-calendar {
+  position: relative;
+  padding: 8px 0;
+  overflow-x: auto;
+  flex: 1;
+}
+
+.months-row {
+  position: relative;
+  height: 20px;
+  margin-bottom: 4px;
+}
+
+.month-label {
+  position: absolute;
+  font-size: 12px;
+  color: #656d76;
+}
+
+.calendar-body {
+  display: flex;
+  gap: 4px;
+}
+
+.weekdays-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 2px;
+}
+
+.weekday-label {
+  height: 10px;
+  font-size: 10px;
+  color: #656d76;
+  line-height: 10px;
+}
+
+.contributions-grid {
+  display: flex;
+  gap: 3px;
+}
+
+.week-column {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.contribution-cell {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: #ebedf0;
+  cursor: pointer;
+  transition: outline 0.1s ease;
+}
+
+.contribution-cell:hover {
+  outline: 1px solid rgba(0,0,0,0.2);
+  outline-offset: 1px;
+}
+
+.contribution-cell.level-0 { background: #ebedf0; }
+.contribution-cell.level-1 { background: #9be9a8; }
+.contribution-cell.level-2 { background: #40c463; }
+.contribution-cell.level-3 { background: #30a14e; }
+.contribution-cell.level-4 { background: #216e39; }
+
+.contributions-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #656d76;
+}
+
+.legend-cells {
+  display: flex;
+  gap: 3px;
+}
+
+.legend-cell {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legend-cell.level-0 { background: #ebedf0; }
+.legend-cell.level-1 { background: #9be9a8; }
+.legend-cell.level-2 { background: #40c463; }
+.legend-cell.level-3 { background: #30a14e; }
+.legend-cell.level-4 { background: #216e39; }
+
+.year-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 80px;
+}
+
+.year-btn {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #656d76;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.year-btn:hover {
+  background: #f6f8fa;
+}
+
+.year-btn.active {
+  background: #0969da;
+  color: white;
+  font-weight: 600;
+}
+
+/* 活动部分 */
+.activity-section {
+  margin-bottom: 32px;
+}
+
+.activity-section h3 {
+  font-size: 16px;
+  font-weight: 400;
+  color: #1f2328;
+  margin: 0 0 16px;
+}
+
+.activity-timeline {
+  border-left: 2px solid #d0d7de;
+  margin-left: 8px;
+  padding-left: 16px;
+}
+
+.activity-date {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2328;
+  margin-bottom: 12px;
+  margin-left: -20px;
+}
+
+.activity-date::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #d0d7de;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empty-activity {
+  padding: 16px 0;
+  color: #656d76;
+  font-size: 14px;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #1f2328;
+}
+
+.activity-icon {
+  font-size: 16px;
+}
+
+.activity-text {
+  flex: 1;
+}
+
+.activity-time {
+  color: #656d76;
+  font-size: 12px;
+}
+
+.show-more-btn {
+  width: 100%;
+  padding: 12px;
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #0969da;
+  cursor: pointer;
+  margin-top: 16px;
+}
+
+.show-more-btn:hover {
+  background: #f3f4f6;
+}
+
+/* 快速编辑弹窗 */
+.edit-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.edit-container {
   background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 13px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #d0d7de;
+}
+
+.edit-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2328;
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #656d76;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.close-btn:hover {
+  background: #f6f8fa;
+}
+
+.edit-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 14px;
   font-weight: 500;
-  color: #475569;
+  color: #1f2328;
+}
+
+.form-input,
+.form-textarea {
+  padding: 8px 12px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1f2328;
+  outline: none;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  border-color: #0969da;
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+}
+
+.edit-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #d0d7de;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.save-btn {
+  padding: 8px 16px;
+  background: #2da44e;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+}
+
+.save-btn:hover {
+  background: #2c974b;
+}
+
+.save-btn.large {
+  padding: 10px 24px;
+  font-size: 16px;
+}
+
+.detail-btn {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #656d76;
+  cursor: pointer;
+}
+
+.detail-btn:hover {
+  background: #f6f8fa;
+}
+
+/* 详细编辑页面 */
+.detail-edit-page {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.detail-edit-container {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 640px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+}
+
+.detail-edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #d0d7de;
+}
+
+.detail-edit-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2328;
+  margin: 0;
+}
+
+.detail-edit-body {
+  padding: 24px;
+}
+
+.avatar-edit-section {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 32px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid #d0d7de;
+}
+
+.avatar-preview-large {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid #d0d7de;
+}
+
+.avatar-preview-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.avatar-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.buy-btn:hover {
-  background: #4a6f9d;
-  border-color: #4a6f9d;
+.avatar-btn.primary {
+  background: #0969da;
+  border: none;
   color: white;
 }
 
-.buy-btn.owned {
-  background: linear-gradient(135deg, #4a6f9d 0%, #6672cb 100%);
-  border-color: transparent;
+.avatar-btn.primary:hover {
+  background: #0550ae;
+}
+
+.avatar-btn.secondary {
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  color: #24292f;
+}
+
+.avatar-btn.secondary:hover {
+  background: #f3f4f6;
+}
+
+.detail-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-group.half {
+  flex: 1;
+}
+
+.detail-edit-footer {
+  padding: 20px 24px;
+  border-top: 1px solid #d0d7de;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.cancel-btn {
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #656d76;
+  cursor: pointer;
+}
+
+.cancel-btn:hover {
+  background: #f6f8fa;
+}
+
+/* 状态emoji样式增强 */
+.status-emoji {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 38px;
+  height: 38px;
+  background: white;
+  border: 1px solid #d0d7de;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.status-emoji:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.status-emoji.busy {
+  border-color: #f0883e;
+  background: #fff8f0;
+}
+
+.busy-indicator {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  background: #f0883e;
+  border: 2px solid white;
+  border-radius: 50%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.7; }
+}
+
+/* 心情设置弹窗 */
+.status-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1002;
+  padding: 24px;
+}
+
+.status-modal-container {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+}
+
+.status-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #d0d7de;
+}
+
+.status-modal-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2328;
+  margin: 0;
+}
+
+.status-modal-body {
+  padding: 24px;
+}
+
+.status-section {
+  margin-bottom: 24px;
+}
+
+.status-section:last-child {
+  margin-bottom: 0;
+}
+
+.status-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2328;
+  margin: 0 0 12px;
+}
+
+.mood-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.mood-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 8px;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mood-item:hover {
+  border-color: #0969da;
+  background: #f6f8fa;
+}
+
+.mood-item.active {
+  border-color: #0969da;
+  background: #ddf4ff;
+}
+
+.mood-emoji {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.mood-label {
+  font-size: 12px;
+  color: #656d76;
+}
+
+.mood-item.active .mood-label {
+  color: #0969da;
+  font-weight: 500;
+}
+
+.busy-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.busy-header h4 {
+  margin: 0;
+}
+
+.busy-desc {
+  font-size: 13px;
+  color: #656d76;
+  margin: 0 0 16px;
+}
+
+.busy-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+}
+
+.busy-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #d0d7de;
+  border-radius: 26px;
+  transition: 0.3s;
+}
+
+.switch-slider::before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+.busy-switch input:checked + .switch-slider {
+  background: #2da44e;
+}
+
+.busy-switch input:checked + .switch-slider::before {
+  transform: translateX(22px);
+}
+
+.busy-settings {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #d0d7de;
+}
+
+.busy-duration {
+  margin-bottom: 16px;
+}
+
+.busy-duration label,
+.auto-reply label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2328;
+  margin-bottom: 8px;
+}
+
+.duration-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.duration-btn {
+  padding: 6px 12px;
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #656d76;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.duration-btn:hover {
+  border-color: #0969da;
+  color: #0969da;
+}
+
+.duration-btn.active {
+  background: #0969da;
+  border-color: #0969da;
   color: white;
 }
 
+.custom-duration-input {
+  margin-top: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+}
+
+.custom-duration-input:focus {
+  border-color: #0969da;
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+}
+
+.auto-reply {
+  margin-bottom: 16px;
+}
+
+.auto-reply-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 14px;
+  resize: vertical;
+  outline: none;
+  font-family: inherit;
+}
+
+.auto-reply-input:focus {
+  border-color: #0969da;
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+}
+
+.auto-reply-hint {
+  font-size: 12px;
+  color: #656d76;
+  margin: 8px 0 0;
+}
+
+.remaining-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #fff8f0;
+  border: 1px solid #f0883e;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #f0883e;
+}
+
+.time-icon {
+  font-size: 18px;
+}
+
+.status-modal-footer {
+  padding: 20px 24px;
+  border-top: 1px solid #d0d7de;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.status-modal-footer .save-btn {
+  padding: 10px 20px;
+  background: #2da44e;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+}
+
+.status-modal-footer .save-btn:hover {
+  background: #2c974b;
+}
+
+/* 动画 */
 .modal-enter-active,
 .modal-leave-active {
-  transition: all 0.3s ease;
+  transition: opacity 0.3s ease;
 }
 
 .modal-enter-from,
@@ -1552,31 +2088,61 @@ if (!levelStore.levels.length) {
   opacity: 0;
 }
 
-.modal-enter-from .shop-container,
-.modal-leave-to .shop-container {
-  transform: scale(0.95);
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.slide-enter-from {
+  opacity: 0;
+  transform: scale(0.95) translateY(20px);
+}
+
+.slide-leave-to {
+  opacity: 0;
+  transform: scale(0.95) translateY(20px);
+}
+
+/* 响应式 */
+@media (max-width: 1012px) {
+  .profile-container {
+    flex-direction: column;
+  }
+  
+  .profile-sidebar {
+    width: 100%;
+  }
+  
+  .profile-avatar {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .repo-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-row {
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 768px) {
-  .summary-grid {
+  .github-profile-page {
+    padding: 16px;
+  }
+  
+  .repo-grid {
     grid-template-columns: 1fr;
   }
-
-  .avatar-section {
+  
+  .contributions-calendar {
+    overflow-x: scroll;
+  }
+  
+  .avatar-edit-section {
     flex-direction: column;
-    align-items: center;
-  }
-
-  .avatar-controls {
-    width: 100%;
-  }
-
-  .items-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .bg-grid {
-    grid-template-columns: repeat(2, 1fr);
+    align-items: flex-start;
   }
 }
 </style>
