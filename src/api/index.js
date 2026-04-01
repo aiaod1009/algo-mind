@@ -28,4 +28,60 @@ api.interceptors.response.use(
   },
 )
 
+api.getUserProblemHeatmap = (year) => {
+  return api
+    .get('/user/problem-heatmap', {
+      params: { year },
+    })
+    .then((res) => {
+      const payload = res?.data || {}
+      return {
+        success: payload.success ?? payload.code === 0,
+        data: payload.data || [],
+        message: payload.message || '',
+        code: payload.code,
+      }
+    })
+}
+
+api.getUserProblemStats = () => {
+  return api.get('/user/problem-stats').then((res) => {
+    const payload = res?.data || {}
+    return {
+      success: payload.success ?? payload.code === 0,
+      data: payload.data || null,
+      message: payload.message || '',
+      code: payload.code,
+    }
+  })
+}
+
+api.getUserActivities = (params = {}) => {
+  return api
+    .get('/user/activities', {
+      params,
+    })
+    .then((res) => {
+      const payload = res?.data || {}
+      return {
+        success: payload.success ?? payload.code === 0,
+        data: payload.data || [],
+        message: payload.message || '',
+        code: payload.code,
+      }
+    })
+}
+
+api.updateUserProfile = (profile) => {
+  return api.put('/user/profile', profile).then((res) => {
+    const payload = res?.data || {}
+    return {
+      success: payload.success ?? payload.code === 0,
+      data: payload.data || null,
+      message: payload.message || '',
+      code: payload.code,
+    }
+  })
+}
+
 export default api
