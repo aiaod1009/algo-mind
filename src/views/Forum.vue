@@ -89,18 +89,18 @@ const toolbarActions = {
 const insertFormat = (type) => {
   const action = toolbarActions[type]
   if (!action || !contentTextarea.value) return
-  
+
   const textarea = contentTextarea.value
   const start = textarea.selectionStart
   const end = textarea.selectionEnd
   const selectedText = postForm.content.substring(start, end) || action.placeholder
-  
+
   const before = postForm.content.substring(0, start)
   const after = postForm.content.substring(end)
   const newText = action.prefix + selectedText + action.suffix
-  
+
   postForm.content = before + newText + after
-  
+
   nextTick(() => {
     textarea.focus()
     const newPos = start + action.prefix.length
@@ -171,11 +171,13 @@ const searchFilters = ref({
   time: 'all'
 })
 
-const filteredPosts = computed(() => {
+const normalizedKeyword = computed(() => searchFilters.value.keyword.trim().toLowerCase())
+
+const filteredSource = computed(() => {
   let result = posts.value
-  if (searchFilters.value.keyword) {
-    const keyword = searchFilters.value.keyword.toLowerCase()
-    result = result.filter(post => 
+  if (normalizedKeyword.value) {
+    const keyword = normalizedKeyword.value
+    result = result.filter(post =>
       post.topic.toLowerCase().includes(keyword) ||
       post.content.toLowerCase().includes(keyword) ||
       post.tag.toLowerCase().includes(keyword)
@@ -185,14 +187,12 @@ const filteredPosts = computed(() => {
 })
 
 const totalPages = computed(() => {
-  const source = searchFilters.value.keyword ? filteredPosts.value : posts.value
-  return Math.ceil(source.length / POSTS_PER_PAGE)
+  return Math.ceil(filteredSource.value.length / POSTS_PER_PAGE)
 })
 
 const paginatedPosts = computed(() => {
-  const source = searchFilters.value.keyword ? filteredPosts.value : posts.value
   const start = (currentPage.value - 1) * POSTS_PER_PAGE
-  return source.slice(start, start + POSTS_PER_PAGE)
+  return filteredSource.value.slice(start, start + POSTS_PER_PAGE)
 })
 
 const handleSearch = (filters) => {
@@ -206,8 +206,9 @@ const handlePageChange = (page) => {
 }
 
 const searchBarAtBottom = ref(false)
+let scrollRafId = 0
 
-const handleScroll = () => {
+const updateSearchBarPosition = () => {
   const scrollTop = window.scrollY
   const windowHeight = window.innerHeight
   const docHeight = document.documentElement.scrollHeight
@@ -217,6 +218,14 @@ const handleScroll = () => {
   } else if (scrollTop < 200) {
     searchBarAtBottom.value = false
   }
+}
+
+const handleScroll = () => {
+  if (scrollRafId) return
+  scrollRafId = window.requestAnimationFrame(() => {
+    updateSearchBarPosition()
+    scrollRafId = 0
+  })
 }
 
 const expandedPosts = ref(new Set())
@@ -325,12 +334,19 @@ const goToChallenge = (questionId) => {
 }
 
 onMounted(() => {
-  window.addEventListener('scroll', handleScroll)
-  forumStore.fetchPosts()
+  window.addEventListener('scroll', handleScroll, { passive: true })
+  forumStore.hydratePostsFromLocal()
+  updateSearchBarPosition()
+  forumStore.fetchPosts({ skipIfLoaded: false })
 })
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
+  if (scrollRafId) {
+    window.cancelAnimationFrame(scrollRafId)
+    scrollRafId = 0
+  }
+  clearTimeout(hoverTimer)
 })
 </script>
 
@@ -339,12 +355,7 @@ onUnmounted(() => {
     <h2 class="section-title">简版论坛</h2>
 
     <Transition name="search-slide">
-      <SearchBar 
-        v-if="!searchBarAtBottom"
-        placeholder="搜索帖子、话题..."
-        :is-sticky="false"
-        @search="handleSearch"
-      />
+      <SearchBar v-if="!searchBarAtBottom" placeholder="搜索帖子、话题..." :is-sticky="false" @search="handleSearch" />
     </Transition>
 
     <div class="composer-wrapper">
@@ -382,18 +393,13 @@ onUnmounted(() => {
             </div>
             <button class="collapse-btn" @click="isComposerExpanded = false" title="收起">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 6L6 18M6 6l12 12"/>
+                <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
           </div>
 
           <div class="topic-input-wrapper">
-            <input 
-              v-model="postForm.topic" 
-              class="topic-input" 
-              placeholder="输入一个吸引人的标题..."
-              maxlength="50"
-            />
+            <input v-model="postForm.topic" class="topic-input" placeholder="输入一个吸引人的标题..." maxlength="50" />
             <span class="char-counter" :class="{ 'is-warning': topicCharCount > 40 }">
               {{ topicCharCount }}/50
             </span>
@@ -403,17 +409,18 @@ onUnmounted(() => {
             <div class="toolbar-group">
               <button class="toolbar-btn" title="加粗 (Ctrl+B)" @click="insertFormat('bold')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4-4H7v14h7.04c2.09 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42zM10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3zm3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5z"/>
+                  <path
+                    d="M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4-4H7v14h7.04c2.09 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42zM10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3zm3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5z" />
                 </svg>
               </button>
               <button class="toolbar-btn" title="斜体 (Ctrl+I)" @click="insertFormat('italic')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z"/>
+                  <path d="M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z" />
                 </svg>
               </button>
               <button class="toolbar-btn" title="标题" @click="insertFormat('heading')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M5 4v3h5.5v12h3V7H19V4z"/>
+                  <path d="M5 4v3h5.5v12h3V7H19V4z" />
                 </svg>
               </button>
             </div>
@@ -421,17 +428,20 @@ onUnmounted(() => {
             <div class="toolbar-group">
               <button class="toolbar-btn" title="插入链接" @click="insertFormat('link')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
+                  <path
+                    d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" />
                 </svg>
               </button>
               <button class="toolbar-btn" title="插入图片" @click="insertFormat('image')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                  <path
+                    d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
                 </svg>
               </button>
               <button class="toolbar-btn" title="代码块" @click="insertFormat('code')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>
+                  <path
+                    d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z" />
                 </svg>
               </button>
             </div>
@@ -439,12 +449,13 @@ onUnmounted(() => {
             <div class="toolbar-group">
               <button class="toolbar-btn" title="列表" @click="insertFormat('list')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"/>
+                  <path
+                    d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z" />
                 </svg>
               </button>
               <button class="toolbar-btn" title="引用" @click="insertFormat('quote')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/>
+                  <path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z" />
                 </svg>
               </button>
             </div>
@@ -459,24 +470,14 @@ onUnmounted(() => {
                     <span class="emoji-title">常用表情</span>
                   </div>
                   <div class="emoji-grid">
-                    <button 
-                      v-for="emoji in emojiList" 
-                      :key="emoji" 
-                      class="emoji-item"
-                      @click="insertEmoji(emoji)"
-                    >
+                    <button v-for="emoji in emojiList" :key="emoji" class="emoji-item" @click="insertEmoji(emoji)">
                       {{ emoji }}
                     </button>
                   </div>
                   <div v-if="recentEmojis.length > 0" class="emoji-recent">
                     <span class="recent-label">最近使用</span>
                     <div class="recent-grid">
-                      <button 
-                        v-for="emoji in recentEmojis" 
-                        :key="emoji" 
-                        class="emoji-item"
-                        @click="insertEmoji(emoji)"
-                      >
+                      <button v-for="emoji in recentEmojis" :key="emoji" class="emoji-item" @click="insertEmoji(emoji)">
                         {{ emoji }}
                       </button>
                     </div>
@@ -487,16 +488,12 @@ onUnmounted(() => {
           </div>
 
           <div class="content-wrapper">
-            <textarea 
-              ref="contentTextarea"
-              v-model="postForm.content" 
-              class="content-textarea" 
-              placeholder="分享你的想法、经验或问题...&#10;&#10;支持 Markdown 格式，让内容更丰富！"
-              maxlength="2000"
-            />
+            <textarea ref="contentTextarea" v-model="postForm.content" class="content-textarea"
+              placeholder="分享你的想法、经验或问题...&#10;&#10;支持 Markdown 格式，让内容更丰富！" maxlength="2000" />
             <div class="content-footer">
               <span class="content-hint">支持 Markdown 格式</span>
-              <span class="char-counter" :class="{ 'is-warning': contentCharCount > 1800, 'is-danger': contentCharCount > 1950 }">
+              <span class="char-counter"
+                :class="{ 'is-warning': contentCharCount > 1800, 'is-danger': contentCharCount > 1950 }">
                 {{ contentCharCount }}/2000
               </span>
             </div>
@@ -505,14 +502,8 @@ onUnmounted(() => {
           <div class="form-row">
             <div class="tag-input-wrapper">
               <div class="tag-input-icon">#</div>
-              <input 
-                v-model="tagInput"
-                class="tag-input" 
-                placeholder="选择或创建话题标签..."
-                @focus="showTagDropdown = true"
-                @click="showTagDropdown = true"
-                @blur="closeTagDropdown"
-              />
+              <input v-model="tagInput" class="tag-input" placeholder="选择或创建话题标签..." @focus="showTagDropdown = true"
+                @click="showTagDropdown = true" @blur="closeTagDropdown" />
               <Transition name="dropdown">
                 <div v-if="showTagDropdown" class="tag-dropdown" @mousedown.stop>
                   <div class="dropdown-header">
@@ -520,18 +511,14 @@ onUnmounted(() => {
                     <button class="dropdown-close" @mousedown.prevent="showTagDropdown = false">×</button>
                   </div>
                   <div class="tag-list">
-                    <div 
-                      v-for="tag in filteredTags" 
-                      :key="tag.name" 
-                      class="tag-option"
-                      :style="{ '--tag-color': tag.color }"
-                      @mousedown.prevent="selectTag(tag)"
-                    >
+                    <div v-for="tag in filteredTags" :key="tag.name" class="tag-option"
+                      :style="{ '--tag-color': tag.color }" @mousedown.prevent="selectTag(tag)">
                       <span class="tag-icon">{{ tag.icon }}</span>
                       <span class="tag-name">{{ tag.name }}</span>
                     </div>
                   </div>
-                  <div v-if="tagInput && !filteredTags.find(t => t.name === tagInput)" class="create-new-tag" @mousedown.prevent="createNewTag">
+                  <div v-if="tagInput && !filteredTags.find(t => t.name === tagInput)" class="create-new-tag"
+                    @mousedown.prevent="createNewTag">
                     <span class="create-icon">✨</span>
                     <span>创建新话题 "{{ tagInput }}"</span>
                   </div>
@@ -540,12 +527,7 @@ onUnmounted(() => {
             </div>
             <div class="quote-input-wrapper">
               <span class="quote-icon">💭</span>
-              <input 
-                v-model="postForm.quote" 
-                class="quote-input" 
-                placeholder="添加引用语（可选）"
-                maxlength="80"
-              />
+              <input v-model="postForm.quote" class="quote-input" placeholder="添加引用语（可选）" maxlength="80" />
             </div>
           </div>
 
@@ -553,25 +535,23 @@ onUnmounted(() => {
             <div class="publish-hints">
               <span class="hint-item">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  <path
+                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                 </svg>
                 发布后可编辑
               </span>
               <span class="hint-item">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+                  <path
+                    d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z" />
                 </svg>
                 内容安全审核
               </span>
             </div>
             <div class="publish-actions">
               <button class="cancel-btn" @click="isComposerExpanded = false">取消</button>
-              <button 
-                class="publish-btn" 
-                :class="{ 'is-disabled': !postForm.topic.trim() || !postForm.content.trim() }"
-                :disabled="!postForm.topic.trim() || !postForm.content.trim()"
-                @click="handlePublish"
-              >
+              <button class="publish-btn" :class="{ 'is-disabled': !postForm.topic.trim() || !postForm.content.trim() }"
+                :disabled="!postForm.topic.trim() || !postForm.content.trim()" @click="handlePublish">
                 <span v-if="publishing" class="loading-spinner"></span>
                 <span v-else class="btn-icon">🚀</span>
                 {{ publishing ? '发布中...' : '发布帖子' }}
@@ -584,14 +564,8 @@ onUnmounted(() => {
 
     <div class="forum-layout">
       <section class="feed-list">
-        <el-card 
-          v-for="item in paginatedPosts" 
-          :key="item.id" 
-          class="feed-card" 
-          :class="{ 'is-highlighted': highlightedPost === item.id }"
-          shadow="never"
-          @click="goToPost(item.id)"
-        >
+        <el-card v-for="item in paginatedPosts" :key="item.id" class="feed-card"
+          :class="{ 'is-highlighted': highlightedPost === item.id }" shadow="never" @click="goToPost(item.id)">
           <div class="head-row">
             <div class="user-wrap">
               <el-avatar :size="44" :src="item.avatar || ''">{{ item.author.slice(0, 1) }}</el-avatar>
@@ -607,10 +581,11 @@ onUnmounted(() => {
           </div>
 
           <h3 class="topic">{{ item.topic }}</h3>
-          
+
           <p class="content" :class="{ 'is-expanded': expandedPosts.has(item.id) }">
             {{ item.content }}
-            <span v-if="!expandedPosts.has(item.id) && item.content.length > 80" class="full" @click.stop="toggleExpand(item.id)">...全文</span>
+            <span v-if="!expandedPosts.has(item.id) && item.content.length > 80" class="full"
+              @click.stop="toggleExpand(item.id)">...全文</span>
             <span v-if="expandedPosts.has(item.id)" class="collapse" @click.stop="toggleExpand(item.id)">收起</span>
           </p>
 
@@ -618,11 +593,8 @@ onUnmounted(() => {
           <div class="hash" @click.stop>{{ item.tag }}</div>
 
           <div class="action-row">
-            <button 
-              class="action-btn like-btn" 
-              :class="{ 'is-liked': item.liked }"
-              @click.stop="handleLike(item, $event)"
-            >
+            <button class="action-btn like-btn" :class="{ 'is-liked': item.liked }"
+              @click.stop="handleLike(item, $event)">
               <span class="btn-icon">👍</span>
               <span class="btn-count">{{ item.likes }}</span>
             </button>
@@ -634,32 +606,19 @@ onUnmounted(() => {
 
           <Transition name="comment-slide">
             <div v-if="activeCommentPost === item.id" class="quick-comment-panel" @click.stop>
-              <input 
-                v-model="quickComment" 
-                class="quick-comment-input" 
-                placeholder="写下你的评论..."
-                @keyup.enter="submitQuickComment(item.id)"
-              />
+              <input v-model="quickComment" class="quick-comment-input" placeholder="写下你的评论..."
+                @keyup.enter="submitQuickComment(item.id)" />
               <el-button type="primary" size="small" round @click="submitQuickComment(item.id)">发送</el-button>
             </div>
           </Transition>
         </el-card>
-        
+
         <Transition name="search-slide">
-          <SearchBar 
-            v-if="searchBarAtBottom"
-            placeholder="搜索帖子、话题..."
-            :is-sticky="false"
-            @search="handleSearch"
-          />
+          <SearchBar v-if="searchBarAtBottom" placeholder="搜索帖子、话题..." :is-sticky="false" @search="handleSearch" />
         </Transition>
-        
+
         <div v-if="totalPages > 1" class="pagination-wrapper">
-          <FlowerPagination 
-            :total="totalPages" 
-            :defaultPage="currentPage"
-            @change="handlePageChange"
-          />
+          <FlowerPagination :total="totalPages" :defaultPage="currentPage" @change="handlePageChange" />
         </div>
       </section>
 
@@ -673,18 +632,12 @@ onUnmounted(() => {
             </div>
           </div>
           <div class="hot-list">
-            <div 
-              v-for="(q, index) in paginatedHotQuestions" 
-              :key="q.id" 
-              class="hot-item"
-              @mouseenter="handleHotHover(q)"
-              @mouseleave="handleHotLeave"
-              @click="goToChallenge(q.id)"
-            >
+            <div v-for="(q, index) in paginatedHotQuestions" :key="q.id" class="hot-item"
+              @mouseenter="handleHotHover(q)" @mouseleave="handleHotLeave" @click="goToChallenge(q.id)">
               <span class="hot-rank">{{ hotCurrentPage * hotPageSize + index + 1 }}</span>
               <span class="hot-item-title">{{ q.title }}</span>
               <span class="hot-badge">HOT</span>
-              
+
               <Transition name="tooltip">
                 <div v-if="hoveredHot === q.id" class="hot-tooltip">
                   <div class="tooltip-row">
@@ -708,7 +661,8 @@ onUnmounted(() => {
     </div>
 
     <Transition name="emoji-burst">
-      <div v-if="showEmojiBurst" class="emoji-burst-container" :style="{ left: burstPosition.x + 'px', top: burstPosition.y + 'px' }">
+      <div v-if="showEmojiBurst" class="emoji-burst-container"
+        :style="{ left: burstPosition.x + 'px', top: burstPosition.y + 'px' }">
         <span v-for="(emoji, i) in likeEmojis" :key="i" class="burst-emoji" :style="{ animationDelay: i * 0.05 + 's' }">
           {{ emoji }}
         </span>
@@ -767,9 +721,17 @@ onUnmounted(() => {
 }
 
 @keyframes gradient-flow {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 .collapsed-left {
@@ -1395,7 +1357,9 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .emoji-dropdown-enter-active,
@@ -1488,13 +1452,15 @@ onUnmounted(() => {
   max-height: 500px;
 }
 
-.full, .collapse {
+.full,
+.collapse {
   color: #4a90d9;
   font-weight: 600;
   cursor: pointer;
 }
 
-.full:hover, .collapse:hover {
+.full:hover,
+.collapse:hover {
   text-decoration: underline;
 }
 
@@ -1693,8 +1659,17 @@ onUnmounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.05); }
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
 }
 
 .hot-tooltip {
@@ -1731,9 +1706,17 @@ onUnmounted(() => {
   color: var(--text-main);
 }
 
-.tooltip-value.简单 { color: #52c41a; }
-.tooltip-value.中等 { color: #faad14; }
-.tooltip-value.困难 { color: #ff4d4f; }
+.tooltip-value.简单 {
+  color: #52c41a;
+}
+
+.tooltip-value.中等 {
+  color: #faad14;
+}
+
+.tooltip-value.困难 {
+  color: #ff4d4f;
+}
 
 .tooltip-value.tags {
   color: #4a90d9;
@@ -1764,6 +1747,7 @@ onUnmounted(() => {
     opacity: 1;
     transform: translateY(0) scale(0.5);
   }
+
   100% {
     opacity: 0;
     transform: translateY(-60px) scale(1.2);
@@ -1783,6 +1767,7 @@ onUnmounted(() => {
     opacity: 0;
     transform: translateY(-10px) scale(0.98);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -1802,6 +1787,7 @@ onUnmounted(() => {
     opacity: 0;
     transform: translateY(-20px) scale(0.95);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);

@@ -364,6 +364,17 @@ export const useLevelStore = defineStore('level', () => {
     }
   }
 
+  const hydrateLevelsFromLocal = () => {
+    const local = readLocalLevels()
+    if (!Array.isArray(local) || !local.length) return false
+    const mergedLocal = mergeLocalWithMockLevels(local)
+    levels.value = normalizeLevels(mergedLocal)
+    if (mergedLocal.length !== local.length) {
+      saveLocalLevels(levels.value)
+    }
+    return true
+  }
+
   const findLevelById = (id) => levels.value.find((item) => Number(item.id) === Number(id))
 
   const getLevelsByTrack = (trackCode) => {
@@ -475,5 +486,13 @@ export const useLevelStore = defineStore('level', () => {
     }
   }
 
-  return { levels, tracks, fetchLevels, submitAnswer, findLevelById, getLevelsByTrack }
+  return {
+    levels,
+    tracks,
+    fetchLevels,
+    hydrateLevelsFromLocal,
+    submitAnswer,
+    findLevelById,
+    getLevelsByTrack,
+  }
 })

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useLevelStore } from '../stores/level'
@@ -13,6 +13,10 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const selectedLevel = ref(null)
 const activeTrack = ref(userStore.userInfo?.targetTrack || userStore.selectedTrack || 'algo')
+const prefersReducedMotion = ref(false)
+
+let motionMediaQuery = null
+let motionListener = null
 
 const trackList = computed(() => levelStore.tracks)
 const trackLevels = computed(() => levelStore.getLevelsByTrack(activeTrack.value))
@@ -78,6 +82,15 @@ const openLevelDialog = (level) => {
   dialogVisible.value = true
 }
 
+const nodeStyles = computed(() => {
+  return trackLevels.value.map((_, index) => getNodeStyle(index))
+})
+
+const progressTruckStyle = computed(() => {
+  if (progressLevelIndex.value < 0) return null
+  return getTruckStyle(progressLevelIndex.value)
+})
+
 const startChallengeFromDialog = () => {
   if (!selectedLevel.value) return
   if (!selectedLevel.value.isUnlocked) {
@@ -89,6 +102,20 @@ const startChallengeFromDialog = () => {
 }
 
 const loadData = async () => {
+  if (levelStore.levels.length) {
+    loading.value = false
+    return
+  }
+
+  const hydrated = levelStore.hydrateLevelsFromLocal()
+  if (hydrated) {
+    loading.value = false
+    levelStore.fetchLevels().catch(() => {
+      ElMessage.warning('远端关卡刷新失败，已显示本地缓存')
+    })
+    return
+  }
+
   loading.value = true
   try {
     await levelStore.fetchLevels()
@@ -99,12 +126,44 @@ const loadData = async () => {
   }
 }
 
+const setupMotionPreference = () => {
+  if (typeof window === 'undefined' || !window.matchMedia) return
+  motionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  prefersReducedMotion.value = motionMediaQuery.matches
+  motionListener = (event) => {
+    prefersReducedMotion.value = event.matches
+  }
+  if (motionMediaQuery.addEventListener) {
+    motionMediaQuery.addEventListener('change', motionListener)
+  } else {
+    motionMediaQuery.addListener(motionListener)
+  }
+}
+
+const teardownMotionPreference = () => {
+  if (!motionMediaQuery || !motionListener) return
+  if (motionMediaQuery.removeEventListener) {
+    motionMediaQuery.removeEventListener('change', motionListener)
+  } else {
+    motionMediaQuery.removeListener(motionListener)
+  }
+  motionMediaQuery = null
+  motionListener = null
+}
+
 watch(activeTrack, () => {
   dialogVisible.value = false
   selectedLevel.value = null
 })
 
-onMounted(loadData)
+onMounted(() => {
+  setupMotionPreference()
+  loadData()
+})
+
+onUnmounted(() => {
+  teardownMotionPreference()
+})
 </script>
 
 <template>
@@ -120,7 +179,7 @@ onMounted(loadData)
     <el-skeleton :loading="loading" animated :rows="6">
       <section class="surface-card pixel-stage">
         <div v-if="trackLevels.length" class="stage-viewport">
-          <div class="map-world" :style="mapWorldStyle">
+          <div class="map-world" :style="mapWorldStyle" :class="{ 'reduced-motion': prefersReducedMotion }">
             <div class="sky-pixels" aria-hidden="true"></div>
 
             <span class="cloud cloud-a" aria-hidden="true"></span>
@@ -133,8 +192,7 @@ onMounted(loadData)
             <span class="pipe pipe-c" aria-hidden="true"></span>
             <span class="pipe pipe-d" aria-hidden="true"></span>
 
-            <div v-for="(item, index) in trackLevels" :key="item.id" class="level-sign-wrap"
-              :style="getNodeStyle(index)">
+            <div v-for="(item, index) in trackLevels" :key="item.id" class="level-sign-wrap" :style="nodeStyles[index]">
               <div class="node-stars" :class="{ dimmed: !item.isUnlocked }">
                 <span v-for="star in 3" :key="`${item.id}-${star}`" class="star"
                   :class="{ filled: star <= getLevelStars(item) }">
@@ -157,8 +215,7 @@ onMounted(loadData)
               <div class="piece-name">{{ item.name }}</div>
             </div>
 
-            <div v-if="progressLevelIndex >= 0" class="progress-truck" :style="getTruckStyle(progressLevelIndex)"
-              aria-hidden="true">
+            <div v-if="progressTruckStyle" class="progress-truck" :style="progressTruckStyle" aria-hidden="true">
               <span class="truck-body"></span>
               <span class="truck-cab"></span>
               <span class="truck-window"></span>
@@ -768,5 +825,20 @@ onMounted(loadData)
   .star {
     font-size: 21px;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .cloud,
+  .progress-truck,
+  .truck-wheel {
+    animation: none !important;
+  }
+}
+
+.map-world.reduced-motion .cloud,
+.map-world.reduced-motion .progress-truck,
+.map-world.reduced-motion .truck-wheel {
+  animation: none !important;
 }
 </style>

@@ -21,7 +21,24 @@ const saveLocalErrors = (errors) => {
 export const useErrorStore = defineStore('error', () => {
   const errors = ref(readLocalErrors())
 
-  const fetchErrors = async () => {
+  const hydrateErrorsFromLocal = () => {
+    const local = readLocalErrors()
+    if (Array.isArray(local) && local.length > 0) {
+      errors.value = local
+      return true
+    }
+    errors.value = []
+    return false
+  }
+
+  const fetchErrors = async ({ skipIfLoaded = true } = {}) => {
+    if (skipIfLoaded && Array.isArray(errors.value) && errors.value.length > 0) {
+      return
+    }
+
+    // Render local data first so the page does not block on network timeout.
+    hydrateErrorsFromLocal()
+
     try {
       const res = await api.get('/errors')
       if (res.data?.code === 0 && Array.isArray(res.data.data)) {
@@ -79,5 +96,5 @@ export const useErrorStore = defineStore('error', () => {
     saveLocalErrors(errors.value)
   }
 
-  return { errors, fetchErrors, addError, getAnalysis, markAnalysis }
+  return { errors, hydrateErrorsFromLocal, fetchErrors, addError, getAnalysis, markAnalysis }
 })

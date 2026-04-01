@@ -55,7 +55,25 @@ const saveLocalPosts = (posts) => {
 export const useForumStore = defineStore('forum', () => {
   const posts = ref([])
 
-  const fetchPosts = async () => {
+  const hydratePostsFromLocal = () => {
+    const local = readLocalPosts()
+    if (Array.isArray(local) && local.length > 0) {
+      posts.value = local
+      return true
+    }
+    posts.value = DEFAULT_POSTS
+    saveLocalPosts(posts.value)
+    return false
+  }
+
+  const fetchPosts = async ({ skipIfLoaded = true } = {}) => {
+    if (skipIfLoaded && Array.isArray(posts.value) && posts.value.length > 0) {
+      return
+    }
+
+    // Render something first so UI does not wait for network timeout.
+    const hasHydrated = hydratePostsFromLocal()
+
     try {
       const res = await api.get('/forum-posts')
       if (res.data?.code === 0 && Array.isArray(res.data.data)) {
@@ -67,9 +85,8 @@ export const useForumStore = defineStore('forum', () => {
       console.warn('论坛接口不可用，使用本地论坛数据。', error)
     }
 
-    const local = readLocalPosts()
-    posts.value = local || DEFAULT_POSTS
-    if (!local) {
+    if (!hasHydrated) {
+      posts.value = DEFAULT_POSTS
       saveLocalPosts(posts.value)
     }
   }
@@ -120,5 +137,5 @@ export const useForumStore = defineStore('forum', () => {
     saveLocalPosts(posts.value)
   }
 
-  return { posts, fetchPosts, addPost, toggleLike, addCommentCount }
+  return { posts, hydratePostsFromLocal, fetchPosts, addPost, toggleLike, addCommentCount }
 })
