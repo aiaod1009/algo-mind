@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { userApi } from './user'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -27,5 +28,20 @@ api.interceptors.response.use(
     return Promise.reject(error)
   },
 )
+
+// 挂载用户相关API方法
+api.getUserProblemHeatmap = userApi.getUserProblemHeatmap
+api.getUserProblemStats = userApi.getUserProblemStats
+api.getUserActivities = userApi.getUserActivities
+api.updateUserProfile = userApi.updateUserProfile
+api.getUserStatus = userApi.getUserStatus
+api.updateUserStatus = userApi.updateUserStatus
+api.getUserErrors = userApi.getUserErrors
+api.addUserError = userApi.addUserError
+api.deleteUserError = userApi.deleteUserError
+api.getUserRanking = userApi.getUserRanking
+api.getUserPointsHistory = userApi.getUserPointsHistory
+api.getUserCreatedProblems = userApi.getUserCreatedProblems
+api.getUserSolvedProblems = userApi.getUserSolvedProblems
 
 export default api
