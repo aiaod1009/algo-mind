@@ -196,7 +196,7 @@ const generateLearningPlan = async (preferences = {}) => {
         weekGoals: planData.weekGoals || [],
         dailyTasks: planData.dailyTasks || [],
         recommendations: planData.recommendations || [],
-        generatedAt: planData.generatedAt || new Date().toISOString(),
+        generatedAt: planData.generatedAt || Date.now(),
         track: planData.track || props.selectedTrack,
         trackLabel: planData.trackLabel || getTrackLabel(props.selectedTrack),
         weeklyGoal: planData.weeklyGoal || props.weeklyGoal,
@@ -209,12 +209,12 @@ const generateLearningPlan = async (preferences = {}) => {
     // 降级使用本地数据
     const today = new Date()
     const trackPlan = getTrackPlan(props.selectedTrack)
-    
+
     learningPlan.value = {
       weekGoals: trackPlan.weekGoals,
       dailyTasks: trackPlan.dailyTasks,
       recommendations: trackPlan.recommendations,
-      generatedAt: today.toISOString(),
+      generatedAt: Date.now(),
       track: props.selectedTrack,
       trackLabel: getTrackLabel(props.selectedTrack),
       weeklyGoal: props.weeklyGoal
@@ -256,7 +256,7 @@ const fetchCurrentLearningPlan = async () => {
         weekGoals: planData.weekGoals || [],
         dailyTasks: planData.dailyTasks || [],
         recommendations: planData.recommendations || [],
-        generatedAt: planData.generatedAt || new Date().toISOString(),
+        generatedAt: planData.generatedAt || Date.now(),
         track: planData.track || props.selectedTrack,
         trackLabel: planData.trackLabel || getTrackLabel(props.selectedTrack),
         weeklyGoal: planData.weeklyGoal || props.weeklyGoal,

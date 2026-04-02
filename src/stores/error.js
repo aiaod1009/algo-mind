@@ -60,7 +60,7 @@ export const useErrorStore = defineStore('error', () => {
       question: errorItem.question || '未命名题目',
       userAnswer: errorItem.userAnswer || '',
       description: errorItem.description || '暂无描述',
-      createdAt: errorItem.createdAt || new Date().toLocaleString(),
+      createdAt: errorItem.createdAt || Date.now(),
       analysisStatus: '未分析',
       analysis: '',
     }
