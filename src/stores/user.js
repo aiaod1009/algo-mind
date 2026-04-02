@@ -114,13 +114,19 @@ export const useUserStore = defineStore('user', () => {
     try {
       const res = await api.post('/login', { username, password })
       if (res.data?.code === 0) {
+        let avatarUrl = res.data.data.user?.avatar || ''
+        // 如果是相对路径，拼接成完整URL
+        if (avatarUrl && avatarUrl.startsWith('/')) {
+          const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:8080'
+          avatarUrl = `${baseUrl}${avatarUrl}`
+        }
         const nextUser = {
           ...res.data.data.user,
           targetTrack: res.data.data.user?.targetTrack || selectedTrack.value,
           weeklyGoal: Number(res.data.data.user?.weeklyGoal || 10),
           bio: res.data.data.user?.bio || '保持节奏，长期主义。',
           gender: res.data.data.user?.gender || 'unknown',
-          avatar: res.data.data.user?.avatar || '',
+          avatar: avatarUrl,
         }
         const nextPoints = Number(res.data.data.points || 0)
         syncUser(nextUser, nextPoints)

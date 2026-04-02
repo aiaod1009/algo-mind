@@ -144,7 +144,7 @@ const clearNavSearch = () => {
           <el-dropdown trigger="click" @command="handleUserCommand">
             <div class="user-entry">
               <div class="avatar-with-pendant">
-                <el-avatar :size="34" :src="userStore.userInfo?.avatar || ''" class="animated-avatar">
+                <el-avatar :size="34" :src="userStore.userInfo?.avatar || ''" :key="userStore.userInfo?.avatar" class="animated-avatar">
                   {{ (userStore.userInfo?.name || '同学').slice(0, 1) }}
                 </el-avatar>
                 <div class="avatar-pendant">

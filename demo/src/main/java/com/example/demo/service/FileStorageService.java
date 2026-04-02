@@ -65,7 +65,7 @@ public class FileStorageService {
         System.out.println("文件保存成功");
 
         // 返回访问路径
-        String result = "/uploads/" + newFilename;
+        String result = "/uploads/avatars/" + newFilename;
         System.out.println("返回路径: " + result);
         return result;
     }
@@ -75,9 +75,10 @@ public class FileStorageService {
             return;
         }
 
+        // 从URL中提取文件名（支持 /uploads/avatars/filename 格式）
         String filename = avatarUrl.substring(avatarUrl.lastIndexOf("/") + 1);
         Path filePath = Paths.get(fileStorageConfig.getUploadDir()).resolve(filename);
-        
+
         if (Files.exists(filePath)) {
             Files.delete(filePath);
         }

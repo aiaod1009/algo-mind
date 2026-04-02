@@ -444,7 +444,29 @@ const changeYear = (year) => {
 }
 
 const handleAvatarClick = () => {
+  // 打开编辑弹窗前，重新加载最新的用户数据
+  editForm.value = {
+    name: userStore.userInfo?.name || '',
+    bio: userStore.userInfo?.bio || '先把基础打扎实，再冲更高难度。',
+    avatar: userStore.userInfo?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte',
+    email: userStore.userInfo?.email || '',
+    github: userStore.userInfo?.github || '',
+    website: userStore.userInfo?.website || ''
+  }
   showDetailEdit.value = true
+}
+
+const openEditModal = () => {
+  // 打开编辑弹窗前，重新加载最新的用户数据
+  editForm.value = {
+    name: userStore.userInfo?.name || '',
+    bio: userStore.userInfo?.bio || '先把基础打扎实，再冲更高难度。',
+    avatar: userStore.userInfo?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte',
+    email: userStore.userInfo?.email || '',
+    github: userStore.userInfo?.github || '',
+    website: userStore.userInfo?.website || ''
+  }
+  showEditModal.value = true
 }
 
 // 头像加载错误处理
@@ -483,7 +505,13 @@ const handleFileChange = async (event) => {
   try {
     const response = await api.uploadAvatar(file)
     if (response.data && response.data.code === 0) {
-      const avatarUrl = response.data.data.avatarUrl
+      let avatarUrl = response.data.data.avatarUrl
+      // 如果是相对路径，拼接成完整URL
+      if (avatarUrl && avatarUrl.startsWith('/')) {
+        // 获取基础URL（去掉 /api 后缀）
+        const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:8080'
+        avatarUrl = `${baseUrl}${avatarUrl}`
+      }
       editForm.value.avatar = avatarUrl
       // 更新用户 store 中的头像
       userStore.updateProfile({ avatar: avatarUrl })
@@ -538,10 +566,11 @@ onMounted(() => {
         <div class="avatar-section">
           <div class="avatar-wrapper" @click="handleAvatarClick">
             <div class="avatar-container">
-              <img 
-                :src="userStore.userInfo?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'" 
+              <img
+                :src="userStore.userInfo?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'"
                 :alt="userStore.userInfo?.name"
                 class="profile-avatar"
+                :key="userStore.userInfo?.avatar"
                 @error="handleAvatarError"
               />
               <div v-if="!userStore.userInfo?.avatar" class="avatar-placeholder">
@@ -565,7 +594,7 @@ onMounted(() => {
           <p class="profile-bio">{{ userStore.userInfo?.bio || '先把基础打扎实，再冲更高难度。' }}</p>
         </div>
         
-        <button class="edit-profile-btn" @click="showEditModal = true">
+        <button class="edit-profile-btn" @click="openEditModal">
           编辑个人资料
         </button>
         
@@ -811,7 +840,7 @@ onMounted(() => {
             <!-- 头像预览区 -->
             <div class="avatar-preview-section">
               <div class="avatar-preview-ring">
-                <img :src="editForm.avatar" alt="头像预览" />
+                <img :src="editForm.avatar" alt="头像预览" :key="editForm.avatar" @error="handleAvatarError" />
                 <div class="avatar-edit-overlay" @click="handleUploadClick">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -923,9 +952,10 @@ onMounted(() => {
             <!-- 头像编辑 -->
             <div class="avatar-edit-section">
               <div class="avatar-preview-large">
-                <img 
-                  :src="editForm.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'" 
+                <img
+                  :src="editForm.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'"
                   alt="头像预览"
+                  :key="editForm.avatar"
                   @error="handleAvatarError"
                 />
                 <div v-if="!editForm.avatar" class="avatar-preview-placeholder">
