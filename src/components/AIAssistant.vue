@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useUserStore } from '../stores/user'
+import api from '../api'
 
 const userStore = useUserStore()
 
@@ -181,19 +182,92 @@ const getTrackPlan = (track) => {
 }
 
 const generateLearningPlan = async (preferences = {}) => {
-  const today = new Date()
-  const trackPlan = getTrackPlan(props.selectedTrack)
-  
-  learningPlan.value = {
-    weekGoals: trackPlan.weekGoals,
-    dailyTasks: trackPlan.dailyTasks,
-    recommendations: trackPlan.recommendations,
-    generatedAt: today.toISOString(),
-    track: props.selectedTrack,
-    trackLabel: getTrackLabel(props.selectedTrack),
-    weeklyGoal: props.weeklyGoal
+  try {
+    const response = await api.generateLearningPlan({
+      track: props.selectedTrack,
+      trackLabel: getTrackLabel(props.selectedTrack),
+      weeklyGoal: props.weeklyGoal,
+      ...preferences
+    })
+    
+    if (response.data && response.data.code === 0) {
+      const planData = response.data.data
+      learningPlan.value = {
+        weekGoals: planData.weekGoals || [],
+        dailyTasks: planData.dailyTasks || [],
+        recommendations: planData.recommendations || [],
+        generatedAt: planData.generatedAt || new Date().toISOString(),
+        track: planData.track || props.selectedTrack,
+        trackLabel: planData.trackLabel || getTrackLabel(props.selectedTrack),
+        weeklyGoal: planData.weeklyGoal || props.weeklyGoal,
+        id: planData.id
+      }
+      return learningPlan.value
+    }
+  } catch (error) {
+    console.error('生成学习计划失败:', error)
+    // 降级使用本地数据
+    const today = new Date()
+    const trackPlan = getTrackPlan(props.selectedTrack)
+    
+    learningPlan.value = {
+      weekGoals: trackPlan.weekGoals,
+      dailyTasks: trackPlan.dailyTasks,
+      recommendations: trackPlan.recommendations,
+      generatedAt: today.toISOString(),
+      track: props.selectedTrack,
+      trackLabel: getTrackLabel(props.selectedTrack),
+      weeklyGoal: props.weeklyGoal
+    }
   }
   return learningPlan.value
+}
+
+const saveLearningPlan = async () => {
+  if (!learningPlan.value.id) {
+    try {
+      const response = await api.saveLearningPlan({
+        track: learningPlan.value.track,
+        trackLabel: learningPlan.value.trackLabel,
+        weeklyGoal: learningPlan.value.weeklyGoal,
+        weekGoals: learningPlan.value.weekGoals,
+        dailyTasks: learningPlan.value.dailyTasks,
+        recommendations: learningPlan.value.recommendations
+      })
+      
+      if (response.data && response.data.code === 0) {
+        learningPlan.value.id = response.data.data.id
+        return true
+      }
+    } catch (error) {
+      console.error('保存学习计划失败:', error)
+    }
+  }
+  return false
+}
+
+const fetchCurrentLearningPlan = async () => {
+  try {
+    const response = await api.getCurrentLearningPlan(props.selectedTrack)
+    
+    if (response.data && response.data.code === 0) {
+      const planData = response.data.data
+      learningPlan.value = {
+        weekGoals: planData.weekGoals || [],
+        dailyTasks: planData.dailyTasks || [],
+        recommendations: planData.recommendations || [],
+        generatedAt: planData.generatedAt || new Date().toISOString(),
+        track: planData.track || props.selectedTrack,
+        trackLabel: planData.trackLabel || getTrackLabel(props.selectedTrack),
+        weeklyGoal: planData.weeklyGoal || props.weeklyGoal,
+        id: planData.id
+      }
+      return learningPlan.value
+    }
+  } catch (error) {
+    console.error('获取学习计划失败:', error)
+  }
+  return null
 }
 
 // 监听赛道和目标变化，自动更新计划
@@ -394,6 +468,7 @@ defineExpose({
 onMounted(async () => {
   await fetchErrorAnalysis()
   await fetchStudyHabits()
+  await fetchCurrentLearningPlan()
   
   const trackLabel = getTrackLabel(props.selectedTrack)
   chatMessages.value.push({
@@ -606,7 +681,7 @@ onMounted(async () => {
         </div>
 
         <div class="plan-actions">
-          <button class="plan-btn primary" @click="generateLearningPlan()">
+          <button class="plan-btn primary" @click="saveLearningPlan()">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 4v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6a2 2 0 0 0-2 2z"/>
             </svg>

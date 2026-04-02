@@ -1,70 +1,97 @@
 import api from './index'
 
-// 用户相关API
 export const userApi = {
-  // 获取用户做题热力图数据
   getUserProblemHeatmap(year) {
-    return api.get(`/user/heatmap?year=${year}`)
+    return api.get(`/users/me/heatmap?year=${year}`)
   },
 
-  // 获取用户做题统计
   getUserProblemStats() {
-    return api.get('/user/stats')
+    return api.get('/users/me/stats')
   },
 
-  // 获取用户活动列表
   getUserActivities(params = {}) {
-    return api.get('/user/activities', { params })
+    return api.get('/users/me/activities', { params })
   },
 
-  // 更新用户资料
   updateUserProfile(data) {
-    return api.put('/user/profile', data)
+    return api.put('/users/me', data)
   },
 
-  // 获取用户状态设置
   getUserStatus() {
-    return api.get('/user/status')
+    return api.get('/users/me/status')
   },
 
-  // 更新用户状态设置
   updateUserStatus(data) {
-    return api.put('/user/status', data)
+    return api.put('/users/me/status', data)
   },
 
-  // 获取用户错题本
   getUserErrors() {
-    return api.get('/user/errors')
+    return api.get('/errors')
   },
 
-  // 添加错题
   addUserError(data) {
-    return api.post('/user/errors', data)
+    return api.post('/errors', data)
   },
 
-  // 删除错题
   deleteUserError(errorId) {
-    return api.delete(`/user/errors/${errorId}`)
+    return api.delete(`/errors/${errorId}`)
   },
 
-  // 获取用户排行榜位置
   getUserRanking() {
-    return api.get('/user/ranking')
+    return api.get('/users/me/ranking')
   },
 
-  // 获取用户积分记录
-  getUserPointsHistory() {
-    return api.get('/user/points-history')
+  getUserPointsHistory(params = {}) {
+    return api.get('/users/me/points-history', { params })
   },
 
-  // 获取用户创建的题目
-  getUserCreatedProblems() {
-    return api.get('/user/created-problems')
+  getUserCreatedProblems(params = {}) {
+    return api.get('/users/me/created-problems', { params })
   },
 
-  // 获取用户完成的题目
-  getUserSolvedProblems() {
-    return api.get('/user/solved-problems')
+  getUserSolvedProblems(params = {}) {
+    return api.get('/users/me/solved-problems', { params })
+  },
+
+  analyzeError(errorId, description) {
+    return api.post('/error-analysis', { errorId, description })
+  },
+
+  // 学习计划相关接口
+  getLearningPlans() {
+    return api.get('/learning-plans')
+  },
+
+  getCurrentLearningPlan(track = 'algo') {
+    return api.get(`/learning-plans/current?track=${track}`)
+  },
+
+  generateLearningPlan(data) {
+    return api.post('/learning-plans/generate', data)
+  },
+
+  saveLearningPlan(data) {
+    return api.post('/learning-plans', data)
+  },
+
+  deleteLearningPlan(planId) {
+    return api.delete(`/learning-plans/${planId}`)
+  },
+
+  // 头像相关接口
+  uploadAvatar(file) {
+    const formData = new FormData()
+    formData.append('file', file)
+    // 不设置 Content-Type，让浏览器自动设置 boundary
+    return api.post('/users/me/avatar', formData)
+  },
+
+  getAvatar() {
+    return api.get('/users/me/avatar')
+  },
+
+  deleteAvatar() {
+    return api.delete('/users/me/avatar')
   },
 }
 

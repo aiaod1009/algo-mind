@@ -2,7 +2,7 @@ import axios from 'axios'
 import { userApi } from './user'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: '/api',
   timeout: 10000,
 })
 
@@ -29,7 +29,6 @@ api.interceptors.response.use(
   },
 )
 
-// 挂载用户相关API方法
 api.getUserProblemHeatmap = userApi.getUserProblemHeatmap
 api.getUserProblemStats = userApi.getUserProblemStats
 api.getUserActivities = userApi.getUserActivities
@@ -43,5 +42,18 @@ api.getUserRanking = userApi.getUserRanking
 api.getUserPointsHistory = userApi.getUserPointsHistory
 api.getUserCreatedProblems = userApi.getUserCreatedProblems
 api.getUserSolvedProblems = userApi.getUserSolvedProblems
+api.analyzeError = userApi.analyzeError
+
+// 学习计划相关
+api.getLearningPlans = userApi.getLearningPlans
+api.getCurrentLearningPlan = userApi.getCurrentLearningPlan
+api.generateLearningPlan = userApi.generateLearningPlan
+api.saveLearningPlan = userApi.saveLearningPlan
+api.deleteLearningPlan = userApi.deleteLearningPlan
+
+// 头像相关
+api.uploadAvatar = userApi.uploadAvatar
+api.getAvatar = userApi.getAvatar
+api.deleteAvatar = userApi.deleteAvatar
 
 export default api

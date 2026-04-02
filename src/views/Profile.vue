@@ -416,7 +416,8 @@ const handleSave = async () => {
       website: editForm.value.website
     })
     
-    if (response.success) {
+    // 后端返回格式: { data: { code: 0, data: user } }
+    if (response.data && response.data.code === 0) {
       userStore.updateProfile({
         name: editForm.value.name,
         bio: editForm.value.bio,
@@ -428,6 +429,8 @@ const handleSave = async () => {
       showEditModal.value = false
       showDetailEdit.value = false
       ElMessage.success('个人资料已更新')
+    } else {
+      ElMessage.error(response.data?.message || '更新失败')
     }
   } catch (error) {
     console.error('更新资料失败:', error)
@@ -442,6 +445,60 @@ const changeYear = (year) => {
 
 const handleAvatarClick = () => {
   showDetailEdit.value = true
+}
+
+// 头像加载错误处理
+const handleAvatarError = (event) => {
+  // 当图片加载失败时，使用默认头像
+  event.target.src = 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'
+}
+
+// 头像上传相关
+const fileInputRef = ref(null)
+const isUploading = ref(false)
+
+const handleUploadClick = () => {
+  fileInputRef.value?.click()
+}
+
+const handleFileChange = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  // 验证文件类型
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+  if (!allowedTypes.includes(file.type)) {
+    ElMessage.error('仅支持 JPG、PNG、GIF、WEBP 格式的图片')
+    return
+  }
+
+  // 验证文件大小 (5MB)
+  const maxSize = 5 * 1024 * 1024
+  if (file.size > maxSize) {
+    ElMessage.error('文件大小不能超过 5MB')
+    return
+  }
+
+  isUploading.value = true
+  try {
+    const response = await api.uploadAvatar(file)
+    if (response.data && response.data.code === 0) {
+      const avatarUrl = response.data.data.avatarUrl
+      editForm.value.avatar = avatarUrl
+      // 更新用户 store 中的头像
+      userStore.updateProfile({ avatar: avatarUrl })
+      ElMessage.success('头像上传成功')
+    } else {
+      ElMessage.error(response.data?.message || '上传失败')
+    }
+  } catch (error) {
+    console.error('上传头像失败:', error)
+    ElMessage.error('上传失败，请重试')
+  } finally {
+    isUploading.value = false
+    // 清空 input 以便可以重复选择同一文件
+    event.target.value = ''
+  }
 }
 
 // 加载更多活动
@@ -480,11 +537,20 @@ onMounted(() => {
       <aside class="profile-sidebar">
         <div class="avatar-section">
           <div class="avatar-wrapper" @click="handleAvatarClick">
-            <img 
-              :src="userStore.userInfo?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'" 
-              :alt="userStore.userInfo?.name"
-              class="profile-avatar"
-            />
+            <div class="avatar-container">
+              <img 
+                :src="userStore.userInfo?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'" 
+                :alt="userStore.userInfo?.name"
+                class="profile-avatar"
+                @error="handleAvatarError"
+              />
+              <div v-if="!userStore.userInfo?.avatar" class="avatar-placeholder">
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </div>
+            </div>
             <div class="status-emoji" @click.stop="handleStatusClick" :class="{ busy: userStatus.isBusy }">
               {{ userStatus.emoji }}
               <span v-if="userStatus.isBusy" class="busy-indicator"></span>
@@ -721,36 +787,119 @@ onMounted(() => {
       </main>
     </div>
     
-    <!-- 快速编辑弹窗 -->
+    <!-- 快速编辑弹窗 - 玻璃拟态风格 -->
     <Transition name="modal">
-      <div v-if="showEditModal" class="edit-modal" @click.self="showEditModal = false">
-        <div class="edit-container">
-          <div class="edit-header">
+      <div v-if="showEditModal" class="edit-modal glass-modal" @click.self="showEditModal = false">
+        <div class="edit-container glass-container">
+          <div class="edit-header glass-header">
+            <div class="header-icon">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+            </div>
             <h3>编辑个人资料</h3>
-            <button class="close-btn" @click="showEditModal = false">
+            <button class="close-btn glass-close" @click="showEditModal = false">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18"/>
                 <line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
             </button>
           </div>
-          <div class="edit-body">
-            <div class="form-group">
-              <label>昵称</label>
-              <input v-model="editForm.name" type="text" class="form-input" />
+          
+          <div class="edit-body glass-body">
+            <!-- 头像预览区 -->
+            <div class="avatar-preview-section">
+              <div class="avatar-preview-ring">
+                <img :src="editForm.avatar" alt="头像预览" />
+                <div class="avatar-edit-overlay" @click="handleUploadClick">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                  <span>更换</span>
+                </div>
+              </div>
             </div>
-            <div class="form-group">
-              <label>个人简介</label>
-              <textarea v-model="editForm.bio" class="form-textarea" rows="3"></textarea>
-            </div>
-            <div class="form-group">
-              <label>头像链接</label>
-              <input v-model="editForm.avatar" type="text" class="form-input" />
+            
+            <!-- 表单区 -->
+            <div class="form-section">
+              <div class="form-group glass-form-group">
+                <label class="floating-label">
+                  <span class="label-icon">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                      <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                  </span>
+                  昵称
+                </label>
+                <input 
+                  v-model="editForm.name" 
+                  type="text" 
+                  class="form-input glass-input" 
+                  placeholder="输入你的昵称"
+                  maxlength="20"
+                />
+                <span class="char-count">{{ editForm.name?.length || 0 }}/20</span>
+              </div>
+              
+              <div class="form-group glass-form-group">
+                <label class="floating-label">
+                  <span class="label-icon">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="21" y1="10" x2="3" y2="10"/>
+                      <line x1="21" y1="6" x2="3" y2="6"/>
+                      <line x1="21" y1="14" x2="3" y2="14"/>
+                      <line x1="21" y1="18" x2="3" y2="18"/>
+                    </svg>
+                  </span>
+                  个人简介
+                </label>
+                <textarea 
+                  v-model="editForm.bio" 
+                  class="form-textarea glass-textarea" 
+                  rows="3" 
+                  placeholder="用一句话介绍自己..."
+                  maxlength="100"
+                ></textarea>
+                <span class="char-count">{{ editForm.bio?.length || 0 }}/100</span>
+              </div>
+              
+              <div class="form-group glass-form-group">
+                <label class="floating-label">
+                  <span class="label-icon">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                  </span>
+                  头像链接
+                </label>
+                <input 
+                  v-model="editForm.avatar" 
+                  type="text" 
+                  class="form-input glass-input" 
+                  placeholder="https://..."
+                />
+              </div>
             </div>
           </div>
-          <div class="edit-footer">
-            <button class="save-btn" @click="handleSave">保存</button>
-            <button class="detail-btn" @click="showDetailEdit = true; showEditModal = false">详细设置</button>
+          
+          <div class="edit-footer glass-footer">
+            <button class="detail-btn glass-secondary" @click="showDetailEdit = true; showEditModal = false">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 1v6m0 6v6m4.22-10.22l4.24-4.24M6.34 6.34L2.1 2.1m17.8 17.8l-4.24-4.24M6.34 17.66l-4.24 4.24M23 12h-6m-6 0H1m20.24-4.24l-4.24 4.24M6.34 6.34l-4.24-4.24"/>
+              </svg>
+              更多设置
+            </button>
+            <button class="save-btn glass-primary" @click="handleSave">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              保存更改
+            </button>
           </div>
         </div>
       </div>
@@ -774,11 +923,38 @@ onMounted(() => {
             <!-- 头像编辑 -->
             <div class="avatar-edit-section">
               <div class="avatar-preview-large">
-                <img :src="editForm.avatar" alt="头像预览" />
+                <img 
+                  :src="editForm.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'" 
+                  alt="头像预览"
+                  @error="handleAvatarError"
+                />
+                <div v-if="!editForm.avatar" class="avatar-preview-placeholder">
+                  <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </div>
+                <div v-if="isUploading" class="upload-overlay">
+                  <div class="upload-spinner"></div>
+                  <span>上传中...</span>
+                </div>
               </div>
               <div class="avatar-actions">
-                <button class="avatar-btn primary">上传新头像</button>
-                <button class="avatar-btn secondary">选择预设头像</button>
+                <input
+                  ref="fileInputRef"
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  style="display: none"
+                  @change="handleFileChange"
+                />
+                <button 
+                  class="avatar-btn primary" 
+                  @click="handleUploadClick"
+                  :disabled="isUploading"
+                >
+                  {{ isUploading ? '上传中...' : '上传新头像' }}
+                </button>
+                <button class="avatar-btn secondary" @click="editForm.avatar = 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=' + Math.random()">随机头像</button>
               </div>
             </div>
             
@@ -952,6 +1128,50 @@ onMounted(() => {
   position: relative;
   display: inline-block;
   cursor: pointer;
+  max-width: 100%;
+}
+
+.avatar-container {
+  width: 296px;
+  height: 296px;
+  position: relative;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #f0f6fa;
+  border: 1px solid #d0d7de;
+}
+
+.avatar-wrapper img {
+  max-width: 100%;
+  height: auto;
+}
+
+.profile-avatar {
+  width: 296px;
+  height: 296px;
+  border-radius: 50%;
+  border: none;
+  object-fit: cover;
+  transition: filter 0.3s ease;
+  display: block;
+}
+
+.avatar-placeholder {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #e0e4e8 0%, #f0f6fa 100%);
+  color: #8c959f;
+  pointer-events: none;
+}
+
+.avatar-placeholder svg {
+  opacity: 0.5;
 }
 
 .profile-avatar {
@@ -1667,12 +1887,71 @@ onMounted(() => {
   border-radius: 50%;
   overflow: hidden;
   border: 3px solid #d0d7de;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f6fa;
 }
 
 .avatar-preview-large img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+}
+
+.avatar-preview-placeholder {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #e0e4e8 0%, #f0f6fa 100%);
+  color: #8c959f;
+}
+
+.avatar-preview-placeholder svg {
+  opacity: 0.5;
+}
+
+.upload-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+}
+
+.upload-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 8px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.avatar-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .avatar-actions {
@@ -1791,6 +2070,250 @@ onMounted(() => {
 @keyframes pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.2); opacity: 0.7; }
+}
+
+/* ===== 玻璃拟态编辑弹窗样式 ===== */
+.glass-modal {
+  background: rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(8px);
+}
+
+.glass-container {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  border-radius: 20px !important;
+  overflow: hidden;
+}
+
+.glass-header {
+  background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-accent) 100%);
+  color: white;
+  padding: 24px !important;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.glass-header h3 {
+  color: white;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+}
+
+.header-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+}
+
+.header-icon svg {
+  color: white;
+}
+
+.glass-close {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border: none !important;
+  color: white !important;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.glass-close:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+  transform: rotate(90deg);
+}
+
+.glass-body {
+  padding: 24px !important;
+}
+
+/* 头像预览区 */
+.avatar-preview-section {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.avatar-preview-ring {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  padding: 4px;
+  background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-accent) 100%);
+  cursor: pointer;
+  transition: transform 0.3s ease;
+}
+
+.avatar-preview-ring:hover {
+  transform: scale(1.05);
+}
+
+.avatar-preview-ring img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid white;
+}
+
+.avatar-edit-overlay {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.avatar-preview-ring:hover .avatar-edit-overlay {
+  opacity: 1;
+}
+
+.avatar-edit-overlay svg {
+  margin-bottom: 4px;
+}
+
+/* 表单样式 */
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.glass-form-group {
+  position: relative;
+}
+
+.floating-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #656d76;
+  margin-bottom: 8px;
+}
+
+.label-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-blue);
+}
+
+.glass-input,
+.glass-textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e1e4e8;
+  border-radius: 12px;
+  font-size: 15px;
+  background: #fafbfc;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.glass-input:focus,
+.glass-textarea:focus {
+  outline: none;
+  border-color: var(--brand-blue);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(74, 111, 157, 0.1);
+}
+
+.glass-textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+}
+
+.char-count {
+  position: absolute;
+  right: 12px;
+  bottom: -18px;
+  font-size: 11px;
+  color: #8c959f;
+}
+
+/* 底部按钮 */
+.glass-footer {
+  padding: 20px 24px !important;
+  background: #f6f8fa;
+  border-top: 1px solid #e1e4e8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.glass-primary {
+  background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-accent) 100%) !important;
+  color: white !important;
+  border: none !important;
+  padding: 12px 24px !important;
+  border-radius: 10px !important;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(74, 111, 157, 0.3);
+}
+
+.glass-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(74, 111, 157, 0.4);
+}
+
+.glass-secondary {
+  background: transparent !important;
+  color: #656d76 !important;
+  border: 1px solid #d0d7de !important;
+  padding: 12px 20px !important;
+  border-radius: 10px !important;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.glass-secondary:hover {
+  background: #f3f4f6 !important;
+  border-color: var(--brand-blue) !important;
+  color: var(--brand-blue) !important;
 }
 
 /* 心情设置弹窗 */
@@ -2113,9 +2636,27 @@ onMounted(() => {
     width: 100%;
   }
   
+  .avatar-container {
+    width: 120px;
+    height: 120px;
+  }
+  
   .profile-avatar {
     width: 120px;
     height: 120px;
+  }
+  
+  .avatar-placeholder svg {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .status-emoji {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+    bottom: 8px;
+    right: 8px;
   }
   
   .repo-grid {
