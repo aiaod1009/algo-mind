@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import api from '../api'
 
 const LEADERBOARD_KEY = 'leaderboard'
@@ -73,6 +73,14 @@ export const useUserStore = defineStore('user', () => {
   const points = ref(Number(localStorage.getItem('points') || 0))
   const selectedTrack = ref(localStorage.getItem(TRACK_KEY) || 'algo')
 
+  // ============ 计算属性 ============
+  // 头像计算属性：所有组件统一从这里读取
+  const avatar = computed(() => {
+    return userInfo.value?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'
+  })
+
+  const isLogin = computed(() => !!userInfo.value)
+
   const syncLeaderboard = (payloadUser, payloadPoints) => {
     if (!payloadUser?.id) return
     const list = readLeaderboard()
@@ -117,7 +125,7 @@ export const useUserStore = defineStore('user', () => {
         let avatarUrl = res.data.data.user?.avatar || ''
         // 如果是相对路径，拼接成完整URL
         if (avatarUrl && avatarUrl.startsWith('/')) {
-          const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:8080'
+          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
           avatarUrl = `${baseUrl}${avatarUrl}`
         }
         const nextUser = {
@@ -193,16 +201,41 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem(TRACK_KEY)
   }
 
+  /**
+   * 更新头像 —— 关键方法
+   * 所有用到头像的组件都读 avatar 计算属性
+   * 这里一改，全站所有头像自动响应式更新
+   */
+  const updateAvatar = async (newAvatarUrl) => {
+    if (!userInfo.value) return
+
+    // 第一步：立刻更新本地状态（页面瞬间响应）
+    userInfo.value.avatar = newAvatarUrl
+    localStorage.setItem('user', JSON.stringify(userInfo.value))
+
+    // 第二步：同步到后端（持久化）
+    try {
+      await api.put('/users/me', { avatar: newAvatarUrl })
+    } catch (e) {
+      // 后端保存失败，回滚本地状态
+      console.error('头像保存到后端失败:', e)
+      throw new Error('头像保存失败，请重试')
+    }
+  }
+
   return {
     userInfo,
     points,
     selectedTrack,
+    avatar,
+    isLogin,
     login,
     logout,
     addPoints,
     setPoints,
     setTrack,
     updateProfile,
+    updateAvatar,
     getLeaderboard,
   }
 })

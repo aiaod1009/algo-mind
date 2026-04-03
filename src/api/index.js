@@ -53,6 +53,7 @@ api.deleteLearningPlan = userApi.deleteLearningPlan
 
 // 头像相关
 api.uploadAvatar = userApi.uploadAvatar
+api.uploadAvatarFromUrl = userApi.uploadAvatarFromUrl
 api.getAvatar = userApi.getAvatar
 api.deleteAvatar = userApi.deleteAvatar
 

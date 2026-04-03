@@ -1,0 +1,27 @@
+# 生产环境配置 - 宝塔面板部署用
+
+# 服务器端口（宝塔面板通常用 8080 或其他非 80 端口，由 Nginx 转发）
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+# CORS 跨域配置 - 必须改成你的真实域名
+cors:
+  allowed-origins: https://www.yourdomain.com,https://yourdomain.com
+
+# 文件上传配置
+file:
+  upload-dir: /www/wwwroot/your-project/uploads/avatars
+
+# AI 配置（从环境变量读取，不要在代码里写死）
+ai:
+  api-key: ${AI_API_KEY:}
+
+# 日志配置
+logging:
+  level:
+    root: WARN
+    com.example.demo: INFO
+  file:
+    name: /www/wwwroot/your-project/logs/app.log

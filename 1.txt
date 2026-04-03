@@ -1,0 +1,475 @@
+{
+  "log": {
+    "version": "1.2",
+    "creator": {
+      "name": "WebInspector",
+      "version": "537.36"
+    },
+    "pages": [
+      {
+        "startedDateTime": "2026-04-02T10:42:59.299Z",
+        "id": "page_1",
+        "title": "http://localhost:5177/profile",
+        "pageTimings": {
+          "onContentLoad": 456.23199999681674,
+          "onLoad": 3001.943000002939
+        }
+      }
+    ],
+    "entries": [
+      {
+        "_initiator": {
+          "type": "script",
+          "stack": {
+            "callFrames": [
+              {
+                "functionName": "",
+                "scriptId": "826",
+                "url": "http://localhost:5177/src/components/AvatarUpload.vue",
+                "lineNumber": 430,
+                "columnNumber": 8
+              },
+              {
+                "functionName": "uploadWithXHR",
+                "scriptId": "826",
+                "url": "http://localhost:5177/src/components/AvatarUpload.vue",
+                "lineNumber": 369,
+                "columnNumber": 9
+              },
+              {
+                "functionName": "uploadFile",
+                "scriptId": "826",
+                "url": "http://localhost:5177/src/components/AvatarUpload.vue",
+                "lineNumber": 444,
+                "columnNumber": 21
+              },
+              {
+                "functionName": "handleFileChange",
+                "scriptId": "826",
+                "url": "http://localhost:5177/src/components/AvatarUpload.vue",
+                "lineNumber": 171,
+                "columnNumber": 10
+              }
+            ],
+            "parent": {
+              "description": "await",
+              "callFrames": [
+                {
+                  "functionName": "callWithErrorHandling",
+                  "scriptId": "795",
+                  "url": "http://localhost:5177/node_modules/.vite/deps/chunk-IGIFKXF4.js?v=ea734fbf",
+                  "lineNumber": 2350,
+                  "columnNumber": 18
+                },
+                {
+                  "functionName": "callWithAsyncErrorHandling",
+                  "scriptId": "795",
+                  "url": "http://localhost:5177/node_modules/.vite/deps/chunk-IGIFKXF4.js?v=ea734fbf",
+                  "lineNumber": 2357,
+                  "columnNumber": 16
+                },
+                {
+                  "functionName": "invoker",
+                  "scriptId": "795",
+                  "url": "http://localhost:5177/node_modules/.vite/deps/chunk-IGIFKXF4.js?v=ea734fbf",
+                  "lineNumber": 11518,
+                  "columnNumber": 4
+                }
+              ]
+            }
+          }
+        },
+        "_priority": "High",
+        "_resourceType": "xhr",
+        "cache": {},
+        "pageref": "page_1",
+        "request": {
+          "method": "POST",
+          "url": "http://localhost:5177/api/users/me/avatar",
+          "httpVersion": "",
+          "headers": [
+            {
+              "name": "Accept",
+              "value": "*/*"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": "gzip, deflate, br, zstd"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6"
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "Content-Length",
+              "value": "427221"
+            },
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data; boundary=----WebKitFormBoundaryYcpRVcPpmzJ1SkyB"
+            },
+            {
+              "name": "DNT",
+              "value": "1"
+            },
+            {
+              "name": "Host",
+              "value": "localhost:5177"
+            },
+            {
+              "name": "Origin",
+              "value": "http://localhost:5177"
+            },
+            {
+              "name": "Referer",
+              "value": "http://localhost:5177/profile"
+            },
+            {
+              "name": "Sec-Fetch-Dest",
+              "value": "empty"
+            },
+            {
+              "name": "Sec-Fetch-Mode",
+              "value": "cors"
+            },
+            {
+              "name": "Sec-Fetch-Site",
+              "value": "same-origin"
+            },
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36 Edg/146.0.0.0"
+            },
+            {
+              "name": "sec-ch-ua",
+              "value": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Microsoft Edge\";v=\"146\""
+            },
+            {
+              "name": "sec-ch-ua-mobile",
+              "value": "?1"
+            },
+            {
+              "name": "sec-ch-ua-platform",
+              "value": "\"Android\""
+            }
+          ],
+          "queryString": [],
+          "cookies": [],
+          "headersSize": -1,
+          "bodySize": 187,
+          "postData": {
+            "mimeType": "multipart/form-data; boundary=----WebKitFormBoundaryYcpRVcPpmzJ1SkyB",
+            "text": "------WebKitFormBoundaryYcpRVcPpmzJ1SkyB\r\nContent-Disposition: form-data; name=\"file\"; filename=\"无标题.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n\r\n------WebKitFormBoundaryYcpRVcPpmzJ1SkyB--\r\n",
+            "params": [
+              {
+                "name": "file",
+                "value": "(二进制)"
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 0,
+          "statusText": "",
+          "httpVersion": "",
+          "headers": [],
+          "cookies": [],
+          "content": {
+            "size": 0,
+            "mimeType": "x-unknown"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": -1,
+          "_transferSize": 0,
+          "_error": "net::ERR_CONNECTION_RESET",
+          "_fetchedViaServiceWorker": false
+        },
+        "serverIPAddress": "",
+        "startedDateTime": "2026-04-02T10:43:09.394Z",
+        "time": 21.510999999009073,
+        "timings": {
+          "blocked": 21.510999999009073,
+          "dns": -1,
+          "ssl": -1,
+          "connect": -1,
+          "send": 0,
+          "wait": 0,
+          "receive": 0,
+          "_blocked_queueing": 1.9409999949857593
+        }
+      },
+      {
+        "_connectionId": "127536",
+        "_initiator": {
+          "type": "script",
+          "stack": {
+            "callFrames": [
+              {
+                "functionName": "dispatchXhrRequest",
+                "scriptId": "833",
+                "url": "http://localhost:5177/node_modules/.vite/deps/axios.js?v=ea734fbf",
+                "lineNumber": 1783,
+                "columnNumber": 12
+              },
+              {
+                "functionName": "xhr",
+                "scriptId": "833",
+                "url": "http://localhost:5177/node_modules/.vite/deps/axios.js?v=ea734fbf",
+                "lineNumber": 1648,
+                "columnNumber": 9
+              },
+              {
+                "functionName": "dispatchRequest",
+                "scriptId": "833",
+                "url": "http://localhost:5177/node_modules/.vite/deps/axios.js?v=ea734fbf",
+                "lineNumber": 2211,
+                "columnNumber": 9
+              }
+            ],
+            "parent": {
+              "description": "Promise.then",
+              "callFrames": [
+                {
+                  "functionName": "_request",
+                  "scriptId": "833",
+                  "url": "http://localhost:5177/node_modules/.vite/deps/axios.js?v=ea734fbf",
+                  "lineNumber": 2429,
+                  "columnNumber": 26
+                },
+                {
+                  "functionName": "request",
+                  "scriptId": "833",
+                  "url": "http://localhost:5177/node_modules/.vite/deps/axios.js?v=ea734fbf",
+                  "lineNumber": 2325,
+                  "columnNumber": 24
+                },
+                {
+                  "functionName": "httpMethod",
+                  "scriptId": "833",
+                  "url": "http://localhost:5177/node_modules/.vite/deps/axios.js?v=ea734fbf",
+                  "lineNumber": 2477,
+                  "columnNumber": 18
+                },
+                {
+                  "functionName": "wrap",
+                  "scriptId": "833",
+                  "url": "http://localhost:5177/node_modules/.vite/deps/axios.js?v=ea734fbf",
+                  "lineNumber": 7,
+                  "columnNumber": 14
+                },
+                {
+                  "functionName": "uploadWithApi",
+                  "scriptId": "826",
+                  "url": "http://localhost:5177/src/components/AvatarUpload.vue",
+                  "lineNumber": 349,
+                  "columnNumber": 29
+                },
+                {
+                  "functionName": "uploadFile",
+                  "scriptId": "826",
+                  "url": "http://localhost:5177/src/components/AvatarUpload.vue",
+                  "lineNumber": 447,
+                  "columnNumber": 21
+                }
+              ],
+              "parent": {
+                "description": "await",
+                "callFrames": [
+                  {
+                    "functionName": "handleFileChange",
+                    "scriptId": "826",
+                    "url": "http://localhost:5177/src/components/AvatarUpload.vue",
+                    "lineNumber": 171,
+                    "columnNumber": 10
+                  }
+                ],
+                "parent": {
+                  "description": "await",
+                  "callFrames": [
+                    {
+                      "functionName": "callWithErrorHandling",
+                      "scriptId": "795",
+                      "url": "http://localhost:5177/node_modules/.vite/deps/chunk-IGIFKXF4.js?v=ea734fbf",
+                      "lineNumber": 2350,
+                      "columnNumber": 18
+                    },
+                    {
+                      "functionName": "callWithAsyncErrorHandling",
+                      "scriptId": "795",
+                      "url": "http://localhost:5177/node_modules/.vite/deps/chunk-IGIFKXF4.js?v=ea734fbf",
+                      "lineNumber": 2357,
+                      "columnNumber": 16
+                    },
+                    {
+                      "functionName": "invoker",
+                      "scriptId": "795",
+                      "url": "http://localhost:5177/node_modules/.vite/deps/chunk-IGIFKXF4.js?v=ea734fbf",
+                      "lineNumber": 11518,
+                      "columnNumber": 4
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "_priority": "High",
+        "_resourceType": "xhr",
+        "cache": {},
+        "connection": "5177",
+        "pageref": "page_1",
+        "request": {
+          "method": "POST",
+          "url": "http://localhost:5177/api/users/me/avatar",
+          "httpVersion": "HTTP/1.1",
+          "headers": [
+            {
+              "name": "Accept",
+              "value": "application/json, text/plain, */*"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": "gzip, deflate, br, zstd"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6"
+            },
+            {
+              "name": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "name": "Content-Length",
+              "value": "427221"
+            },
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data; boundary=----WebKitFormBoundaryAdAhBxxXd87unJLT"
+            },
+            {
+              "name": "DNT",
+              "value": "1"
+            },
+            {
+              "name": "Host",
+              "value": "localhost:5177"
+            },
+            {
+              "name": "Origin",
+              "value": "http://localhost:5177"
+            },
+            {
+              "name": "Referer",
+              "value": "http://localhost:5177/profile"
+            },
+            {
+              "name": "Sec-Fetch-Dest",
+              "value": "empty"
+            },
+            {
+              "name": "Sec-Fetch-Mode",
+              "value": "cors"
+            },
+            {
+              "name": "Sec-Fetch-Site",
+              "value": "same-origin"
+            },
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36 Edg/146.0.0.0"
+            },
+            {
+              "name": "sec-ch-ua",
+              "value": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Microsoft Edge\";v=\"146\""
+            },
+            {
+              "name": "sec-ch-ua-mobile",
+              "value": "?1"
+            },
+            {
+              "name": "sec-ch-ua-platform",
+              "value": "\"Android\""
+            }
+          ],
+          "queryString": [],
+          "cookies": [],
+          "headersSize": 883,
+          "bodySize": 187,
+          "postData": {
+            "mimeType": "multipart/form-data; boundary=----WebKitFormBoundaryAdAhBxxXd87unJLT",
+            "text": "------WebKitFormBoundaryAdAhBxxXd87unJLT\r\nContent-Disposition: form-data; name=\"file\"; filename=\"无标题.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n\r\n------WebKitFormBoundaryAdAhBxxXd87unJLT--\r\n",
+            "params": [
+              {
+                "name": "file",
+                "value": "(二进制)"
+              }
+            ]
+          }
+        },
+        "response": {
+          "status": 403,
+          "statusText": "Forbidden",
+          "httpVersion": "HTTP/1.1",
+          "headers": [
+            {
+              "name": "Access-Control-Allow-Origin",
+              "value": "http://localhost:5177"
+            },
+            {
+              "name": "Transfer-Encoding",
+              "value": "chunked"
+            },
+            {
+              "name": "connection",
+              "value": "close"
+            },
+            {
+              "name": "date",
+              "value": "Thu, 02 Apr 2026 10:43:09 GMT"
+            },
+            {
+              "name": "vary",
+              "value": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+            }
+          ],
+          "cookies": [],
+          "content": {
+            "size": 20,
+            "mimeType": "text/plain",
+            "compression": -11,
+            "text": "Invalid CORS request"
+          },
+          "redirectURL": "",
+          "headersSize": 239,
+          "bodySize": 31,
+          "_transferSize": 270,
+          "_error": null,
+          "_fetchedViaServiceWorker": false
+        },
+        "serverIPAddress": "[::1]",
+        "startedDateTime": "2026-04-02T10:43:09.415Z",
+        "time": 7.812999999406282,
+        "timings": {
+          "blocked": 1.965000001559034,
+          "dns": 0.013000000000000012,
+          "ssl": -1,
+          "connect": 0.43700000000000006,
+          "send": 4.337,
+          "wait": 0.6919999966188337,
+          "receive": 0.3690000012284145,
+          "_blocked_queueing": 1.724000001559034,
+          "_workerStart": -1,
+          "_workerReady": -1,
+          "_workerFetchStart": -1,
+          "_workerRespondWithSettled": -1
+        }
+      }
+    ]
+  }
+}

@@ -3,6 +3,10 @@ server:
   servlet:
     context-path: /api
 
+# CORS 跨域配置（开发环境使用默认值，生产环境通过环境变量覆盖）
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+
 spring:
   profiles:
     active: dev
@@ -41,6 +45,17 @@ file:
   max-size: 5242880
   allowed-types: image/jpeg,image/png,image/gif,image/webp
 
+# 豆包AI配置
+doubao:
+  api:
+    key: 40d60324-a9dd-4505-b1c6-1ef4d0d63556
+    url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+    model: doubao-seed-1-8-251228
+    timeout: 30000
+    max-retries: 3
+    temperature: 0.7
+    max-tokens: 4096
+
 ---
 spring:
   config:
@@ -63,8 +78,13 @@ spring:
     date-format: yyyy-MM-dd'T'HH:mm:ss.SSS'Z'
     time-zone: UTC
 
+# 生产环境AI配置
 doubao:
   api:
-    key: 40d60324-a9dd-4505-b1c6-1ef4d0d63556
+    key: ${DOUBAO_API_KEY:40d60324-a9dd-4505-b1c6-1ef4d0d63556}
     url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
-    model: doubao-seed-1-8-251228
+    model: ${DOUBAO_MODEL:doubao-seed-1-8-251228}
+    timeout: 30000
+    max-retries: 3
+    temperature: 0.7
+    max-tokens: 4096

@@ -167,7 +167,7 @@ const handleAdd = async () => {
       question: addForm.question,
       userAnswer: addForm.userAnswer,
       description: addForm.description,
-      createdAt: Date.now(),
+      createdAt: new Date().toLocaleString(),
     })
     ElMessage.success('添加成功')
     addDialogVisible.value = false

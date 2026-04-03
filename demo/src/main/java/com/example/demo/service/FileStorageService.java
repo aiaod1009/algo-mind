@@ -5,6 +5,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -64,7 +66,7 @@ public class FileStorageService {
         Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
         System.out.println("文件保存成功");
 
-        // 返回访问路径
+        // 返回访问路径（context-path /api 会自动添加）
         String result = "/uploads/avatars/" + newFilename;
         System.out.println("返回路径: " + result);
         return result;
@@ -93,5 +95,42 @@ public class FileStorageService {
             return ".jpg";
         }
         return filename.substring(filename.lastIndexOf("."));
+    }
+
+    public String storeAvatarFromUrl(String imageUrl, Long userId) throws IOException {
+        System.out.println("开始从URL存储头像，用户ID: " + userId);
+        System.out.println("图片URL: " + imageUrl);
+
+        // 创建上传目录
+        String uploadDir = fileStorageConfig.getUploadDir();
+        Path uploadPath = Paths.get(uploadDir);
+
+        if (!Files.exists(uploadPath)) {
+            Files.createDirectories(uploadPath);
+        }
+
+        // 生成文件名
+        String extension = ".jpg";
+        if (imageUrl.contains(".")) {
+            String urlExtension = imageUrl.substring(imageUrl.lastIndexOf("."));
+            if (urlExtension.length() <= 5) {
+                extension = urlExtension;
+            }
+        }
+        String newFilename = "avatar_" + userId + "_" + UUID.randomUUID().toString().substring(0, 8) + extension;
+        System.out.println("新文件名: " + newFilename);
+
+        // 从URL下载图片
+        URL url = new URL(imageUrl);
+        try (InputStream in = url.openStream()) {
+            Path targetLocation = uploadPath.resolve(newFilename);
+            Files.copy(in, targetLocation, StandardCopyOption.REPLACE_EXISTING);
+            System.out.println("文件保存成功");
+        }
+
+        // 返回访问路径（context-path /api 会自动添加）
+        String result = "/uploads/avatars/" + newFilename;
+        System.out.println("返回路径: " + result);
+        return result;
     }
 }

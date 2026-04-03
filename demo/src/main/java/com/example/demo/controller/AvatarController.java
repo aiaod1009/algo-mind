@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -141,5 +143,78 @@ public class AvatarController {
         result.put("avatarUrl", user.getAvatar());
 
         return Result.success(result);
+    }
+
+    @PostMapping("/avatar-from-url")
+    public Result<Map<String, Object>> uploadAvatarFromUrl(@RequestBody Map<String, String> request) {
+        Long currentUserId = 1L;
+        String imageUrl = request.get("url");
+
+        if (imageUrl == null || imageUrl.isEmpty()) {
+            return Result.fail(40001, "请提供图片URL");
+        }
+
+        try {
+            // 先尝试查找用户
+            Optional<User> existingUser = userRepository.findById(currentUserId);
+            User user;
+            String oldAvatar = null;
+
+            if (existingUser.isPresent()) {
+                user = existingUser.get();
+                oldAvatar = user.getAvatar();
+                System.out.println("找到现有用户，ID: " + user.getId());
+            } else {
+                System.out.println("用户不存在，创建新用户...");
+                User newUser = new User();
+                newUser.setName("系统管理员");
+                newUser.setEmail("admin@example.com");
+                newUser.setPassword("admin");
+                newUser.setPoints(999);
+                newUser.setBio("先把基础打扎实，再冲更高难度。");
+                newUser.setGender("unknown");
+                newUser.setTargetTrack("algo");
+                newUser.setWeeklyGoal(10);
+                newUser.setCreatedAt(java.time.OffsetDateTime.now());
+                newUser.setUpdatedAt(java.time.OffsetDateTime.now());
+                user = userRepository.save(newUser);
+                System.out.println("新用户创建成功，ID: " + user.getId());
+            }
+
+            // 从URL下载图片并存储
+            String avatarUrl = fileStorageService.storeAvatarFromUrl(imageUrl, user.getId());
+
+            // 删除旧头像文件
+            if (oldAvatar != null && !oldAvatar.isEmpty() && !oldAvatar.equals(avatarUrl)) {
+                try {
+                    fileStorageService.deleteAvatar(oldAvatar);
+                } catch (IOException e) {
+                    System.err.println("删除旧头像失败: " + e.getMessage());
+                }
+            }
+
+            // 更新用户头像URL
+            user.setAvatar(avatarUrl);
+            userRepository.save(user);
+            System.out.println("用户头像更新成功: " + avatarUrl);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("avatarUrl", avatarUrl);
+            result.put("message", "头像上传成功");
+
+            return Result.success(result);
+
+        } catch (IllegalArgumentException e) {
+            System.err.println("头像上传参数错误: " + e.getMessage());
+            return Result.fail(40001, e.getMessage());
+        } catch (IOException e) {
+            System.err.println("头像上传IO错误: " + e.getMessage());
+            e.printStackTrace();
+            return Result.fail(50001, "文件上传失败: " + e.getMessage());
+        } catch (Exception e) {
+            System.err.println("头像上传未知错误: " + e.getMessage());
+            e.printStackTrace();
+            return Result.fail(50001, "上传失败: " + e.getMessage());
+        }
     }
 }

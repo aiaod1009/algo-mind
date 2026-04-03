@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/user'
 import { useLevelStore } from '../stores/level'
+import AvatarUpload from '../components/AvatarUpload.vue'
 import api from '../api'
 
 const userStore = useUserStore()
@@ -407,21 +408,53 @@ const editForm = ref({
 
 const handleSave = async () => {
   try {
+    let finalAvatar = editForm.value.avatar
+
+    // 检查头像是否是外部 URL（需要下载并上传到后端）
+    if (finalAvatar && finalAvatar.startsWith('http') &&
+        !finalAvatar.includes('localhost') &&
+        !finalAvatar.includes('127.0.0.1')) {
+      try {
+        ElMessage.info('正在处理头像，请稍候...')
+
+        // 调用后端接口，通过 URL 上传头像
+        const uploadResponse = await api.uploadAvatarFromUrl({ url: finalAvatar })
+
+        if (uploadResponse.data && uploadResponse.data.code === 0) {
+          let avatarUrl = uploadResponse.data.data.avatarUrl
+
+          // 如果是相对路径，拼接成完整URL
+          if (avatarUrl && avatarUrl.startsWith('/')) {
+            const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+            avatarUrl = `${baseUrl}${avatarUrl}`
+          }
+
+          finalAvatar = avatarUrl
+          ElMessage.success('头像已保存到服务器')
+        } else {
+          ElMessage.warning('头像上传失败，将保留原链接')
+        }
+      } catch (uploadError) {
+        console.error('头像上传失败:', uploadError)
+        ElMessage.warning('头像上传失败，将保留原链接')
+      }
+    }
+
     const response = await api.updateUserProfile({
       name: editForm.value.name,
       bio: editForm.value.bio,
-      avatar: editForm.value.avatar,
+      avatar: finalAvatar,
       email: editForm.value.email,
       github: editForm.value.github,
       website: editForm.value.website
     })
-    
+
     // 后端返回格式: { data: { code: 0, data: user } }
     if (response.data && response.data.code === 0) {
       userStore.updateProfile({
         name: editForm.value.name,
         bio: editForm.value.bio,
-        avatar: editForm.value.avatar,
+        avatar: finalAvatar,
         email: editForm.value.email,
         github: editForm.value.github,
         website: editForm.value.website
@@ -475,58 +508,15 @@ const handleAvatarError = (event) => {
   event.target.src = 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'
 }
 
-// 头像上传相关
-const fileInputRef = ref(null)
-const isUploading = ref(false)
-
-const handleUploadClick = () => {
-  fileInputRef.value?.click()
+// 头像上传相关 - 使用 AvatarUpload 组件
+const handleAvatarUploadSuccess = (result) => {
+  // 更新编辑表单中的头像
+  editForm.value.avatar = result.url
+  ElMessage.success('头像上传成功')
 }
 
-const handleFileChange = async (event) => {
-  const file = event.target.files[0]
-  if (!file) return
-
-  // 验证文件类型
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-  if (!allowedTypes.includes(file.type)) {
-    ElMessage.error('仅支持 JPG、PNG、GIF、WEBP 格式的图片')
-    return
-  }
-
-  // 验证文件大小 (5MB)
-  const maxSize = 5 * 1024 * 1024
-  if (file.size > maxSize) {
-    ElMessage.error('文件大小不能超过 5MB')
-    return
-  }
-
-  isUploading.value = true
-  try {
-    const response = await api.uploadAvatar(file)
-    if (response.data && response.data.code === 0) {
-      let avatarUrl = response.data.data.avatarUrl
-      // 如果是相对路径，拼接成完整URL
-      if (avatarUrl && avatarUrl.startsWith('/')) {
-        // 获取基础URL（去掉 /api 后缀）
-        const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:8080'
-        avatarUrl = `${baseUrl}${avatarUrl}`
-      }
-      editForm.value.avatar = avatarUrl
-      // 更新用户 store 中的头像
-      userStore.updateProfile({ avatar: avatarUrl })
-      ElMessage.success('头像上传成功')
-    } else {
-      ElMessage.error(response.data?.message || '上传失败')
-    }
-  } catch (error) {
-    console.error('上传头像失败:', error)
-    ElMessage.error('上传失败，请重试')
-  } finally {
-    isUploading.value = false
-    // 清空 input 以便可以重复选择同一文件
-    event.target.value = ''
-  }
+const handleAvatarUploadError = (error) => {
+  console.error('头像上传失败:', error)
 }
 
 // 加载更多活动
@@ -567,18 +557,12 @@ onMounted(() => {
           <div class="avatar-wrapper" @click="handleAvatarClick">
             <div class="avatar-container">
               <img
-                :src="userStore.userInfo?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'"
+                :src="userStore.avatar"
                 :alt="userStore.userInfo?.name"
                 class="profile-avatar"
-                :key="userStore.userInfo?.avatar"
+                :key="userStore.avatar"
                 @error="handleAvatarError"
               />
-              <div v-if="!userStore.userInfo?.avatar" class="avatar-placeholder">
-                <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                  <circle cx="12" cy="7" r="4"/>
-                </svg>
-              </div>
             </div>
             <div class="status-emoji" @click.stop="handleStatusClick" :class="{ busy: userStatus.isBusy }">
               {{ userStatus.emoji }}
@@ -949,41 +933,17 @@ onMounted(() => {
           </div>
           
           <div class="detail-edit-body">
-            <!-- 头像编辑 -->
+            <!-- 头像编辑 - 使用 AvatarUpload 组件 -->
             <div class="avatar-edit-section">
-              <div class="avatar-preview-large">
-                <img
-                  :src="editForm.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'"
-                  alt="头像预览"
-                  :key="editForm.avatar"
-                  @error="handleAvatarError"
-                />
-                <div v-if="!editForm.avatar" class="avatar-preview-placeholder">
-                  <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                    <circle cx="12" cy="7" r="4"/>
-                  </svg>
-                </div>
-                <div v-if="isUploading" class="upload-overlay">
-                  <div class="upload-spinner"></div>
-                  <span>上传中...</span>
-                </div>
-              </div>
+              <AvatarUpload
+                v-model="editForm.avatar"
+                :size="120"
+                :max-size-m-b="5"
+                :formats="['jpg', 'png', 'gif', 'webp', 'svg']"
+                @upload-success="handleAvatarUploadSuccess"
+                @upload-error="handleAvatarUploadError"
+              />
               <div class="avatar-actions">
-                <input
-                  ref="fileInputRef"
-                  type="file"
-                  accept="image/jpeg,image/png,image/gif,image/webp"
-                  style="display: none"
-                  @change="handleFileChange"
-                />
-                <button 
-                  class="avatar-btn primary" 
-                  @click="handleUploadClick"
-                  :disabled="isUploading"
-                >
-                  {{ isUploading ? '上传中...' : '上传新头像' }}
-                </button>
                 <button class="avatar-btn secondary" @click="editForm.avatar = 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=' + Math.random()">随机头像</button>
               </div>
             </div>
@@ -1172,13 +1132,14 @@ onMounted(() => {
 }
 
 .avatar-wrapper img {
-  max-width: 100%;
-  height: auto;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .profile-avatar {
-  width: 296px;
-  height: 296px;
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
   border: none;
   object-fit: cover;
@@ -1205,8 +1166,8 @@ onMounted(() => {
 }
 
 .profile-avatar {
-  width: 296px;
-  height: 296px;
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
   border: 1px solid #d0d7de;
   object-fit: cover;
@@ -2672,8 +2633,8 @@ onMounted(() => {
   }
   
   .profile-avatar {
-    width: 120px;
-    height: 120px;
+    width: 100%;
+    height: 100%;
   }
   
   .avatar-placeholder svg {

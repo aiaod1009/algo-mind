@@ -29,6 +29,8 @@ const isJumping = ref(false)
 const chatMessages = ref([])
 const inputMessage = ref('')
 const isTyping = ref(false)
+const isGenerating = ref(false)
+const isGenerated = ref(false)
 const chatContainerRef = ref(null)
 
 const errorAnalysis = ref({
@@ -182,6 +184,8 @@ const getTrackPlan = (track) => {
 }
 
 const generateLearningPlan = async (preferences = {}) => {
+  isGenerating.value = true
+  isGenerated.value = false
   try {
     const response = await api.generateLearningPlan({
       track: props.selectedTrack,
@@ -189,19 +193,23 @@ const generateLearningPlan = async (preferences = {}) => {
       weeklyGoal: props.weeklyGoal,
       ...preferences
     })
-    
+
     if (response.data && response.data.code === 0) {
       const planData = response.data.data
       learningPlan.value = {
         weekGoals: planData.weekGoals || [],
         dailyTasks: planData.dailyTasks || [],
         recommendations: planData.recommendations || [],
-        generatedAt: planData.generatedAt || Date.now(),
+        generatedAt: planData.generatedAt || new Date().toISOString(),
         track: planData.track || props.selectedTrack,
         trackLabel: planData.trackLabel || getTrackLabel(props.selectedTrack),
         weeklyGoal: planData.weeklyGoal || props.weeklyGoal,
         id: planData.id
       }
+      // 标记生成完成
+      isGenerated.value = true
+      // 延迟关闭遮罩，让用户看到完成状态
+      await new Promise(r => setTimeout(r, 1500))
       return learningPlan.value
     }
   } catch (error) {
@@ -214,11 +222,17 @@ const generateLearningPlan = async (preferences = {}) => {
       weekGoals: trackPlan.weekGoals,
       dailyTasks: trackPlan.dailyTasks,
       recommendations: trackPlan.recommendations,
-      generatedAt: Date.now(),
+      generatedAt: today.toISOString(),
       track: props.selectedTrack,
       trackLabel: getTrackLabel(props.selectedTrack),
       weeklyGoal: props.weeklyGoal
     }
+    // 降级方案也标记为完成
+    isGenerated.value = true
+    await new Promise(r => setTimeout(r, 1500))
+  } finally {
+    isGenerating.value = false
+    isGenerated.value = false
   }
   return learningPlan.value
 }
@@ -256,7 +270,7 @@ const fetchCurrentLearningPlan = async () => {
         weekGoals: planData.weekGoals || [],
         dailyTasks: planData.dailyTasks || [],
         recommendations: planData.recommendations || [],
-        generatedAt: planData.generatedAt || Date.now(),
+        generatedAt: planData.generatedAt || new Date().toISOString(),
         track: planData.track || props.selectedTrack,
         trackLabel: planData.trackLabel || getTrackLabel(props.selectedTrack),
         weeklyGoal: planData.weeklyGoal || props.weeklyGoal,
@@ -451,6 +465,14 @@ const resetData = () => {
   errorAnalysis.value = { totalErrors: 0, categories: [], recentErrors: [], improvementTrend: '' }
   studyHabits.value = { weeklyStudyTime: 0, averageTimePerQuestion: 0, preferredTimeSlot: '', consistencyScore: 0, strongTopics: [], weakTopics: [] }
   learningPlan.value = { weekGoals: [], dailyTasks: [], recommendations: [], generatedAt: null }
+}
+
+const closeGeneratingOverlay = () => {
+  // 只有在生成完成后才能关闭
+  if (isGenerated.value) {
+    isGenerating.value = false
+    isGenerated.value = false
+  }
 }
 
 defineExpose({
@@ -681,14 +703,18 @@ onMounted(async () => {
         </div>
 
         <div class="plan-actions">
-          <button class="plan-btn primary" @click="saveLearningPlan()">
+          <button class="plan-btn primary" @click="saveLearningPlan()" :disabled="isGenerating">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 4v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6a2 2 0 0 0-2 2z"/>
             </svg>
             保存计划
           </button>
-          <button class="plan-btn secondary" @click="generateLearningPlan()">重新生成</button>
+          <button class="plan-btn secondary" @click="generateLearningPlan()" :disabled="isGenerating">
+            <span v-if="isGenerating" class="btn-spinner"></span>
+            <span v-else>重新生成</span>
+          </button>
         </div>
+
       </div>
 
       <div v-show="activeSection === 'chat'" class="chat-section">
@@ -729,6 +755,52 @@ onMounted(async () => {
             </svg>
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- 容器内加载遮罩 - 固定在section内，跨页面保持 -->
+    <div v-if="isGenerating" class="generating-overlay" @click="closeGeneratingOverlay">
+      <div class="generating-content" :class="{ 'success-state': isGenerated }" @click.stop>
+        <!-- 加载中状态 -->
+        <template v-if="!isGenerated">
+          <div class="ai-brain">
+            <div class="brain-core"></div>
+            <div class="orbit orbit-1"></div>
+            <div class="orbit orbit-2"></div>
+            <div class="orbit orbit-3"></div>
+            <div class="particles">
+              <span v-for="n in 12" :key="n" class="particle" :style="{ '--i': n }"></span>
+            </div>
+          </div>
+          <h3 class="generating-title">AI 正在思考</h3>
+          <p class="generating-subtitle">为您定制专属学习计划</p>
+          <div class="progress-bar">
+            <div class="progress-fill"></div>
+          </div>
+          <div class="generating-tips">
+            <span class="tip-icon">💡</span>
+            <span class="tip-text">根据您的学习数据智能分析中...</span>
+          </div>
+        </template>
+
+        <!-- 生成完成状态 -->
+        <template v-else>
+          <div class="success-icon">
+            <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M8 12l2.5 2.5L16 9"/>
+            </svg>
+          </div>
+          <h3 class="generating-title success">生成完成！</h3>
+          <p class="generating-subtitle">您的专属学习计划已准备就绪</p>
+          <div class="progress-bar completed">
+            <div class="progress-fill" style="width: 100%;"></div>
+          </div>
+          <div class="generating-tips success-tip">
+            <span class="tip-icon">🎉</span>
+            <span class="tip-text">点击任意处关闭提示</span>
+          </div>
+        </template>
       </div>
     </div>
   </section>
@@ -1341,6 +1413,305 @@ onMounted(async () => {
 
 .plan-btn.secondary:hover {
   background: #f8fafc;
+}
+
+.plan-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(74, 111, 157, 0.2);
+  border-top-color: #4a6f9d;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 容器内加载遮罩 - 固定在section内 */
+.generating-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 0.3s ease;
+  border-radius: 24px;
+  cursor: pointer;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.generating-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 48px 64px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.95) 100%);
+  border-radius: 32px;
+  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255,255,255,0.1);
+  animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* AI大脑动画 */
+.ai-brain {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brain-core {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #6672cb 0%, #4a6f9d 50%, #3b5998 100%);
+  border-radius: 50%;
+  box-shadow:
+    0 0 30px rgba(102, 114, 203, 0.6),
+    0 0 60px rgba(102, 114, 203, 0.3),
+    inset 0 -2px 10px rgba(0,0,0,0.2);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 30px rgba(102, 114, 203, 0.6), 0 0 60px rgba(102, 114, 203, 0.3);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 0 40px rgba(102, 114, 203, 0.8), 0 0 80px rgba(102, 114, 203, 0.4);
+  }
+}
+
+.orbit {
+  position: absolute;
+  border: 2px solid transparent;
+  border-radius: 50%;
+}
+
+.orbit-1 {
+  width: 70px;
+  height: 70px;
+  border-top-color: rgba(102, 114, 203, 0.6);
+  border-right-color: rgba(102, 114, 203, 0.3);
+  animation: rotate 3s linear infinite;
+}
+
+.orbit-2 {
+  width: 90px;
+  height: 90px;
+  border-bottom-color: rgba(74, 111, 157, 0.5);
+  border-left-color: rgba(74, 111, 157, 0.2);
+  animation: rotate 4s linear infinite reverse;
+}
+
+.orbit-3 {
+  width: 110px;
+  height: 110px;
+  border-top-color: rgba(102, 114, 203, 0.3);
+  border-bottom-color: rgba(74, 111, 157, 0.4);
+  animation: rotate 5s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.particles {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
+.particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: linear-gradient(135deg, #6672cb, #4a6f9d);
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: rotate(calc(var(--i) * 30deg)) translateX(55px);
+  animation: particleFloat 2s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.15s);
+  opacity: 0;
+}
+
+@keyframes particleFloat {
+  0%, 100% {
+    opacity: 0;
+    transform: rotate(calc(var(--i) * 30deg)) translateX(55px) scale(0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(calc(var(--i) * 30deg)) translateX(65px) scale(1);
+  }
+}
+
+.generating-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  background: linear-gradient(135deg, #4a6f9d 0%, #6672cb 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.generating-subtitle {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0;
+  font-weight: 500;
+}
+
+.progress-bar {
+  width: 200px;
+  height: 4px;
+  background: rgba(74, 111, 157, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* 生成遮罩中的进度条动画 */
+.generating-content .progress-fill {
+  height: 100%;
+  width: 30%;
+  background: linear-gradient(90deg, #4a6f9d 0%, #6672cb 50%, #4a6f9d 100%);
+  background-size: 200% 100%;
+  border-radius: 2px;
+  animation: progressMove 2s ease-in-out infinite, shimmer 1.5s linear infinite;
+}
+
+@keyframes progressMove {
+  0% { width: 0%; margin-left: 0%; }
+  50% { width: 60%; margin-left: 20%; }
+  100% { width: 30%; margin-left: 70%; }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.generating-tips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: rgba(102, 114, 203, 0.08);
+  border-radius: 12px;
+  border: 1px solid rgba(102, 114, 203, 0.15);
+}
+
+.generating-tips.success-tip {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.tip-icon {
+  font-size: 16px;
+  animation: bounce 1s ease-in-out infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.tip-text {
+  font-size: 13px;
+  color: #4a6f9d;
+  font-weight: 500;
+}
+
+.generating-tips.success-tip .tip-text {
+  color: #059669;
+}
+
+/* 成功状态样式 */
+.success-state {
+  animation: successPulse 0.5s ease;
+}
+
+@keyframes successPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.success-icon {
+  color: #10b981;
+  animation: successPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes successPop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.success-icon svg {
+  filter: drop-shadow(0 4px 12px rgba(16, 185, 129, 0.4));
+}
+
+.generating-title.success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 生成遮罩中的完成状态进度条 */
+.generating-content .progress-bar.completed {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.generating-content .progress-bar.completed .progress-fill {
+  background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+  animation: none;
+  width: 100% !important;
+  transition: width 0.5s ease;
 }
 
 .chat-section {

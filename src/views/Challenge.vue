@@ -50,7 +50,7 @@ const normalizeEvaluationResult = (result) => {
     output: String(result.output ?? result.stdout ?? result.runOutput ?? '').trim(),
     analysis: String(result.analysis ?? result.aiAnalysis ?? result.feedback ?? '').trim(),
     pointsEarned: Number(result.pointsEarned || 0),
-    updatedAt: Date.now(),
+    updatedAt: new Date().toLocaleString(),
   }
 }
 
@@ -177,7 +177,7 @@ const handleSubmit = async () => {
       question: currentLevel.value.question,
       userAnswer: answer.value,
       description: `关卡：${currentLevel.value.name}。你的答案：${answer.value}`,
-      createdAt: Date.now(),
+      createdAt: new Date().toLocaleString(),
     })
     await ElMessageBox.alert('回答错误，已加入错题本。', '继续加油', { type: 'warning' })
   } catch (error) {
