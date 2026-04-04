@@ -113,15 +113,20 @@ public class AIService {
      * 通用AI对话方法
      */
     public String chat(List<ChatMessage> messages) {
-        ChatRequest request = ChatRequest.builder()
-                .model(aiConfig.getModel())
-                .messages(messages)
-                .temperature(aiConfig.getTemperature())
-                .maxTokens(aiConfig.getMaxTokens())
-                .stream(false)
-                .build();
-        
-        return callAIWithTimeout(request);
+        try {
+            ChatRequest request = ChatRequest.builder()
+                    .model(aiConfig.getModel())
+                    .messages(messages)
+                    .temperature(aiConfig.getTemperature())
+                    .maxTokens(aiConfig.getMaxTokens())
+                    .stream(false)
+                    .build();
+            
+            return callAIWithTimeout(request);
+        } catch (TimeoutException e) {
+            log.warn("AI对话超时");
+            throw new AIException("AI服务响应超时", e);
+        }
     }
     
     /**

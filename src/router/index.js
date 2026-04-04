@@ -68,13 +68,11 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to) => {
   const user = localStorage.getItem('user')
   if (to.meta.requiresAuth && !user) {
-    next('/')
-    return
+    return '/'
   }
-  next()
 })
 
 export default router

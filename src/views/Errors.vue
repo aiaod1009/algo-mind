@@ -127,15 +127,25 @@ const loadData = async () => {
 
   const hasHydrated = errorStore.hydrateErrorsFromLocal()
   if (hasHydrated) {
-    loading.value = false
-    void errorStore.fetchErrors({ skipIfLoaded: false })
+    loading.value = false // 已有本地缓存，先展示，再静默刷新
+    try {
+      const result = await errorStore.fetchErrors({ skipIfLoaded: false })
+      if (result?.isOffline) {
+        ElMessage.warning('网络不可用，当前展示的是本地缓存数据')
+      }
+    } catch (error) {
+      console.error('刷新错题失败:', error)
+    }
     return
   }
 
   try {
-    await errorStore.fetchErrors({ skipIfLoaded: false })
+    const result = await errorStore.fetchErrors({ skipIfLoaded: false })
+    if (result?.isOffline) {
+      ElMessage.warning('网络不可用，当前展示的是本地缓存数据')
+    }
   } catch (error) {
-    ElMessage.error('错题加载失败')
+    ElMessage.error('错题加载失败，请检查网络后重试')
   } finally {
     loading.value = false
   }
@@ -150,7 +160,9 @@ const handleAnalyze = async (row) => {
     analysisText.value = result
     errorStore.markAnalysis(row.id, result)
   } catch (error) {
-    analysisText.value = '分析失败，请稍后重试。'
+    const serverMessage = error?.response?.data?.message || error?.message || 'AI 分析失败，请稍后重试'
+    ElMessage.error(serverMessage)
+    analysisText.value = ''
   } finally {
     analysisLoading.value = false
   }
@@ -175,7 +187,12 @@ const handleAdd = async () => {
     addForm.userAnswer = ''
     addForm.description = ''
   } catch (error) {
-    ElMessage.error('添加失败')
+    const message = error?.message || '错题已保存到本地，但同步服务器失败'
+    ElMessage.warning(message)
+    addDialogVisible.value = false
+    addForm.question = ''
+    addForm.userAnswer = ''
+    addForm.description = ''
   }
 }
 

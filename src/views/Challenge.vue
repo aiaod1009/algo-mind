@@ -58,11 +58,24 @@ const getDraftKey = () => `${DRAFT_KEY_PREFIX}${currentLevelId.value}`
 
 const loadDraft = () => {
   const raw = localStorage.getItem(getDraftKey())
-  if (!raw) return
+  if (!raw) {
+    if (currentLevel.value?.type === 'multi' && !Array.isArray(answer.value)) {
+      answer.value = []
+    }
+    return
+  }
   try {
     const draft = JSON.parse(raw)
     if (draft.answer != null) {
-      answer.value = draft.answer
+      if (currentLevel.value?.type === 'multi') {
+        answer.value = Array.isArray(draft.answer) ? draft.answer : []
+      } else {
+        answer.value = draft.answer
+      }
+    } else {
+      if (currentLevel.value?.type === 'multi') {
+        answer.value = []
+      }
     }
     if (typeof draft.stdinInput === 'string') {
       stdinInput.value = draft.stdinInput
@@ -72,6 +85,9 @@ const loadDraft = () => {
     }
   } catch (error) {
     console.warn('草稿读取失败。', error)
+    if (currentLevel.value?.type === 'multi') {
+      answer.value = []
+    }
   }
 }
 

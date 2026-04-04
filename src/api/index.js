@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { ElMessage } from 'element-plus'
 import { userApi } from './user'
 
 const api = axios.create({
@@ -24,6 +25,20 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const status = error?.response?.status
+    const message = error?.response?.data?.message || error?.message || '请求失败'
+
+    if (status === 401) {
+      localStorage.removeItem('user')
+      ElMessage.error('登录已过期，请重新登录')
+    } else if (status === 403) {
+      ElMessage.error('无权限访问该资源')
+    } else if (status === 500) {
+      ElMessage.error('服务器内部错误，请稍后重试')
+    } else {
+      ElMessage.error(message)
+    }
+
     console.error('API Error:', error)
     return Promise.reject(error)
   },

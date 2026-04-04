@@ -5,33 +5,6 @@ import api from '../api'
 const LEADERBOARD_KEY = 'leaderboard'
 const TRACK_KEY = 'learning-track'
 
-const DEFAULT_USERS = [
-  {
-    id: 1,
-    username: 'guest',
-    nickname: '游客',
-    password: 'guest',
-    token: 'guest-token',
-    bio: '先把基础打扎实，再冲更高难度。',
-    gender: 'unknown',
-    avatar: '',
-    targetTrack: 'algo',
-    weeklyGoal: 8,
-  },
-  {
-    id: 2,
-    username: 'admin',
-    nickname: '管理员',
-    password: '123456',
-    token: 'admin-token',
-    bio: '持续刷题，稳定提分。',
-    gender: 'unknown',
-    avatar: '',
-    targetTrack: 'algo',
-    weeklyGoal: 12,
-  },
-]
-
 const readLocalUser = () => {
   const userRaw = localStorage.getItem('user')
   if (!userRaw) return null
@@ -56,17 +29,6 @@ const readLeaderboard = () => {
 const saveLeaderboard = (list) => {
   localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(list))
 }
-
-const createDefaultUser = (item) => ({
-  id: item.id,
-  name: item.nickname,
-  token: item.token,
-  bio: item.bio,
-  gender: item.gender,
-  avatar: item.avatar,
-  targetTrack: item.targetTrack,
-  weeklyGoal: item.weeklyGoal,
-})
 
 export const useUserStore = defineStore('user', () => {
   const userInfo = ref(readLocalUser())
@@ -119,35 +81,26 @@ export const useUserStore = defineStore('user', () => {
   }
 
   const login = async (username, password) => {
-    try {
-      const res = await api.post('/login', { username, password })
-      if (res.data?.code === 0) {
-        let avatarUrl = res.data.data.user?.avatar || ''
-        // 如果是相对路径，拼接成完整URL
-        if (avatarUrl && avatarUrl.startsWith('/')) {
-          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
-          avatarUrl = `${baseUrl}${avatarUrl}`
-        }
-        const nextUser = {
-          ...res.data.data.user,
-          targetTrack: res.data.data.user?.targetTrack || selectedTrack.value,
-          weeklyGoal: Number(res.data.data.user?.weeklyGoal || 10),
-          bio: res.data.data.user?.bio || '保持节奏，长期主义。',
-          gender: res.data.data.user?.gender || 'unknown',
-          avatar: avatarUrl,
-        }
-        const nextPoints = Number(res.data.data.points || 0)
-        syncUser(nextUser, nextPoints)
-        return true
+    const res = await api.post('/login', { username, password })
+    if (res.data?.code === 0) {
+      let avatarUrl = res.data.data.user?.avatar || ''
+      if (avatarUrl && avatarUrl.startsWith('/')) {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+        avatarUrl = `${baseUrl}${avatarUrl}`
       }
-    } catch (error) {
-      console.warn('登录接口不可用，使用本地模拟登录。', error)
+      const nextUser = {
+        ...res.data.data.user,
+        targetTrack: res.data.data.user?.targetTrack || selectedTrack.value,
+        weeklyGoal: Number(res.data.data.user?.weeklyGoal || 10),
+        bio: res.data.data.user?.bio || '保持节奏，长期主义。',
+        gender: res.data.data.user?.gender || 'unknown',
+        avatar: avatarUrl,
+      }
+      const nextPoints = Number(res.data.data.points || 0)
+      syncUser(nextUser, nextPoints)
+      return true
     }
-
-    const matched = DEFAULT_USERS.find((item) => item.username === username && item.password === password)
-    if (!matched) return false
-    syncUser(createDefaultUser(matched), points.value || 0)
-    return true
+    return false
   }
 
   const addPoints = (value) => {
@@ -209,17 +162,16 @@ export const useUserStore = defineStore('user', () => {
   const updateAvatar = async (newAvatarUrl) => {
     if (!userInfo.value) return
 
-    // 第一步：立刻更新本地状态（页面瞬间响应）
+    const previousAvatar = userInfo.value.avatar
     userInfo.value.avatar = newAvatarUrl
     localStorage.setItem('user', JSON.stringify(userInfo.value))
 
-    // 第二步：同步到后端（持久化）
     try {
       await api.put('/users/me', { avatar: newAvatarUrl })
     } catch (e) {
-      // 后端保存失败，回滚本地状态
-      console.error('头像保存到后端失败:', e)
-      throw new Error('头像保存失败，请重试')
+      userInfo.value.avatar = previousAvatar
+      localStorage.setItem('user', JSON.stringify(userInfo.value))
+      throw e
     }
   }
 
