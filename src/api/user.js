@@ -1,5 +1,24 @@
 import api from './index'
 
+const AI_TIMEOUT = 60000
+const LONG_TIMEOUT = 30000
+
+const createApiCall = (method, url, timeout) => {
+  return async (dataOrParams) => {
+    const config = { timeout }
+    if (method === 'get') {
+      config.params = dataOrParams
+      return api.get(url, config)
+    } else if (method === 'post') {
+      return api.post(url, dataOrParams, config)
+    } else if (method === 'put') {
+      return api.put(url, dataOrParams, config)
+    } else if (method === 'delete') {
+      return api.delete(url, config)
+    }
+  }
+}
+
 export const userApi = {
   getUserProblemHeatmap(year) {
     return api.get(`/users/me/heatmap?year=${year}`)
@@ -54,34 +73,19 @@ export const userApi = {
   },
 
   analyzeError(errorId, description) {
-    return api.post('/error-analysis', { errorId, description })
+    return api.post('/error-analysis', { errorId, description }, { timeout: AI_TIMEOUT })
   },
 
-  // 学习计划相关接口
   getLearningPlans() {
     return api.get('/learning-plans')
   },
 
   getCurrentLearningPlan(track = 'algo') {
-    return api.get(`/learning-plans/current?track=${track}`)
+    return api.get(`/learning-plans/current?track=${track}`, { timeout: LONG_TIMEOUT })
   },
 
-  /**
-   * 生成个性化学习计划
-   * @param {Object} data - 用户学习数据
-   * @param {string} data.track - 目标赛道 (algo/ds/contest)
-   * @param {string} data.trackLabel - 赛道标签
-   * @param {number} data.weeklyGoal - 每周目标题数
-   * @param {number} data.weeklyCompleted - 本周已完成题数
-   * @param {string[]} data.errorTopics - 历史错题知识点标签
-   * @param {string[]} data.strongAreas - 擅长领域
-   * @param {string[]} data.weakAreas - 薄弱环节
-   * @param {number} data.persistenceIndex - 坚持指数 (0-100)
-   * @param {number} data.totalSolved - 累计解题数
-   * @param {number} data.currentStreak - 当前连续打卡天数
-   */
   generateLearningPlan(data) {
-    return api.post('/learning-plans/generate', data)
+    return api.post('/learning-plans/generate', data, { timeout: AI_TIMEOUT })
   },
 
   saveLearningPlan(data) {
@@ -92,12 +96,13 @@ export const userApi = {
     return api.delete(`/learning-plans/${planId}`)
   },
 
-  // 头像相关接口
   uploadAvatar(file) {
     const formData = new FormData()
     formData.append('file', file)
-    // 不设置 Content-Type，让浏览器自动设置 boundary
-    return api.post('/users/me/avatar', formData)
+    return api.post('/users/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: LONG_TIMEOUT
+    })
   },
 
   uploadAvatarFromUrl(data) {

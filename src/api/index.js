@@ -44,14 +44,12 @@ api.getUserCreatedProblems = userApi.getUserCreatedProblems
 api.getUserSolvedProblems = userApi.getUserSolvedProblems
 api.analyzeError = userApi.analyzeError
 
-// 学习计划相关
 api.getLearningPlans = userApi.getLearningPlans
 api.getCurrentLearningPlan = userApi.getCurrentLearningPlan
 api.generateLearningPlan = userApi.generateLearningPlan
 api.saveLearningPlan = userApi.saveLearningPlan
 api.deleteLearningPlan = userApi.deleteLearningPlan
 
-// 头像相关
 api.uploadAvatar = userApi.uploadAvatar
 api.uploadAvatarFromUrl = userApi.uploadAvatarFromUrl
 api.getAvatar = userApi.getAvatar

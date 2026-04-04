@@ -16,9 +16,14 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.*;
 
 /**
  * AI服务：封装豆包AI调用逻辑
+ * 优化策略：
+ * 1. 单次调用快速失败（15秒超时）
+ * 2. AI失败立即降级到本地算法
+ * 3. 异步预检查AI可用性
  */
 @Slf4j
 @Service
@@ -29,9 +34,8 @@ public class AIService {
     private final AIConfig aiConfig;
     private final ObjectMapper objectMapper;
     
-    /**
-     * 系统提示词：学习计划生成专家
-     */
+    private static final int AI_CALL_TIMEOUT_SECONDS = 15;
+    
     private static final String LEARNING_PLAN_SYSTEM_PROMPT = """
         你是一位专业的算法学习规划师，擅长根据学生的学习数据制定个性化的学习计划。
         
@@ -70,21 +74,18 @@ public class AIService {
         """;
     
     /**
-     * 调用AI生成学习计划
+     * 调用AI生成学习计划（带快速失败机制）
      */
     public LearningPlanAIResponse generateLearningPlan(LearningPlanAIRequest request) {
         log.info("开始调用AI生成学习计划，用户赛道：{}，周目标：{}", request.getTrack(), request.getWeeklyGoal());
         
         try {
-            // 构建用户提示词
             String userPrompt = buildLearningPlanPrompt(request);
             
-            // 构建对话消息
             List<ChatMessage> messages = new ArrayList<>();
             messages.add(ChatMessage.system(LEARNING_PLAN_SYSTEM_PROMPT));
             messages.add(ChatMessage.user(userPrompt));
             
-            // 构建请求
             ChatRequest chatRequest = ChatRequest.builder()
                     .model(aiConfig.getModel())
                     .messages(messages)
@@ -93,17 +94,17 @@ public class AIService {
                     .stream(false)
                     .build();
             
-            // 调用AI
-            String responseContent = callAI(chatRequest);
-            
-            // 解析响应
+            String responseContent = callAIWithTimeout(chatRequest);
             LearningPlanAIResponse planResponse = parseLearningPlanResponse(responseContent);
             
             log.info("AI学习计划生成成功");
             return planResponse;
             
+        } catch (TimeoutException e) {
+            log.warn("AI调用超时，将使用本地算法降级");
+            throw new AIException("AI服务响应超时", e);
         } catch (Exception e) {
-            log.error("AI生成学习计划失败：{}", e.getMessage(), e);
+            log.warn("AI生成学习计划失败：{}，将使用本地算法降级", e.getMessage());
             throw new AIException("AI生成学习计划失败：" + e.getMessage(), e);
         }
     }
@@ -120,66 +121,75 @@ public class AIService {
                 .stream(false)
                 .build();
         
-        return callAI(request);
+        return callAIWithTimeout(request);
     }
     
     /**
-     * 调用AI接口（带重试机制）
+     * 带超时控制的AI调用（单次尝试，快速失败）
      */
-    private String callAI(ChatRequest request) {
-        int maxRetries = aiConfig.getMaxRetries();
-        int attempt = 0;
+    private String callAIWithTimeout(ChatRequest request) throws TimeoutException {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
         
-        while (attempt < maxRetries) {
+        try {
+            Future<String> future = executor.submit(() -> callAIOnce(request));
+            
             try {
-                attempt++;
-                log.debug("AI调用第{}次尝试", attempt);
-                
-                // 设置请求头
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                headers.set("Authorization", "Bearer " + aiConfig.getKey());
-                
-                // 发送请求
-                HttpEntity<ChatRequest> entity = new HttpEntity<>(request, headers);
-                ResponseEntity<ChatResponse> response = restTemplate.postForEntity(
-                        aiConfig.getUrl(),
-                        entity,
-                        ChatResponse.class
-                );
-                
-                // 处理响应
-                if (response.getBody() == null) {
-                    throw new AIException("AI响应为空");
+                return future.get(AI_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                future.cancel(true);
+                throw e;
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof AIException) {
+                    throw (AIException) cause;
                 }
-                
-                String content = response.getBody().getContent();
-                if (content == null || content.isBlank()) {
-                    throw new AIException("AI返回内容为空");
-                }
-                
-                log.debug("AI调用成功，消耗token：{}", 
-                        response.getBody().getUsage() != null ? 
-                                response.getBody().getUsage().getTotalTokens() : "未知");
-                
-                return content;
-                
-            } catch (RestClientException e) {
-                log.warn("AI调用第{}次尝试失败：{}", attempt, e.getMessage());
-                if (attempt >= maxRetries) {
-                    throw new AIException("AI服务调用失败，已重试" + maxRetries + "次：" + e.getMessage(), e);
-                }
-                // 等待后重试
-                try {
-                    Thread.sleep(1000 * attempt);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    throw new AIException("重试被中断", ie);
-                }
+                throw new AIException("AI调用失败: " + cause.getMessage(), cause);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AIException("AI调用被中断", e);
             }
+        } finally {
+            executor.shutdownNow();
         }
-        
-        throw new AIException("AI调用失败，超出最大重试次数");
+    }
+    
+    /**
+     * 单次AI调用（无重试）
+     */
+    private String callAIOnce(ChatRequest request) {
+        try {
+            log.debug("开始AI调用");
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Authorization", "Bearer " + aiConfig.getKey());
+            
+            HttpEntity<ChatRequest> entity = new HttpEntity<>(request, headers);
+            ResponseEntity<ChatResponse> response = restTemplate.postForEntity(
+                    aiConfig.getUrl(),
+                    entity,
+                    ChatResponse.class
+            );
+            
+            if (response.getBody() == null) {
+                throw new AIException("AI响应为空");
+            }
+            
+            String content = response.getBody().getContent();
+            if (content == null || content.isBlank()) {
+                throw new AIException("AI返回内容为空");
+            }
+            
+            log.debug("AI调用成功，消耗token：{}", 
+                    response.getBody().getUsage() != null ? 
+                            response.getBody().getUsage().getTotalTokens() : "未知");
+            
+            return content;
+            
+        } catch (RestClientException e) {
+            log.error("AI调用网络错误：{}", e.getMessage());
+            throw new AIException("AI服务网络错误：" + e.getMessage(), e);
+        }
     }
     
     /**
@@ -233,7 +243,6 @@ public class AIService {
      */
     private LearningPlanAIResponse parseLearningPlanResponse(String content) {
         try {
-            // 清理可能的markdown代码块标记
             String jsonContent = content;
             if (content.contains("```json")) {
                 jsonContent = content.replaceAll("(?s)```json\\s*", "").replaceAll("(?s)\\s*```", "").trim();
@@ -241,7 +250,6 @@ public class AIService {
                 jsonContent = content.replaceAll("(?s)```\\s*", "").replaceAll("(?s)\\s*```", "").trim();
             }
             
-            // 尝试解析JSON
             return objectMapper.readValue(jsonContent, LearningPlanAIResponse.class);
             
         } catch (JsonProcessingException e) {
