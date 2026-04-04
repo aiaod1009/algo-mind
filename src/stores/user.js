@@ -5,33 +5,6 @@ import api from '../api'
 const LEADERBOARD_KEY = 'leaderboard'
 const TRACK_KEY = 'learning-track'
 
-const DEFAULT_USERS = [
-  {
-    id: 1,
-    username: 'guest',
-    nickname: '游客',
-    password: 'guest',
-    token: 'guest-token',
-    bio: '先把基础打扎实，再冲更高难度。',
-    gender: 'unknown',
-    avatar: '',
-    targetTrack: 'algo',
-    weeklyGoal: 8,
-  },
-  {
-    id: 2,
-    username: 'admin',
-    nickname: '管理员',
-    password: '123456',
-    token: 'admin-token',
-    bio: '持续刷题，稳定提分。',
-    gender: 'unknown',
-    avatar: '',
-    targetTrack: 'algo',
-    weeklyGoal: 12,
-  },
-]
-
 const readLocalUser = () => {
   const userRaw = localStorage.getItem('user')
   if (!userRaw) return null
@@ -57,22 +30,20 @@ const saveLeaderboard = (list) => {
   localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(list))
 }
 
-const createDefaultUser = (item) => ({
-  id: item.id,
-  name: item.nickname,
-  token: item.token,
-  bio: item.bio,
-  gender: item.gender,
-  avatar: item.avatar,
-  targetTrack: item.targetTrack,
-  weeklyGoal: item.weeklyGoal,
-})
-
 export const useUserStore = defineStore('user', () => {
   const userInfo = ref(readLocalUser())
   const points = ref(Number(localStorage.getItem('points') || 0))
   const selectedTrack = ref(localStorage.getItem(TRACK_KEY) || 'algo')
 
+<<<<<<< Updated upstream
+=======
+  const avatar = computed(() => {
+    return userInfo.value?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'
+  })
+
+  const isLogin = computed(() => !!userInfo.value)
+
+>>>>>>> Stashed changes
   const syncLeaderboard = (payloadUser, payloadPoints) => {
     if (!payloadUser?.id) return
     const list = readLeaderboard()
@@ -111,6 +82,7 @@ export const useUserStore = defineStore('user', () => {
   }
 
   const login = async (username, password) => {
+<<<<<<< Updated upstream
     try {
       const res = await api.post('/login', { username, password })
       if (res.data?.code === 0) {
@@ -125,15 +97,28 @@ export const useUserStore = defineStore('user', () => {
         const nextPoints = Number(res.data.data.points || 0)
         syncUser(nextUser, nextPoints)
         return true
+=======
+    const res = await api.post('/login', { username, password })
+    if (res.data?.code === 0) {
+      let avatarUrl = res.data.data.user?.avatar || ''
+      if (avatarUrl && avatarUrl.startsWith('/')) {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+        avatarUrl = `${baseUrl}${avatarUrl}`
+>>>>>>> Stashed changes
       }
-    } catch (error) {
-      console.warn('登录接口不可用，使用本地模拟登录。', error)
+      const nextUser = {
+        ...res.data.data.user,
+        targetTrack: res.data.data.user?.targetTrack || selectedTrack.value,
+        weeklyGoal: Number(res.data.data.user?.weeklyGoal || 10),
+        bio: res.data.data.user?.bio || '保持节奏，长期主义。',
+        gender: res.data.data.user?.gender || 'unknown',
+        avatar: avatarUrl,
+      }
+      const nextPoints = Number(res.data.data.points || 0)
+      syncUser(nextUser, nextPoints)
+      return true
     }
-
-    const matched = DEFAULT_USERS.find((item) => item.username === username && item.password === password)
-    if (!matched) return false
-    syncUser(createDefaultUser(matched), points.value || 0)
-    return true
+    return false
   }
 
   const addPoints = (value) => {
@@ -181,6 +166,26 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem(TRACK_KEY)
   }
 
+<<<<<<< Updated upstream
+=======
+  const updateAvatar = async (newAvatarUrl) => {
+    if (!userInfo.value) return
+
+    const previousAvatar = userInfo.value.avatar
+
+    userInfo.value.avatar = newAvatarUrl
+    localStorage.setItem('user', JSON.stringify(userInfo.value))
+
+    try {
+      await api.put('/users/me', { avatar: newAvatarUrl })
+    } catch (e) {
+      userInfo.value.avatar = previousAvatar
+      localStorage.setItem('user', JSON.stringify(userInfo.value))
+      throw e
+    }
+  }
+
+>>>>>>> Stashed changes
   return {
     userInfo,
     points,

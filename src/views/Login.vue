@@ -242,7 +242,8 @@ const handleLogin = async () => {
     ElMessage.success('登录成功')
     router.push('/home')
   } catch (error) {
-    ElMessage.error('登录失败，请稍后重试')
+    const serverMessage = error?.response?.data?.message || error?.message || '登录失败，请稍后重试'
+    ElMessage.error(serverMessage)
   } finally {
     loading.value = false
   }

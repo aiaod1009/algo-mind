@@ -1,4 +1,9 @@
 import axios from 'axios'
+<<<<<<< Updated upstream
+=======
+import { ElMessage } from 'element-plus'
+import { userApi } from './user'
+>>>>>>> Stashed changes
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -23,9 +28,51 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const status = error?.response?.status
+    const message = error?.response?.data?.message || error?.message || '请求失败'
+
+    if (status === 401) {
+      localStorage.removeItem('user')
+      ElMessage.error('登录已过期，请重新登录')
+    } else if (status === 403) {
+      ElMessage.error('无权限访问该资源')
+    } else if (status === 500) {
+      ElMessage.error('服务器内部错误，请稍后重试')
+    } else {
+      ElMessage.error(message)
+    }
+
     console.error('API Error:', error)
     return Promise.reject(error)
   },
 )
 
+<<<<<<< Updated upstream
+=======
+api.getUserProblemHeatmap = userApi.getUserProblemHeatmap
+api.getUserProblemStats = userApi.getUserProblemStats
+api.getUserActivities = userApi.getUserActivities
+api.updateUserProfile = userApi.updateUserProfile
+api.getUserStatus = userApi.getUserStatus
+api.updateUserStatus = userApi.updateUserStatus
+api.getUserErrors = userApi.getUserErrors
+api.addUserError = userApi.addUserError
+api.deleteUserError = userApi.deleteUserError
+api.getUserRanking = userApi.getUserRanking
+api.getUserPointsHistory = userApi.getUserPointsHistory
+api.getUserCreatedProblems = userApi.getUserCreatedProblems
+api.getUserSolvedProblems = userApi.getUserSolvedProblems
+api.analyzeError = userApi.analyzeError
+api.getLearningPlans = userApi.getLearningPlans
+api.getCurrentLearningPlan = userApi.getCurrentLearningPlan
+api.generateLearningPlan = userApi.generateLearningPlan
+api.saveLearningPlan = userApi.saveLearningPlan
+api.deleteLearningPlan = userApi.deleteLearningPlan
+api.uploadAvatar = userApi.uploadAvatar
+api.uploadAvatarFromUrl = userApi.uploadAvatarFromUrl
+api.getAvatar = userApi.getAvatar
+api.deleteAvatar = userApi.deleteAvatar
+api.aiChat = userApi.aiChat
+
+>>>>>>> Stashed changes
 export default api

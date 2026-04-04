@@ -37,25 +37,39 @@ export const useErrorStore = defineStore('error', () => {
   }
 
   const addError = async (errorItem) => {
-    const nextItem = {
-      id: errorItem.id || Date.now(),
+    const payload = {
       levelId: errorItem.levelId || null,
-      question: errorItem.question || '未命名题目',
+      question: errorItem.question,
       userAnswer: errorItem.userAnswer || '',
       description: errorItem.description || '暂无描述',
+<<<<<<< Updated upstream
       createdAt: errorItem.createdAt || new Date().toLocaleString(),
       analysisStatus: '未分析',
       analysis: '',
+=======
+>>>>>>> Stashed changes
     }
 
-    errors.value.unshift(nextItem)
-    saveLocalErrors(errors.value)
-
     try {
-      await api.post('/errors', nextItem)
+      const res = await api.post('/errors', payload)
+      if (res.data?.code === 0 && res.data.data) {
+        errors.value.unshift(res.data.data)
+        saveLocalErrors(errors.value)
+        return { success: true, data: res.data.data }
+      }
+      return { success: false, message: res.data?.message || '添加失败' }
     } catch (error) {
       console.warn('错题上报失败，已保存在本地。', error)
     }
+
+    const localItem = {
+      ...payload,
+      analysisStatus: '未分析',
+      analysis: '',
+    }
+    errors.value.unshift(localItem)
+    saveLocalErrors(errors.value)
+    return { success: true, data: localItem, offline: true }
   }
 
   const getAnalysis = async (errorId, description) => {
@@ -72,7 +86,7 @@ export const useErrorStore = defineStore('error', () => {
   }
 
   const markAnalysis = (errorId, analysis) => {
-    const item = errors.value.find((row) => Number(row.id) === Number(errorId))
+    const item = errors.value.find((row) => row.id === errorId)
     if (!item) return
     item.analysisStatus = '已分析'
     item.analysis = analysis

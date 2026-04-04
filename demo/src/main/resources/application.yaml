@@ -1,0 +1,94 @@
+server:
+  port: 3000
+  servlet:
+    context-path: /api
+
+# CORS 跨域配置（开发环境使用默认值，生产环境通过环境变量覆盖）
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+
+spring:
+  profiles:
+    active: dev
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:h2:mem:algodb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+    defer-datasource-initialization: true
+  sql:
+    init:
+      mode: always
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB
+      max-request-size: 10MB
+
+# 文件存储配置
+file:
+  upload-dir: ./uploads/avatars
+  max-size: 5242880
+  allowed-types: image/jpeg,image/png,image/gif,image/webp
+
+# 豆包AI配置
+doubao:
+  api:
+    key: 40d60324-a9dd-4505-b1c6-1ef4d0d63556
+    url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+    model: doubao-seed-1-8-251228
+    timeout: 30000
+    max-retries: 3
+    temperature: 0.7
+    max-tokens: 4096
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: jdbc:mysql://localhost:3306/algo_challenge?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: '#Skkll11mccom'
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+  jackson:
+    date-format: yyyy-MM-dd'T'HH:mm:ss.SSS'Z'
+    time-zone: UTC
+
+# 生产环境AI配置
+doubao:
+  api:
+    key: ${DOUBAO_API_KEY:40d60324-a9dd-4505-b1c6-1ef4d0d63556}
+    url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+    model: ${DOUBAO_MODEL:doubao-seed-1-8-251228}
+    timeout: 30000
+    max-retries: 3
+    temperature: 0.7
+    max-tokens: 4096

@@ -70,11 +70,21 @@ const handleSubmit = async () => {
 
   loading.value = true
   try {
+<<<<<<< Updated upstream
     const result = await levelStore.submitAnswer(currentLevelId.value, answer.value)
     if (!result) {
       ElMessage.error('提交失败，请稍后重试')
       return
     }
+=======
+    const timeMs = Date.now() - startTimestamp.value
+    const result = await levelStore.submitAnswer(currentLevelId.value, answer.value, {
+      attempts: attemptsInRun.value,
+      timeMs,
+      language: language.value,
+      stdinInput: stdinInput.value,
+    })
+>>>>>>> Stashed changes
 
     if (result.correct) {
       userStore.addPoints(result.pointsEarned)
@@ -87,16 +97,24 @@ const handleSubmit = async () => {
       return
     }
 
-    await errorStore.addError({
+    const addResult = await errorStore.addError({
       levelId: currentLevelId.value,
       question: currentLevel.value.question,
       userAnswer: answer.value,
       description: `关卡：${currentLevel.value.name}。你的答案：${answer.value}`,
+<<<<<<< Updated upstream
       createdAt: new Date().toLocaleString(),
+=======
+>>>>>>> Stashed changes
     })
+    if (!addResult.success) {
+      ElMessage.error(addResult.message || '添加错题失败')
+      return
+    }
     await ElMessageBox.alert('回答错误，已加入错题本。', '继续加油', { type: 'warning' })
   } catch (error) {
-    ElMessage.error('提交异常，请稍后重试')
+    const serverMessage = error?.response?.data?.message || error?.message || '提交异常，请稍后重试'
+    ElMessage.error(serverMessage)
   } finally {
     loading.value = false
   }

@@ -40,12 +40,31 @@ const handleStart = (level) => {
 }
 
 const loadData = async () => {
+<<<<<<< Updated upstream
+=======
+  if (levelStore.levels.length) {
+    loading.value = false
+    return
+  }
+
+  const hydrated = levelStore.hydrateLevelsFromLocal()
+  if (hydrated) {
+    loading.value = false
+    try {
+      await levelStore.fetchLevels()
+    } catch (error) {
+      ElMessage.warning('远端关卡刷新失败，当前展示为本地缓存')
+    }
+    return
+  }
+
+>>>>>>> Stashed changes
   loading.value = true
   try {
     await levelStore.fetchLevels()
     selectedLevelId.value = trackLevels.value[0]?.id || null
   } catch (error) {
-    ElMessage.error('关卡加载失败')
+    ElMessage.error('关卡加载失败，请检查网络后重试')
   } finally {
     loading.value = false
   }

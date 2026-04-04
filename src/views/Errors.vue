@@ -50,12 +50,19 @@ const handleAdd = async () => {
   }
 
   try {
-    await errorStore.addError({
+    const result = await errorStore.addError({
       question: addForm.question,
       userAnswer: addForm.userAnswer,
       description: addForm.description,
+<<<<<<< Updated upstream
       createdAt: new Date().toLocaleString(),
+=======
+>>>>>>> Stashed changes
     })
+    if (!result.success) {
+      ElMessage.error(result.message || '添加失败')
+      return
+    }
     ElMessage.success('添加成功')
     addDialogVisible.value = false
     addForm.question = ''

@@ -177,7 +177,9 @@ export const useLevelStore = defineStore('level', () => {
         saveLocalLevels(levels.value)
         return
       }
+      throw new Error(res.data?.message || '获取关卡数据失败')
     } catch (error) {
+<<<<<<< Updated upstream
       console.warn('关卡接口不可用，使用本地关卡数据。', error)
     }
 
@@ -185,6 +187,9 @@ export const useLevelStore = defineStore('level', () => {
     levels.value = normalizeLevels(local || MOCK_LEVELS)
     if (!local) {
       saveLocalLevels(levels.value)
+=======
+      throw error
+>>>>>>> Stashed changes
     }
   }
 
@@ -210,13 +215,32 @@ export const useLevelStore = defineStore('level', () => {
     return true
   }
 
+<<<<<<< Updated upstream
   const submitAnswer = async (levelId, answer) => {
     try {
       const res = await api.post('/submit', { levelId, answer })
+=======
+  const submitAnswer = async (levelId, answer, meta = {}) => {
+    const payload = { levelId, answer, meta }
+    if (meta?.language) {
+      payload.language = meta.language
+    }
+    if (meta?.stdinInput != null) {
+      payload.stdinInput = meta.stdinInput
+    }
+    if (typeof answer === 'string') {
+      payload.code = answer
+    }
+
+    try {
+      const res = await api.post('/submit', payload)
+>>>>>>> Stashed changes
       if (res.data?.code === 0) {
         return res.data.data
       }
+      throw new Error(res.data?.message || '提交失败')
     } catch (error) {
+<<<<<<< Updated upstream
       console.warn('提交接口不可用，执行本地判题。', error)
     }
 
@@ -248,6 +272,9 @@ export const useLevelStore = defineStore('level', () => {
       correct: false,
       pointsEarned: 0,
       nextLevelUnlocked: false,
+=======
+      throw error
+>>>>>>> Stashed changes
     }
   }
 
