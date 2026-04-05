@@ -78,32 +78,104 @@ public class UserController {
     }
 
     @GetMapping("/me/heatmap")
-    public Result<List<Map<String, Object>>> getUserHeatmap(
+    public Result<Map<String, Object>> getUserHeatmap(
             @RequestParam(required = false) Integer year) {
         int targetYear = (year != null) ? year : LocalDate.now().getYear();
         Long currentUserId = 1L;
 
-        List<Map<String, Object>> heatmapData = new ArrayList<>();
+        List<Map<String, Object>> records = new ArrayList<>();
         Random random = new Random(targetYear + currentUserId);
 
         LocalDate startOfYear = LocalDate.of(targetYear, 1, 1);
         LocalDate endOfYear = LocalDate.of(targetYear, 12, 31);
 
+        int totalCount = 0;
+        int activeDays = 0;
+        int currentStreak = 0;
+        int longestStreak = 0;
+        int tempStreak = 0;
+        LocalDate today = LocalDate.now();
+
         for (LocalDate date = startOfYear; !date.isAfter(endOfYear); date = date.plusDays(1)) {
-            int count = random.nextInt(10);
-            if (random.nextDouble() > 0.6) {
-                count = random.nextInt(5);
+            int count = 0;
+            java.time.DayOfWeek dayOfWeek = date.getDayOfWeek();
+            int month = date.getMonthValue();
+
+            if (random.nextDouble() < 0.28) {
+                count = 0;
+            } else {
+                if (dayOfWeek == java.time.DayOfWeek.SATURDAY || dayOfWeek == java.time.DayOfWeek.SUNDAY) {
+                    count = 2 + random.nextInt(7);
+                } else {
+                    count = random.nextInt(4);
+                }
+
+                if (month == 3 || month == 4 || month == 10 || month == 11) {
+                    count += random.nextInt(3);
+                }
+
+                if (month == 1 && date.getDayOfMonth() <= 7) {
+                    count += 2;
+                }
+
+                if (month == 6 && random.nextDouble() < 0.3) {
+                    count = 0;
+                }
             }
+
+            int level;
+            if (count == 0) level = 0;
+            else if (count <= 2) level = 1;
+            else if (count <= 4) level = 2;
+            else if (count <= 7) level = 3;
+            else level = 4;
+
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("date", date.toString());
+            entry.put("count", count);
+            entry.put("level", level);
+            records.add(entry);
+
             if (count > 0) {
-                Map<String, Object> entry = new HashMap<>();
-                entry.put("date", date.toString());
-                entry.put("count", count);
-                entry.put("level", Math.min(4, count));
-                heatmapData.add(entry);
+                totalCount += count;
+                activeDays++;
+                tempStreak++;
+                longestStreak = Math.max(longestStreak, tempStreak);
+            } else {
+                tempStreak = 0;
+            }
+
+            if (date.equals(today.minusDays(currentStreak))) {
+                currentStreak++;
             }
         }
 
-        return Result.success(heatmapData);
+        int monthlyActiveDays = 0;
+        int monthlyTotalCount = 0;
+        LocalDate firstDayOfMonth = today.withDayOfMonth(1);
+        for (LocalDate date = firstDayOfMonth; !date.isAfter(today); date = date.plusDays(1)) {
+            int idx = (int) java.time.temporal.ChronoUnit.DAYS.between(startOfYear, date);
+            if (idx >= 0 && idx < records.size()) {
+                Map<String, Object> rec = records.get(idx);
+                int c = (int) rec.get("count");
+                if (c > 0) {
+                    monthlyActiveDays++;
+                    monthlyTotalCount += c;
+                }
+            }
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("year", targetYear);
+        result.put("totalCount", totalCount);
+        result.put("activeDays", activeDays);
+        result.put("longestStreak", longestStreak);
+        result.put("currentStreak", currentStreak);
+        result.put("monthlyActiveDays", monthlyActiveDays);
+        result.put("monthlyTotalCount", monthlyTotalCount);
+        result.put("records", records);
+
+        return Result.success(result);
     }
 
     @GetMapping("/me/stats")

@@ -40,6 +40,17 @@ const actionText = (progress) => {
   return '继续学习'
 }
 
+const getCover = (course) => {
+  if (course.cover) return course.cover
+  const defaultCovers = [
+    'https://api.dicebear.com/7.x/shapes/svg?seed=algo&backgroundColor=4a6f9d',
+    'https://api.dicebear.com/7.x/shapes/svg?seed=ds&backgroundColor=6672cb',
+    'https://api.dicebear.com/7.x/shapes/svg?seed=contest&backgroundColor=f59e0b',
+    'https://api.dicebear.com/7.x/shapes/svg?seed=dp&backgroundColor=10b981'
+  ]
+  return defaultCovers[course.id % defaultCovers.length]
+}
+
 const fetchCourses = async () => {
   courses.value = [
     {
@@ -54,6 +65,7 @@ const fetchCourses = async () => {
       progress: 35,
       tags: ['复杂度', '双指针', '二分'],
       cover: '',
+      bvid: 'BV19e4y1q7JJ',
       rating: 4.8,
       students: 1234,
       direction: '适合算法入门，建立正确的思维方式',
@@ -75,6 +87,7 @@ const fetchCourses = async () => {
       progress: 62,
       tags: ['链表', '哈希', '并查集'],
       cover: '',
+      bvid: 'BV1Zs411g7LG',
       rating: 4.9,
       students: 892,
       direction: '面试高频考点，数据结构实战应用',
@@ -96,6 +109,7 @@ const fetchCourses = async () => {
       progress: 12,
       tags: ['贪心', '最短路', '拓扑排序'],
       cover: '',
+      bvid: 'BV1xx411c7mD',
       rating: 4.7,
       students: 456,
       direction: '竞赛必备，冲刺省选/国赛',
@@ -117,6 +131,7 @@ const fetchCourses = async () => {
       progress: 0,
       tags: ['记忆化', '状态转移', '背包'],
       cover: '',
+      bvid: 'BV1xb411e7ww',
       rating: 4.6,
       students: 678,
       direction: '攻克DP难关，掌握状态设计技巧',
@@ -186,8 +201,8 @@ defineExpose({
   updateRecommendations: (data) => { aiRecommendations.value = data },
 })
 
-onMounted(() => {
-  fetchCourses()
+onMounted(async () => {
+  await fetchCourses()
   fetchAIRecommendations()
 })
 </script>
@@ -253,7 +268,8 @@ onMounted(() => {
       <div class="course-grid">
         <div v-for="course in filteredCourses" :key="course.id" class="course-card" @click="openCourseDetail(course)">
           <div class="course-cover">
-            <div class="cover-placeholder">
+            <img v-if="getCover(course)" :src="getCover(course)" class="cover-image" alt="课程封面" />
+            <div v-else class="cover-placeholder">
               <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
                 <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
                 <line x1="8" y1="21" x2="16" y2="21"/>
@@ -604,6 +620,13 @@ onMounted(() => {
   position: relative;
   height: 160px;
   background: linear-gradient(135deg, #f0f4f8 0%, #e8ecf4 100%);
+  overflow: hidden;
+}
+
+.cover-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .cover-placeholder {

@@ -481,15 +481,14 @@ async function uploadFile(file) {
       result = await uploadWithApi(file)
     }
 
-    // 处理返回的头像 URL
-    let avatarUrl = result.avatarUrl || result.url
-    if (avatarUrl && avatarUrl.startsWith('/')) {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
-      avatarUrl = `${baseUrl}${avatarUrl}`
+    // 处理返回的头像 URL（原始路径）
+    const avatarPath = result.avatarUrl || result.url
+    if (!avatarPath) {
+      throw new Error('服务器未返回头像路径')
     }
 
-    // ★★★ 关键：通过 store 更新头像，全站同步 ★★★
-    await userStore.updateAvatar(avatarUrl)
+    // ★★★ 关键：通过 store 更新头像，只存原始路径 ★★★
+    userStore.updateAvatar(avatarPath)
 
     // 清除本地预览（现在用服务器返回的URL了）
     if (localPreview.value) {
@@ -497,8 +496,8 @@ async function uploadFile(file) {
       localPreview.value = ''
     }
 
-    emit('update:modelValue', avatarUrl)
-    emit('upload-success', { url: avatarUrl, fileName: file.name })
+    emit('update:modelValue', avatarPath)
+    emit('upload-success', { url: avatarPath, fileName: file.name })
     ElMessage.success('头像上传成功')
 
   } catch (error) {

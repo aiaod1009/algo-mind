@@ -13,92 +13,10 @@ const levelStore = useLevelStore()
 const activeRepoTab = ref('created') // 'created' | 'solved'
 
 // 我的题目（用户自己创建的题目）
-const myProblems = ref([
-  {
-    id: 1,
-    name: '自定义动态规划题',
-    description: '我创建的DP练习题 - 爬楼梯变种',
-    difficulty: '中等',
-    difficultyColor: '#d4a373',
-    solvedCount: 56,
-    createdAt: '2026-03-15',
-    isPublic: true
-  },
-  {
-    id: 2,
-    name: '二叉树遍历挑战',
-    description: '非递归实现前中后序遍历',
-    difficulty: '困难',
-    difficultyColor: '#e74c3c',
-    solvedCount: 23,
-    createdAt: '2026-03-10',
-    isPublic: true
-  },
-  {
-    id: 3,
-    name: '图论最短路径',
-    description: 'Dijkstra算法实现与应用',
-    difficulty: '困难',
-    difficultyColor: '#e74c3c',
-    solvedCount: 18,
-    createdAt: '2026-02-28',
-    isPublic: false
-  },
-  {
-    id: 4,
-    name: '数组去重技巧',
-    description: '多种方法实现数组去重',
-    difficulty: '简单',
-    difficultyColor: '#27ae60',
-    solvedCount: 128,
-    createdAt: '2026-02-20',
-    isPublic: true
-  }
-])
+const myProblems = ref([])
 
 // 做过的题目（用户完成的别人的题目）
-const solvedProblems = ref([
-  {
-    id: 101,
-    name: '两数之和',
-    description: 'LeetCode 经典入门题',
-    difficulty: '简单',
-    difficultyColor: '#27ae60',
-    author: '官方题库',
-    solvedAt: '2026-04-01',
-    attempts: 1
-  },
-  {
-    id: 102,
-    name: '三数之和',
-    description: '双指针技巧应用',
-    difficulty: '中等',
-    difficultyColor: '#d4a373',
-    author: '官方题库',
-    solvedAt: '2026-04-01',
-    attempts: 2
-  },
-  {
-    id: 103,
-    name: '最长回文子串',
-    description: '中心扩展法',
-    difficulty: '中等',
-    difficultyColor: '#d4a373',
-    author: '算法达人',
-    solvedAt: '2026-03-30',
-    attempts: 3
-  },
-  {
-    id: 104,
-    name: '最长递增子序列',
-    description: '动态规划 + 二分查找',
-    difficulty: '中等',
-    difficultyColor: '#d4a373',
-    author: '竞赛专区',
-    solvedAt: '2026-03-28',
-    attempts: 2
-  }
-])
+const solvedProblems = ref([])
 
 // 做题统计数据（从后端获取）
 const problemStats = ref({
@@ -110,117 +28,242 @@ const problemStats = ref({
   monthlySolved: 0
 })
 
-// 做题热力图数据
-const contributionYear = ref(2026)
+// 数据加载状态
+const isLoadingHeatmap = ref(false)
+const isLoadingStats = ref(false)
+const isLoadingActivities = ref(false)
+const heatmapError = ref('')
+const statsError = ref('')
+const activitiesError = ref('')
+
+// ==================== 热力图相关：修复版开始 ====================
+
+// 默认当前年
+const contributionYear = ref(new Date().getFullYear())
+
+// 后端原始数据
 const contributionData = ref([])
 
-// 从后端获取做题热力图数据
+// 热力图统计
+const heatmapStats = ref({
+  year: new Date().getFullYear(),
+  totalCount: 0,
+  activeDays: 0,
+  longestStreak: 0,
+  currentStreak: 0,
+  monthlyActiveDays: 0,
+  monthlyTotalCount: 0
+})
+
+// 获取热力图数据
 const fetchProblemHeatmap = async (year) => {
+  isLoadingHeatmap.value = true
+  heatmapError.value = ''
+
   try {
     const response = await api.getUserProblemHeatmap(year)
-    if (response.success) {
-      contributionData.value = response.data.map(item => ({
+
+    if (response.data?.code === 0) {
+      const data = response.data.data || {}
+
+      heatmapStats.value = {
+        year: data.year || year,
+        totalCount: data.totalCount || 0,
+        activeDays: data.activeDays || 0,
+        longestStreak: data.longestStreak || 0,
+        currentStreak: data.currentStreak || 0,
+        monthlyActiveDays: data.monthlyActiveDays || 0,
+        monthlyTotalCount: data.monthlyTotalCount || 0
+      }
+
+      contributionData.value = (data.records || []).map(item => ({
         date: item.date,
-        level: item.count === 0 ? 0 : item.count <= 2 ? 1 : item.count <= 5 ? 2 : item.count <= 8 ? 3 : 4,
-        count: item.count
+        count: Number(item.count || 0),
+        level: Number(item.level || 0)
       }))
+    } else {
+      heatmapError.value = response.data?.message || '获取做题数据失败'
+      contributionData.value = []
     }
   } catch (error) {
     console.error('获取做题数据失败:', error)
-    // 使用模拟数据
-    generateMockContributionData()
+    heatmapError.value = '网络错误，无法获取做题数据'
+    contributionData.value = []
+  } finally {
+    isLoadingHeatmap.value = false
   }
 }
 
-// 生成模拟做题数据 (60周 = 420天)
-const generateMockContributionData = () => {
-  const data = []
-  const startDate = new Date(contributionYear.value, 0, 1)
-  const totalDays = 60 * 7 // 60周
-  
-  for (let i = 0; i < totalDays; i++) {
-    const date = new Date(startDate)
-    date.setDate(startDate.getDate() + i)
-    
-    const isWeekend = date.getDay() === 0 || date.getDay() === 6
-    const baseLevel = isWeekend ? 0.4 : 0.2
-    const random = Math.random()
-    
-    let level = 0
-    if (random < baseLevel) level = 1
-    else if (random < baseLevel + 0.2) level = 2
-    else if (random < baseLevel + 0.35) level = 3
-    else if (random < baseLevel + 0.45) level = 4
-    
-    data.push({
-      date: date.toISOString().split('T')[0],
-      level: level,
-      count: level === 0 ? 0 : Math.floor(Math.random() * 10) + 1
-    })
+// 总做题数
+const totalContributions = computed(() => {
+  if (heatmapStats.value.totalCount) return heatmapStats.value.totalCount
+  return contributionData.value.reduce((sum, day) => sum + (day.count || 0), 0)
+})
+
+// tooltip
+const tooltipData = ref({
+  show: false,
+  x: 0,
+  y: 0,
+  date: '',
+  count: 0,
+  level: 0
+})
+
+const showTooltip = (event, data) => {
+  if (!data) return
+
+  const offsetX = 12
+  const offsetY = 12
+  let x = event.clientX + offsetX
+  let y = event.clientY - offsetY
+
+  // 简单防止超出右边界
+  const tooltipWidth = 160
+  if (x + tooltipWidth > window.innerWidth) {
+    x = event.clientX - tooltipWidth - 12
   }
-  contributionData.value = data
+
+  // 简单防止超出顶部
+  if (y < 10) {
+    y = event.clientY + 20
+  }
+
+  tooltipData.value = {
+    show: true,
+    x,
+    y,
+    date: data.date,
+    count: data.count,
+    level: data.level
+  }
 }
+
+const hideTooltip = () => {
+  tooltipData.value.show = false
+}
+
+const getLevelText = (level) => {
+  const texts = ['无记录', '轻度活跃', '中度活跃', '高度活跃', '爆发日']
+  return texts[level] || '无记录'
+}
+
+// 月份名称
+const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+// 周标签（周一开始）
+const weekDaysShort = ['Mon', '', 'Wed', '', 'Fri', '', '']
+
+// 把后端数组转成 date => record 的映射
+const contributionMap = computed(() => {
+  const map = new Map()
+  contributionData.value.forEach(item => {
+    map.set(item.date, item)
+  })
+  return map
+})
+
+// 生成热力图网格：每列一周，每行一天（周一到周日）
+const heatmapGrid = computed(() => {
+  const year = contributionYear.value
+  const firstDay = new Date(year, 0, 1)
+  const lastDay = new Date(year, 11, 31)
+
+  // JS: 周日=0, 周一=1 ... 周六=6
+  // 转换后：周一=0, 周二=1 ... 周日=6
+  const firstWeekday = (firstDay.getDay() + 6) % 7
+
+  const cells = []
+
+  // 补齐年初空白格
+  for (let i = 0; i < firstWeekday; i++) {
+    cells.push(null)
+  }
+
+  // 填充全年日期
+  const current = new Date(year, 0, 1)
+  while (current <= lastDay) {
+    const yyyy = current.getFullYear()
+    const mm = String(current.getMonth() + 1).padStart(2, '0')
+    const dd = String(current.getDate()).padStart(2, '0')
+    const dateStr = `${yyyy}-${mm}-${dd}`
+
+    cells.push(
+      contributionMap.value.get(dateStr) || {
+        date: dateStr,
+        count: 0,
+        level: 0
+      }
+    )
+
+    current.setDate(current.getDate() + 1)
+  }
+
+  // 补齐年末空白格，凑满整周
+  while (cells.length % 7 !== 0) {
+    cells.push(null)
+  }
+
+  // 切成每周一列
+  const weeks = []
+  for (let i = 0; i < cells.length; i += 7) {
+    weeks.push(cells.slice(i, i + 7))
+  }
+
+  return weeks
+})
+
+// 月份标签位置
+const monthPositions = computed(() => {
+  const positions = []
+  let lastMonth = -1
+
+  heatmapGrid.value.forEach((week, weekIndex) => {
+    const firstValidCell = week.find(cell => cell !== null)
+    if (!firstValidCell) return
+
+    const [year, month] = firstValidCell.date.split('-').map(Number)
+    if (year !== contributionYear.value) return
+
+    const monthIndex = month - 1
+    if (monthIndex !== lastMonth) {
+      lastMonth = monthIndex
+      positions.push({
+        month: months[monthIndex],
+        weekIndex
+      })
+    }
+  })
+
+  return positions
+})
+
+const changeYear = (year) => {
+  if (contributionYear.value === year) return
+  contributionYear.value = year
+  fetchProblemHeatmap(year)
+}
+
+// ==================== 热力图相关：修复版结束 ====================
 
 // 从后端获取统计数据
 const fetchProblemStats = async () => {
+  isLoadingStats.value = true
+  statsError.value = ''
   try {
     const response = await api.getUserProblemStats()
-    if (response.success) {
-      problemStats.value = response.data
+    if (response.data?.code === 0) {
+      problemStats.value = response.data.data
+    } else {
+      statsError.value = '获取统计数据失败'
     }
   } catch (error) {
     console.error('获取统计数据失败:', error)
-    // 使用本地计算的数据
-    problemStats.value = {
-      totalSolved: solvedProblems.value.length,
-      totalCreated: myProblems.value.length,
-      streakDays: 12,
-      todaySolved: 2,
-      weeklySolved: 15,
-      monthlySolved: 58
-    }
+    statsError.value = '网络错误，无法获取统计数据'
+  } finally {
+    isLoadingStats.value = false
   }
 }
-
-const totalContributions = computed(() => {
-  return contributionData.value.reduce((sum, day) => sum + day.count, 0)
-})
-
-const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const weekDaysShort = ['', 'Mon', '', 'Wed', '', 'Fri', '']
-
-// 获取月份标签位置（只显示当前年份的月份）
-const monthPositions = computed(() => {
-  const positions = []
-  const weeksToShow = 60
-  const daysPerWeek = 7
-  
-  const startDate = new Date(contributionYear.value, 0, 1)
-  let lastMonth = -1
-  
-  for (let weekIndex = 0; weekIndex < weeksToShow; weekIndex++) {
-    const dayIndex = weekIndex * daysPerWeek
-    const date = new Date(startDate)
-    date.setDate(startDate.getDate() + dayIndex)
-    
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    
-    // 只显示当前年份的月份，跳过其他年份
-    if (year !== contributionYear.value) continue
-    
-    // 只在月份变化时添加
-    if (month !== lastMonth) {
-      lastMonth = month
-      positions.push({
-        month: months[month],
-        weekIndex: weekIndex
-      })
-    }
-  }
-  
-  return positions
-})
 
 const solvedLevels = computed(() => {
   if (!levelStore.levels.length) return 0
@@ -242,26 +285,27 @@ const recentActivities = ref([])
 
 // 从后端获取活动数据
 const fetchActivities = async () => {
+  isLoadingActivities.value = true
+  activitiesError.value = ''
   try {
     const response = await api.getUserActivities()
-    if (response.success) {
-      recentActivities.value = response.data.map(activity => ({
+    if (response.data?.code === 0) {
+      const list = response.data.data?.list || []
+      recentActivities.value = list.map(activity => ({
         type: activity.type,
-        title: activity.title,
+        title: activity.description,
         time: formatTime(activity.createdAt),
         icon: getActivityIcon(activity.type)
       }))
+    } else {
+      activitiesError.value = '获取活动数据失败'
     }
   } catch (error) {
     console.error('获取活动数据失败:', error)
-    // 使用模拟数据
-    recentActivities.value = [
-      { type: 'solve', title: '完成了 两数之和', time: '2小时前', icon: '✅' },
-      { type: 'solve', title: '完成了 三数之和', time: '5小时前', icon: '✅' },
-      { type: 'create', title: '创建了题目 动态规划进阶', time: '昨天', icon: '📝' },
-      { type: 'star', title: '收藏了 动态规划专题', time: '昨天', icon: '⭐' },
-      { type: 'solve', title: '完成了 最长回文子串', time: '3天前', icon: '✅' },
-    ]
+    activitiesError.value = '网络错误，无法获取活动数据'
+    recentActivities.value = []
+  } finally {
+    isLoadingActivities.value = false
   }
 }
 
@@ -347,7 +391,6 @@ const selectMood = (mood) => {
 
 // 切换忙碌状态
 const toggleBusy = () => {
-  userStatus.value.isBusy = !userStatus.value.isBusy
   if (userStatus.value.isBusy) {
     const duration = selectedBusyDuration.value === 'custom' 
       ? customBusyMinutes.value 
@@ -424,9 +467,8 @@ const handleSave = async () => {
           let avatarUrl = uploadResponse.data.data.avatarUrl
 
           // 如果是相对路径，拼接成完整URL
-          if (avatarUrl && avatarUrl.startsWith('/')) {
-            const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
-            avatarUrl = `${baseUrl}${avatarUrl}`
+          if (avatarUrl && avatarUrl.startsWith('/') && !avatarUrl.startsWith('/api')) {
+            avatarUrl = '/api' + avatarUrl
           }
 
           finalAvatar = avatarUrl
@@ -471,11 +513,6 @@ const handleSave = async () => {
   }
 }
 
-const changeYear = (year) => {
-  contributionYear.value = year
-  fetchProblemHeatmap(year)
-}
-
 const handleAvatarClick = () => {
   // 打开编辑弹窗前，重新加载最新的用户数据
   editForm.value = {
@@ -508,10 +545,16 @@ const handleAvatarError = (event) => {
   event.target.src = 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'
 }
 
-// 头像上传相关 - 使用 AvatarUpload 组件
+// 头像上传成功 - 只存原始路径
 const handleAvatarUploadSuccess = (result) => {
-  // 更新编辑表单中的头像
-  editForm.value.avatar = result.url
+  const avatarPath = result.url
+  if (!avatarPath) {
+    ElMessage.error('头像路径无效')
+    return
+  }
+
+  editForm.value.avatar = avatarPath
+  userStore.updateAvatar(avatarPath)
   ElMessage.success('头像上传成功')
 }
 
@@ -519,18 +562,26 @@ const handleAvatarUploadError = (error) => {
   console.error('头像上传失败:', error)
 }
 
+const handleUploadClick = () => {
+  showEditModal.value = false
+  showDetailEdit.value = true
+}
+
 // 加载更多活动
 const loadMoreActivities = async () => {
   try {
     const response = await api.getUserActivities({ page: 2, limit: 10 })
-    if (response.success) {
-      const newActivities = response.data.map(activity => ({
+    if (response.data?.code === 0) {
+      const list = response.data.data?.list || []
+      const newActivities = list.map(activity => ({
         type: activity.type,
-        title: activity.title,
+        title: activity.description,
         time: formatTime(activity.createdAt),
         icon: getActivityIcon(activity.type)
       }))
       recentActivities.value.push(...newActivities)
+    } else {
+      ElMessage.info('没有更多活动了')
     }
   } catch (error) {
     console.error('加载更多活动失败:', error)
@@ -545,6 +596,7 @@ onMounted(() => {
   fetchProblemHeatmap(contributionYear.value)
   fetchProblemStats()
   fetchActivities()
+  checkBusyStatus()
 })
 </script>
 
@@ -715,39 +767,97 @@ onMounted(() => {
               <span class="stat-badge">本月 {{ problemStats.monthlySolved }} 题</span>
             </div>
           </div>
-          
-          <div class="contributions-content">
+
+          <div class="streak-cards">
+            <div class="streak-card">
+              <div class="streak-icon">🔥</div>
+              <div class="streak-info">
+                <span class="streak-value">{{ heatmapStats.currentStreak }}</span>
+                <span class="streak-label">连续打卡天</span>
+              </div>
+            </div>
+            <div class="streak-card">
+              <div class="streak-icon">🏆</div>
+              <div class="streak-info">
+                <span class="streak-value">{{ heatmapStats.longestStreak }}</span>
+                <span class="streak-label">最长连胜天</span>
+              </div>
+            </div>
+            <div class="streak-card">
+              <div class="streak-icon">📅</div>
+              <div class="streak-info">
+                <span class="streak-value">{{ heatmapStats.activeDays }}</span>
+                <span class="streak-label">年度活跃天</span>
+              </div>
+            </div>
+            <div class="streak-card">
+              <div class="streak-icon">📝</div>
+              <div class="streak-info">
+                <span class="streak-value">{{ heatmapStats.totalCount }}</span>
+                <span class="streak-label">累计做题道</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="isLoadingHeatmap" class="loading-state">
+            <span class="loading-spinner"></span>
+            <span>加载中...</span>
+          </div>
+
+          <div v-else-if="heatmapError" class="error-state">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span>{{ heatmapError }}</span>
+          </div>
+
+          <div v-else class="contributions-content">
             <div class="contributions-calendar">
               <!-- 月份标签 -->
               <div class="months-row">
-                <div v-for="(pos, index) in monthPositions" :key="index" 
-                     class="month-label" 
-                     :style="{ left: (pos.weekIndex * 14 + 30) + 'px' }">
+                <div
+                  v-for="(pos, index) in monthPositions"
+                  :key="index"
+                  class="month-label"
+                  :style="{ left: `calc(${pos.weekIndex} * (10px + 3px) + 28px)` }"
+                >
                   {{ pos.month }}
                 </div>
               </div>
-              
+
               <div class="calendar-body">
                 <!-- 星期标签 -->
                 <div class="weekdays-col">
-                  <div v-for="(day, index) in weekDaysShort" :key="index" class="weekday-label">
+                  <div
+                    v-for="(day, index) in weekDaysShort"
+                    :key="index"
+                    class="weekday-label"
+                  >
                     {{ day }}
                   </div>
                 </div>
-                
-                <!-- 做题格子 (60周) -->
+
+                <!-- 热力图网格 -->
                 <div class="contributions-grid">
-                  <div v-for="week in 60" :key="week" class="week-column">
-                    <div 
-                      v-for="day in 7" :key="day"
+                  <div
+                    v-for="(week, weekIndex) in heatmapGrid"
+                    :key="weekIndex"
+                    class="week-column"
+                  >
+                    <div
+                      v-for="(cell, dayIndex) in week"
+                      :key="dayIndex"
                       class="contribution-cell"
-                      :class="'level-' + (contributionData[(week-1)*7 + (day-1)]?.level || 0)"
-                      :title="contributionData[(week-1)*7 + (day-1)]?.date + ': 完成 ' + (contributionData[(week-1)*7 + (day-1)]?.count || 0) + ' 题'"
+                      :class="cell ? `level-${cell.level}` : 'is-empty'"
+                      @mouseenter="cell && showTooltip($event, cell)"
+                      @mouseleave="hideTooltip"
                     ></div>
                   </div>
                 </div>
               </div>
-              
+
               <!-- 图例 -->
               <div class="contributions-legend">
                 <span class="legend-label">较少</span>
@@ -761,11 +871,11 @@ onMounted(() => {
                 <span class="legend-label">较多</span>
               </div>
             </div>
-            
+
             <!-- 年份选择器 -->
             <div class="year-selector">
-              <button 
-                v-for="year in [2026, 2025, 2024, 2023, 2022]" 
+              <button
+                v-for="year in [new Date().getFullYear(), new Date().getFullYear() - 1, new Date().getFullYear() - 2, new Date().getFullYear() - 3, new Date().getFullYear() - 4]"
                 :key="year"
                 class="year-btn"
                 :class="{ active: contributionYear === year }"
@@ -780,7 +890,19 @@ onMounted(() => {
         <!-- 活动 -->
         <section class="activity-section">
           <h3>活动</h3>
-          <div class="activity-timeline">
+          <div v-if="isLoadingActivities" class="loading-state">
+            <span class="loading-spinner"></span>
+            <span>加载中...</span>
+          </div>
+          <div v-else-if="activitiesError" class="error-state">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span>{{ activitiesError }}</span>
+          </div>
+          <div v-else class="activity-timeline">
             <div class="activity-date">
               <span>{{ new Date().getFullYear() }}年 {{ new Date().getMonth() + 1 }}月{{ new Date().getDate() }}日</span>
             </div>
@@ -883,17 +1005,18 @@ onMounted(() => {
                 <label class="floating-label">
                   <span class="label-icon">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="2" y1="12" x2="22" y2="12"/>
+                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
                     </svg>
                   </span>
-                  头像链接
+                  个人网站
                 </label>
                 <input 
-                  v-model="editForm.avatar" 
+                  v-model="editForm.website" 
                   type="text" 
                   class="form-input glass-input" 
-                  placeholder="https://..."
+                  placeholder="yourwebsite.com"
                 />
               </div>
             </div>
@@ -975,11 +1098,6 @@ onMounted(() => {
                   <label>个人网站</label>
                   <input v-model="editForm.website" type="text" class="form-input" placeholder="yourwebsite.com" />
                 </div>
-              </div>
-              
-              <div class="form-group">
-                <label>头像链接</label>
-                <input v-model="editForm.avatar" type="text" class="form-input" placeholder="https://..." />
               </div>
             </div>
           </div>
@@ -1086,10 +1204,154 @@ onMounted(() => {
         </div>
       </div>
     </Transition>
+
+    <Teleport to="body">
+      <Transition name="tooltip-fade">
+        <div v-if="tooltipData.show" class="heatmap-tooltip" :style="{ left: tooltipData.x + 'px', top: tooltipData.y + 'px' }">
+          <div class="tooltip-date">{{ tooltipData.date }}</div>
+          <div class="tooltip-content">
+            <span class="tooltip-count">做题 {{ tooltipData.count }} 道</span>
+            <span class="tooltip-level" :class="'level-' + tooltipData.level">{{ getLevelText(tooltipData.level) }}</span>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <style scoped>
+.streak-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.streak-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  transition: all 0.2s;
+}
+
+.streak-card:hover {
+  border-color: #4a90d9;
+  box-shadow: 0 4px 12px rgba(74, 144, 217, 0.1);
+  transform: translateY(-2px);
+}
+
+.streak-icon {
+  font-size: 28px;
+}
+
+.streak-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.streak-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.streak-label {
+  font-size: 12px;
+  color: #666;
+}
+
+.heatmap-tooltip {
+  position: fixed;
+  z-index: 9999;
+  padding: 10px 14px;
+  background: #1a1a1a;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 12px;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  max-width: 180px;
+}
+
+.tooltip-date {
+  font-weight: 600;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.tooltip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tooltip-count {
+  color: #9be2a1;
+}
+
+.tooltip-level {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tooltip-level.level-1 { color: #9be2a1; }
+.tooltip-level.level-2 { color: #40c463; }
+.tooltip-level.level-3 { color: #30a14e; }
+.tooltip-level.level-4 { color: #216e39; background: rgba(33, 110, 57, 0.3); }
+
+.tooltip-fade-enter-active,
+.tooltip-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.tooltip-fade-enter-from,
+.tooltip-fade-leave-to {
+  opacity: 0;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: #666;
+  font-size: 14px;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #e0e0e0;
+  border-top-color: #4a90d9;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: #d46b08;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
 .github-profile-page {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', Helvetica, Arial, sans-serif;
   background: #ffffff;
@@ -1514,6 +1776,8 @@ onMounted(() => {
   flex-direction: column;
   gap: 3px;
   padding-top: 2px;
+  width: 24px;
+  flex-shrink: 0;
 }
 
 .weekday-label {
@@ -1553,6 +1817,16 @@ onMounted(() => {
 .contribution-cell.level-2 { background: #40c463; }
 .contribution-cell.level-3 { background: #30a14e; }
 .contribution-cell.level-4 { background: #216e39; }
+
+.contribution-cell.is-empty {
+  background: transparent;
+  cursor: default;
+}
+
+.contribution-cell.is-empty:hover {
+  outline: none;
+  transform: none;
+}
 
 .contributions-legend {
   display: flex;

@@ -139,7 +139,7 @@ const handlePublish = async () => {
 
   publishing.value = true
   try {
-    await forumStore.addPost({
+    const result = await forumStore.addPost({
       author: userStore.userInfo?.name || '同学',
       authorLevel: resolveUserLevel(),
       avatar: userStore.userInfo?.avatar || '',
@@ -148,12 +148,21 @@ const handlePublish = async () => {
       quote: postForm.quote.trim(),
       tag: postForm.tag.trim() || '# 学习交流',
     })
-    postForm.topic = ''
-    postForm.content = ''
-    postForm.quote = ''
-    tagInput.value = ''
-    isComposerExpanded.value = false
-    ElMessage.success('发布成功')
+    
+    if (result.success) {
+      postForm.topic = ''
+      postForm.content = ''
+      postForm.quote = ''
+      tagInput.value = ''
+      isComposerExpanded.value = false
+      if (result.synced) {
+        ElMessage.success('发布成功')
+      } else {
+        ElMessage.warning('已保存到本地，服务器同步失败')
+      }
+    } else {
+      ElMessage.error(result.error || '发布失败，请稍后重试')
+    }
   } catch (error) {
     ElMessage.error('发布失败，请稍后重试')
   } finally {
@@ -564,6 +573,14 @@ onUnmounted(() => {
 
     <div class="forum-layout">
       <section class="feed-list">
+        <div v-if="forumStore.isFromCache" class="cache-warning">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span>当前展示的是本地缓存数据，服务器连接失败</span>
+        </div>
         <el-card v-for="item in paginatedPosts" :key="item.id" class="feed-card"
           :class="{ 'is-highlighted': highlightedPost === item.id }" shadow="never" @click="goToPost(item.id)">
           <div class="head-row">
@@ -676,6 +693,19 @@ onUnmounted(() => {
   padding-bottom: 20px;
   display: grid;
   gap: 8px;
+}
+
+.cache-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 8px;
+  color: #d46b08;
+  font-size: 13px;
+  margin-bottom: 12px;
 }
 
 .composer-wrapper {

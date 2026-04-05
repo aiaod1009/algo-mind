@@ -144,4 +144,17 @@ public class ForumPostController {
 
         return Result.success(responseData);
     }
+
+    /**
+     * 删除帖子
+     * DELETE /api/forum-posts/{id}
+     */
+    @DeleteMapping("/forum-posts/{id}")
+    public Result<Void> deletePost(@PathVariable Long id) {
+        if (!forumPostRepository.existsById(id)) {
+            return Result.fail(40401, "帖子不存在");
+        }
+        forumPostRepository.deleteById(id);
+        return Result.success(null);
+    }
 }

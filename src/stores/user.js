@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '../api'
+import { getAvatarUrl } from '../utils/file'
 
 const LEADERBOARD_KEY = 'leaderboard'
 const TRACK_KEY = 'learning-track'
@@ -36,9 +37,9 @@ export const useUserStore = defineStore('user', () => {
   const selectedTrack = ref(localStorage.getItem(TRACK_KEY) || 'algo')
 
   // ============ 计算属性 ============
-  // 头像计算属性：所有组件统一从这里读取
+  // 头像计算属性：返回带时间戳的完整 URL
   const avatar = computed(() => {
-    return userInfo.value?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'
+    return getAvatarUrl(userInfo.value?.avatar)
   })
 
   const isLogin = computed(() => !!userInfo.value)
@@ -84,12 +85,12 @@ export const useUserStore = defineStore('user', () => {
     const res = await api.post('/login', { username, password })
     if (res.data?.code === 0) {
       let avatarUrl = res.data.data.user?.avatar || ''
-      if (avatarUrl && avatarUrl.startsWith('/')) {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
-        avatarUrl = `${baseUrl}${avatarUrl}`
+      if (avatarUrl && avatarUrl.startsWith('/') && !avatarUrl.startsWith('/api')) {
+        avatarUrl = '/api' + avatarUrl
       }
       const nextUser = {
         ...res.data.data.user,
+        token: res.data.data.token,
         targetTrack: res.data.data.user?.targetTrack || selectedTrack.value,
         weeklyGoal: Number(res.data.data.user?.weeklyGoal || 10),
         bio: res.data.data.user?.bio || '保持节奏，长期主义。',
@@ -155,24 +156,14 @@ export const useUserStore = defineStore('user', () => {
   }
 
   /**
-   * 更新头像 —— 关键方法
-   * 所有用到头像的组件都读 avatar 计算属性
-   * 这里一改，全站所有头像自动响应式更新
+   * 更新头像 —— 只保存原始路径
+   * @param {string} avatarPath - 后端返回的原始相对路径，如 /uploads/avatars/xxx.jpg
    */
-  const updateAvatar = async (newAvatarUrl) => {
+  const updateAvatar = (avatarPath) => {
     if (!userInfo.value) return
 
-    const previousAvatar = userInfo.value.avatar
-    userInfo.value.avatar = newAvatarUrl
+    userInfo.value.avatar = avatarPath
     localStorage.setItem('user', JSON.stringify(userInfo.value))
-
-    try {
-      await api.put('/users/me', { avatar: newAvatarUrl })
-    } catch (e) {
-      userInfo.value.avatar = previousAvatar
-      localStorage.setItem('user', JSON.stringify(userInfo.value))
-      throw e
-    }
   }
 
   return {
