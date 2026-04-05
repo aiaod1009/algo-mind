@@ -1,16 +1,28 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '../api'
-import { getAvatarUrl } from '../utils/file'
+import { getAvatarUrl, getFullFileUrl } from '../utils/file'
 
 const LEADERBOARD_KEY = 'leaderboard'
 const TRACK_KEY = 'learning-track'
+const DEFAULT_NAME = 'Anonymous User'
+const DEFAULT_BIO = 'Keep a steady pace.'
+
+const normalizeUserAvatar = (avatar) => getFullFileUrl(avatar || '')
+
+const normalizeUserPayload = (user) => {
+  if (!user) return null
+  return {
+    ...user,
+    avatar: normalizeUserAvatar(user.avatar),
+  }
+}
 
 const readLocalUser = () => {
   const userRaw = localStorage.getItem('user')
   if (!userRaw) return null
   try {
-    return JSON.parse(userRaw)
+    return normalizeUserPayload(JSON.parse(userRaw))
   } catch (error) {
     return null
   }
@@ -36,12 +48,7 @@ export const useUserStore = defineStore('user', () => {
   const points = ref(Number(localStorage.getItem('points') || 0))
   const selectedTrack = ref(localStorage.getItem(TRACK_KEY) || 'algo')
 
-  // ============ 计算属性 ============
-  // 头像计算属性：返回带时间戳的完整 URL
-  const avatar = computed(() => {
-    return getAvatarUrl(userInfo.value?.avatar)
-  })
-
+  const avatar = computed(() => getAvatarUrl(userInfo.value?.avatar))
   const isLogin = computed(() => !!userInfo.value)
 
   const syncLeaderboard = (payloadUser, payloadPoints) => {
@@ -50,7 +57,7 @@ export const useUserStore = defineStore('user', () => {
     const currentIndex = list.findIndex((item) => Number(item.id) === Number(payloadUser.id))
     const nextItem = {
       id: payloadUser.id,
-      name: payloadUser.name || '匿名用户',
+      name: payloadUser.name || DEFAULT_NAME,
       points: Number(payloadPoints || 0),
       targetTrack: payloadUser.targetTrack || selectedTrack.value,
       updatedAt: Date.now(),
@@ -64,13 +71,14 @@ export const useUserStore = defineStore('user', () => {
   }
 
   const syncUser = (user, score) => {
+    const normalizedUser = normalizeUserPayload(user) || {}
     const mergedUser = {
-      ...user,
-      targetTrack: user.targetTrack || selectedTrack.value,
-      weeklyGoal: Number(user.weeklyGoal || 10),
-      bio: user.bio || '保持节奏，长期主义。',
-      gender: user.gender || 'unknown',
-      avatar: user.avatar || '',
+      ...normalizedUser,
+      targetTrack: normalizedUser.targetTrack || selectedTrack.value,
+      weeklyGoal: Number(normalizedUser.weeklyGoal || 10),
+      bio: normalizedUser.bio || DEFAULT_BIO,
+      gender: normalizedUser.gender || 'unknown',
+      avatar: normalizedUser.avatar || '',
     }
     userInfo.value = mergedUser
     points.value = score
@@ -84,18 +92,14 @@ export const useUserStore = defineStore('user', () => {
   const login = async (username, password) => {
     const res = await api.post('/login', { username, password })
     if (res.data?.code === 0) {
-      let avatarUrl = res.data.data.user?.avatar || ''
-      if (avatarUrl && avatarUrl.startsWith('/') && !avatarUrl.startsWith('/api')) {
-        avatarUrl = '/api' + avatarUrl
-      }
       const nextUser = {
         ...res.data.data.user,
         token: res.data.data.token,
         targetTrack: res.data.data.user?.targetTrack || selectedTrack.value,
         weeklyGoal: Number(res.data.data.user?.weeklyGoal || 10),
-        bio: res.data.data.user?.bio || '保持节奏，长期主义。',
+        bio: res.data.data.user?.bio || DEFAULT_BIO,
         gender: res.data.data.user?.gender || 'unknown',
-        avatar: avatarUrl,
+        avatar: normalizeUserAvatar(res.data.data.user?.avatar),
       }
       const nextPoints = Number(res.data.data.points || 0)
       syncUser(nextUser, nextPoints)
@@ -128,9 +132,15 @@ export const useUserStore = defineStore('user', () => {
 
   const updateProfile = (payload) => {
     if (!userInfo.value) return
+
+    const nextAvatar = payload.avatar === undefined
+      ? userInfo.value.avatar
+      : normalizeUserAvatar(payload.avatar)
+
     userInfo.value = {
       ...userInfo.value,
       ...payload,
+      avatar: nextAvatar,
       weeklyGoal: Number(payload.weeklyGoal || userInfo.value.weeklyGoal || 10),
     }
     selectedTrack.value = userInfo.value.targetTrack || selectedTrack.value
@@ -155,14 +165,10 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem(TRACK_KEY)
   }
 
-  /**
-   * 更新头像 —— 只保存原始路径
-   * @param {string} avatarPath - 后端返回的原始相对路径，如 /uploads/avatars/xxx.jpg
-   */
   const updateAvatar = (avatarPath) => {
     if (!userInfo.value) return
 
-    userInfo.value.avatar = avatarPath
+    userInfo.value.avatar = normalizeUserAvatar(avatarPath)
     localStorage.setItem('user', JSON.stringify(userInfo.value))
   }
 

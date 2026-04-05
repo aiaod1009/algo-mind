@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.Result;
+import com.example.demo.auth.CurrentUserService;
 import com.example.demo.dto.ai.LearningPlanAIRequest;
 import com.example.demo.dto.ai.LearningPlanAIResponse;
 import com.example.demo.entity.LearningPlan;
@@ -31,10 +32,11 @@ public class LearningPlanController {
     private final LearningPlanRepository learningPlanRepository;
     private final ObjectMapper objectMapper;
     private final AIService aiService;
+    private final CurrentUserService currentUserService;
 
     @GetMapping
     public Result<List<Map<String, Object>>> getUserLearningPlans() {
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
         List<LearningPlan> plans = learningPlanRepository.findByUserIdOrderByCreatedAtDesc(currentUserId);
 
         List<Map<String, Object>> result = new ArrayList<>();
@@ -50,7 +52,7 @@ public class LearningPlanController {
     @GetMapping("/current")
     public Result<Map<String, Object>> getCurrentPlan(
             @RequestParam(defaultValue = "algo") String track) {
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
 
         Optional<LearningPlan> planOpt = learningPlanRepository
                 .findFirstByUserIdAndTrackOrderByCreatedAtDesc(currentUserId, track);
@@ -75,7 +77,7 @@ public class LearningPlanController {
      */
     @PostMapping("/generate")
     public Result<Map<String, Object>> generateLearningPlan(@RequestBody Map<String, Object> request) {
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
         
         // 基础参数
         String track = (String) request.getOrDefault("track", "algo");
@@ -187,7 +189,7 @@ public class LearningPlanController {
 
     @PostMapping
     public Result<Map<String, Object>> saveLearningPlan(@RequestBody Map<String, Object> request) {
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
 
         LearningPlan plan = new LearningPlan();
         plan.setUserId(currentUserId);
@@ -213,7 +215,7 @@ public class LearningPlanController {
 
     @DeleteMapping("/{id}")
     public Result<Map<String, Object>> deleteLearningPlan(@PathVariable Long id) {
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
 
         Optional<LearningPlan> planOpt = learningPlanRepository.findById(id);
         if (planOpt.isEmpty()) {

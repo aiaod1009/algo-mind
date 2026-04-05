@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.Result;
+import com.example.demo.auth.UnauthorizedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -39,6 +40,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public Result<Void> handleValidException(MethodArgumentNotValidException e) {
         return Result.fail(40001, "参数校验失败：" + e.getBindingResult().getFieldError().getDefaultMessage());
+    }
+
+    @ExceptionHandler(UnauthorizedException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public Result<Void> handleUnauthorizedException(UnauthorizedException e) {
+        return Result.fail(40101, e.getMessage());
     }
 
     @ExceptionHandler(RuntimeException.class)

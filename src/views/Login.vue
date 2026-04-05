@@ -368,10 +368,7 @@ watch([isHidingPassword, isShowingPassword], () => {
 })
 
 const normalizeLoginAccount = (value) => {
-  const account = String(value || '').trim()
-  if (!account) return ''
-  if (!account.includes('@')) return account
-  return account.split('@')[0]
+  return String(value || '').trim()
 }
 
 const handleEmailFocus = () => {

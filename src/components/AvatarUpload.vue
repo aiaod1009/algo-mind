@@ -61,6 +61,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/user'
 import api from '../api'
+import { getFullFileUrl } from '../utils/file'
 
 // ==================== 类型定义 ====================
 // 格式配置表
@@ -136,7 +137,7 @@ const progress = ref(0)
 // ==================== 计算属性 ====================
 // 显示的头像 URL：优先本地预览，其次 store，最后 props
 const displayUrl = computed(() => {
-  return localPreview.value || userStore.avatar || props.modelValue
+  return getFullFileUrl(localPreview.value || props.modelValue)
 })
 
 // 生成 accept 属性字符串
@@ -482,7 +483,7 @@ async function uploadFile(file) {
     }
 
     // 处理返回的头像 URL（原始路径）
-    const avatarPath = result.avatarUrl || result.url
+    const avatarPath = getFullFileUrl(result.avatarUrl || result.url)
     if (!avatarPath) {
       throw new Error('服务器未返回头像路径')
     }
@@ -587,6 +588,15 @@ async function uploadFile(file) {
   font-weight: 500;
   opacity: 0;
   transition: opacity 0.3s ease;
+}
+
+.overlay span {
+  display: block;
+  text-align: center;
+  white-space: nowrap;
+  margin: 0;
+  padding: 0;
+  line-height: 1;
 }
 
 .avatar-preview:hover .overlay {

@@ -17,26 +17,10 @@ public class UserService {
         this.userRepository = userRepository;
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public User getOrCreateUser(Long userId) {
-        Optional<User> existingUser = userRepository.findById(userId);
-        if (existingUser.isPresent()) {
-            return existingUser.get();
-        }
-        
-        // 创建新用户，不设置ID，让数据库自动生成
-        User newUser = new User();
-        newUser.setName("系统管理员");
-        newUser.setEmail("admin@example.com");
-        newUser.setPassword("admin");
-        newUser.setPoints(999);
-        newUser.setBio("先把基础打扎实，再冲更高难度。");
-        newUser.setGender("unknown");
-        newUser.setTargetTrack("algo");
-        newUser.setWeeklyGoal(10);
-        newUser.setCreatedAt(OffsetDateTime.now());
-        newUser.setUpdatedAt(OffsetDateTime.now());
-        return userRepository.save(newUser);
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在: " + userId));
     }
 
     @Transactional

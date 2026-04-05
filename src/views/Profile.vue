@@ -5,6 +5,7 @@ import { useUserStore } from '../stores/user'
 import { useLevelStore } from '../stores/level'
 import AvatarUpload from '../components/AvatarUpload.vue'
 import api from '../api'
+import { getFullFileUrl } from '../utils/file'
 
 const userStore = useUserStore()
 const levelStore = useLevelStore()
@@ -464,13 +465,9 @@ const handleSave = async () => {
         const uploadResponse = await api.uploadAvatarFromUrl({ url: finalAvatar })
 
         if (uploadResponse.data && uploadResponse.data.code === 0) {
-          let avatarUrl = uploadResponse.data.data.avatarUrl
+          const avatarUrl = getFullFileUrl(uploadResponse.data.data.avatarUrl)
 
           // 如果是相对路径，拼接成完整URL
-          if (avatarUrl && avatarUrl.startsWith('/') && !avatarUrl.startsWith('/api')) {
-            avatarUrl = '/api' + avatarUrl
-          }
-
           finalAvatar = avatarUrl
           ElMessage.success('头像已保存到服务器')
         } else {
@@ -547,7 +544,7 @@ const handleAvatarError = (event) => {
 
 // 头像上传成功 - 只存原始路径
 const handleAvatarUploadSuccess = (result) => {
-  const avatarPath = result.url
+  const avatarPath = getFullFileUrl(result.url)
   if (!avatarPath) {
     ElMessage.error('头像路径无效')
     return
@@ -946,7 +943,7 @@ onMounted(() => {
             <!-- 头像预览区 -->
             <div class="avatar-preview-section">
               <div class="avatar-preview-ring">
-                <img :src="editForm.avatar" alt="头像预览" :key="editForm.avatar" @error="handleAvatarError" />
+                <img :src="getFullFileUrl(editForm.avatar)" alt="头像预览" :key="editForm.avatar" @error="handleAvatarError" />
                 <div class="avatar-edit-overlay" @click="handleUploadClick">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -1062,7 +1059,7 @@ onMounted(() => {
                 v-model="editForm.avatar"
                 :size="120"
                 :max-size-m-b="5"
-                :formats="['jpg', 'png', 'gif', 'webp', 'svg']"
+                :formats="['jpg', 'png', 'gif', 'webp']"
                 @upload-success="handleAvatarUploadSuccess"
                 @upload-error="handleAvatarUploadError"
               />

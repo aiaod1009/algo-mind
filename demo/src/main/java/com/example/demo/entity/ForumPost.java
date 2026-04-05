@@ -16,6 +16,9 @@ public class ForumPost {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id")
+    private Long userId;
+
     /**
      * 作者名称
      */
@@ -74,4 +77,9 @@ public class ForumPost {
      * 创建时间（ISO 8601格式）
      */
     private OffsetDateTime createdAt = OffsetDateTime.now();
+
+    /**
+     * 发布地点（如：北京、上海等）
+     */
+    private String location;
 }

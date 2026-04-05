@@ -91,6 +91,12 @@ public class DataInitializer implements CommandLineRunner {
             Optional<User> existing = userRepository.findByEmail(seed.email());
 
             if (existing.isPresent()) {
+                if ("admin@example.com".equalsIgnoreCase(seed.email())) {
+                    User user = existing.get();
+                    applyUser(user, seed, now, random, i, false);
+                    user.setPassword(passwordEncoder.encode(DEFAULT_PASSWORD));
+                    usersToSave.add(user);
+                }
                 updated++;
                 continue;
             }
@@ -119,6 +125,11 @@ public class DataInitializer implements CommandLineRunner {
             Optional<ForumPost> existing = forumPostRepository.findByTopic(seed.topic());
 
             if (existing.isPresent()) {
+                ForumPost post = existing.get();
+                if (post.getUserId() == null) {
+                    post.setUserId(author.getId());
+                    postsToSave.add(post);
+                }
                 updated++;
                 continue;
             }
@@ -213,6 +224,7 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void applyPost(ForumPost post, PostSeed seed, User author, OffsetDateTime now, Random random) {
+        post.setUserId(author.getId());
         post.setAuthor(author.getName());
         post.setAuthorLevel(resolveAuthorLevel(author.getPoints()));
         post.setAvatar(author.getAvatar());
@@ -453,6 +465,7 @@ public class DataInitializer implements CommandLineRunner {
 
     private List<UserSeed> userSeeds() {
         return List.of(
+                user("admin@example.com", "Admin", "演示账号，用于体验完整学习流程。", "unknown", "algo", 999, 10, 180, 1, 1),
                 user("linan@example.com", "林安", "最近在补动态规划和图论，喜欢把题解写成自己的模板。", "female", "algo", 860, 12, 120, 2, 4),
                 user("zhoumu@example.com", "周沐", "刷题节奏不快，但会认真复盘每一道错题。", "male", "algo", 540, 8, 96, 5, 9),
                 user("chenxi@example.com", "陈汐", "偏爱单调栈、双指针这类能一眼看出结构感的题。", "female", "contest", 620, 10, 88, 4, 6),

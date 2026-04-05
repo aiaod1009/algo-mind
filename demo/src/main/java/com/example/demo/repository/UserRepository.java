@@ -14,7 +14,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findFirstByName(String username);
 
+    Optional<User> findFirstByNameIgnoreCase(String username);
+
     Optional<User> findByEmail(String email);
+
+    Optional<User> findByEmailIgnoreCase(String email);
+
+    @Query("SELECT u FROM User u WHERE locate('@', u.email) > 0 AND lower(substring(u.email, 1, locate('@', u.email) - 1)) = lower(:localPart)")
+    Optional<User> findByEmailLocalPart(@Param("localPart") String localPart);
 
     boolean existsByEmail(String email);
 

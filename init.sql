@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS `t_forum_post` (
   `tag` varchar(50) DEFAULT NULL COMMENT '帖子标签',
   `likes` int DEFAULT 0 COMMENT '点赞数',
   `comments` int DEFAULT 0 COMMENT '评论数',
+  `location` varchar(50) DEFAULT '北京' COMMENT '发布地点',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP
 ) COMMENT='论坛帖子表';
 
@@ -105,6 +106,7 @@ CREATE TABLE IF NOT EXISTS `t_forum_comment` (
   `content` varchar(2000) NOT NULL COMMENT '评论内容',
   `likes` int DEFAULT 0 COMMENT '点赞数',
   `parent_id` bigint DEFAULT NULL COMMENT '父评论ID',
+  `company` varchar(100) DEFAULT NULL COMMENT '用户公司/学校信息',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`post_id`) REFERENCES `t_forum_post`(`id`) ON DELETE CASCADE
 ) COMMENT='论坛评论表';
@@ -183,15 +185,16 @@ VALUES
 (3, '进阶');
 
 -- 插入测试论坛帖子
-INSERT INTO `t_forum_post` (`author`, `author_level`, `avatar`, `topic`, `content`, `tag`, `likes`, `comments`) 
+INSERT INTO `t_forum_post` (`author`, `author_level`, `avatar`, `topic`, `content`, `tag`, `likes`, `comments`, `location`) 
 VALUES 
-('算法爱好者', 'Lv.5', '/avatars/default.png', '如何高效学习动态规划？', '最近在学动态规划，感觉很难入门，有什么好的学习方法推荐吗？', '求助', 10, 3),
-('数据结构达人', 'Lv.8', '/avatars/default.png', '分享：红黑树详解', '花了一周时间整理的红黑树知识点，希望对大家有帮助！', '分享', 25, 5);
+('算法爱好者', 'Lv.5', '/avatars/default.png', '如何高效学习动态规划？', '最近在学动态规划，感觉很难入门，有什么好的学习方法推荐吗？', '求助', 10, 3, '北京'),
+('数据结构达人', 'Lv.8', '/avatars/default.png', '分享：红黑树详解', '花了一周时间整理的红黑树知识点，希望对大家有帮助！', '分享', 25, 5, '上海');
 
 -- 插入论坛评论
-INSERT INTO `t_forum_comment` (`post_id`, `user_id`, `author`, `avatar`, `author_level`, `content`, `likes`) 
+INSERT INTO `t_forum_comment` (`post_id`, `user_id`, `author`, `avatar`, `author_level`, `content`, `likes`, `company`) 
 VALUES 
-(1, 1, '测试用户', '/avatars/default.png', 'Lv.3', '建议从简单的题目开始，先理解状态转移方程的概念。', 5),
-(1, NULL, '路人甲', '/avatars/default.png', 'Lv.2', '同问，我也在学动态规划', 2);
+(1, 1, 'zjh3029', '/avatars/default.png', 'Lv.3', '需要重点突出AI的能力，现在的岗位和AI强关联。有兴趣联系我', 5, '阿里巴巴集团 服务端研发'),
+(1, NULL, '路人甲', '/avatars/default.png', 'Lv.2', '同问，我也在学动态规划', 2, '北京大学 计算机系'),
+(1, NULL, '算法小白', '/avatars/default.png', 'Lv.1', '感谢分享，很有用！', 0, '清华大学 软件学院');
 
 SELECT '数据库初始化完成！' AS message;

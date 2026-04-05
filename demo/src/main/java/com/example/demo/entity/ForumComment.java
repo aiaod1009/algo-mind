@@ -35,6 +35,11 @@ public class ForumComment {
     @Column(name = "parent_id")
     private Long parentId;
 
+    /**
+     * 用户公司/学校信息（如：阿里巴巴集团 服务端研发）
+     */
+    private String company;
+
     private OffsetDateTime createdAt;
 
     @PrePersist

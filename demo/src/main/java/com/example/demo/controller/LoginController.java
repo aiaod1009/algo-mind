@@ -1,58 +1,116 @@
 package com.example.demo.controller;
 
 import com.example.demo.Result;
+import com.example.demo.auth.JwtService;
 import com.example.demo.entity.User;
 import com.example.demo.repository.UserRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Optional;
 
 @RestController
 public class LoginController {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
 
-    public LoginController(UserRepository userRepository) {
+    public LoginController(UserRepository userRepository,
+                           PasswordEncoder passwordEncoder,
+                           JwtService jwtService) {
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
     }
-
-    // 前端传入的是 username，统一匹配
-    private static final String FIX_USERNAME = "admin";
-    private static final String FIX_PWD = "123456";
 
     @PostMapping("/login")
     public Result<Map<String, Object>> login(@RequestBody LoginRequest req) {
-        // 匹配前端传的 username + password
-        if (FIX_USERNAME.equals(req.getUsername()) && FIX_PWD.equals(req.getPassword())) {
-            Long currentUserId = 1L;
-            User dbUser = userRepository.findById(currentUserId).orElse(null);
+        String identifier = normalize(req.getUsername());
+        String rawPassword = normalize(req.getPassword());
 
-            Map<String, Object> result = new HashMap<>();
-            Map<String, Object> user = new HashMap<>();
-            user.put("id", 1);
-            user.put("name", dbUser != null ? dbUser.getName() : "系统管理员");
-            user.put("email", dbUser != null ? dbUser.getEmail() : "admin@example.com");
-            user.put("points", dbUser != null ? dbUser.getPoints() : 999);
-            user.put("avatar", dbUser != null ? dbUser.getAvatar() : null);
-            user.put("bio", dbUser != null ? dbUser.getBio() : null);
-            user.put("github", dbUser != null ? dbUser.getGithub() : null);
-            user.put("website", dbUser != null ? dbUser.getWebsite() : null);
-            user.put("targetTrack", dbUser != null ? dbUser.getTargetTrack() : "algo");
-            user.put("weeklyGoal", dbUser != null ? dbUser.getWeeklyGoal() : 10);
-
-            result.put("token", UUID.randomUUID().toString());
-            result.put("user", user);
-            result.put("points", dbUser != null ? dbUser.getPoints() : 999);
-
-            return Result.success(result);
+        if (!StringUtils.hasText(identifier) || !StringUtils.hasText(rawPassword)) {
+            return Result.fail(40001, "账号和密码不能为空");
         }
-        return Result.fail(40001, "账号或密码错误");
+
+        Optional<User> userOptional = findUserByIdentifier(identifier);
+        if (userOptional.isEmpty()) {
+            return Result.fail(40001, "账号或密码错误");
+        }
+
+        User user = userOptional.get();
+        if (!matchesPassword(rawPassword, user)) {
+            return Result.fail(40001, "账号或密码错误");
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("id", user.getId());
+        userInfo.put("name", user.getName());
+        userInfo.put("email", user.getEmail());
+        userInfo.put("points", user.getPoints());
+        userInfo.put("avatar", user.getAvatar());
+        userInfo.put("bio", user.getBio());
+        userInfo.put("github", user.getGithub());
+        userInfo.put("website", user.getWebsite());
+        userInfo.put("targetTrack", user.getTargetTrack());
+        userInfo.put("weeklyGoal", user.getWeeklyGoal());
+
+        result.put("token", jwtService.generateToken(user));
+        result.put("user", userInfo);
+        result.put("points", user.getPoints() != null ? user.getPoints() : 0);
+
+        return Result.success(result);
     }
 
-    // 接收前端参数：username + password（和前端完全对应）
+    private Optional<User> findUserByIdentifier(String identifier) {
+        if (identifier.contains("@")) {
+            Optional<User> byEmail = userRepository.findByEmailIgnoreCase(identifier);
+            if (byEmail.isPresent()) {
+                return byEmail;
+            }
+        }
+
+        Optional<User> byName = userRepository.findFirstByNameIgnoreCase(identifier);
+        if (byName.isPresent()) {
+            return byName;
+        }
+
+        return userRepository.findByEmailLocalPart(identifier);
+    }
+
+    private boolean matchesPassword(String rawPassword, User user) {
+        String storedPassword = user.getPassword();
+        if (!StringUtils.hasText(storedPassword)) {
+            return false;
+        }
+
+        if (isBcryptPassword(storedPassword)) {
+            return passwordEncoder.matches(rawPassword, storedPassword);
+        }
+
+        if (rawPassword.equals(storedPassword)) {
+            user.setPassword(passwordEncoder.encode(rawPassword));
+            userRepository.save(user);
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean isBcryptPassword(String password) {
+        return password.startsWith("$2a$") || password.startsWith("$2b$") || password.startsWith("$2y$");
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim();
+    }
+
     public static class LoginRequest {
         private String username;
         private String password;

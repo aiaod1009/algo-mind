@@ -7,12 +7,14 @@ import { useUserStore } from '../stores/user'
 import FlowerPagination from '../components/FlowerPagination.vue'
 import SearchBar from '../components/SearchBar.vue'
 import api from '../api'
+import { getFullFileUrl } from '../utils/file'
 
 const router = useRouter()
 const forumStore = useForumStore()
 const userStore = useUserStore()
 
 const posts = computed(() => forumStore.posts)
+const resolveAvatar = (avatar) => getFullFileUrl(avatar || '')
 
 const formatTime = (timestamp) => {
   if (!timestamp) return '刚刚'
@@ -311,6 +313,15 @@ const goToPostComments = (postId) => {
   router.push({ name: 'forum-post', params: { id: postId }, hash: '#comments' })
 }
 
+const goToPostWithComment = (postId, commentId) => {
+  router.push({ 
+    name: 'forum-post', 
+    params: { id: postId }, 
+    query: { commentId: commentId },
+    hash: '#comments' 
+  })
+}
+
 const highlightedPost = ref(null)
 
 const hotQuestions = ref([])
@@ -432,7 +443,7 @@ onUnmounted(() => {
     <div class="composer-wrapper">
       <div v-if="!isComposerExpanded" class="composer-collapsed" @click="isComposerExpanded = true">
         <div class="collapsed-left">
-          <el-avatar :size="40" :src="userStore.userInfo?.avatar || ''" class="collapsed-avatar">
+          <el-avatar :size="40" :src="userStore.avatar || ''" class="collapsed-avatar">
             {{ (userStore.userInfo?.name || '同学').slice(0, 1) }}
           </el-avatar>
           <div class="collapsed-content">
@@ -451,7 +462,7 @@ onUnmounted(() => {
         <div v-if="isComposerExpanded" class="composer-card">
           <div class="composer-header">
             <div class="header-left">
-              <el-avatar :size="48" :src="userStore.userInfo?.avatar || ''" class="composer-avatar">
+              <el-avatar :size="48" :src="userStore.avatar || ''" class="composer-avatar">
                 {{ (userStore.userInfo?.name || '同学').slice(0, 1) }}
               </el-avatar>
               <div class="composer-user-info">
@@ -647,7 +658,7 @@ onUnmounted(() => {
           :class="{ 'is-highlighted': highlightedPost === item.id }" shadow="never">
           <div class="head-row">
             <div class="user-wrap">
-              <el-avatar :size="44" :src="item.avatar || ''">{{ item.author.slice(0, 1) }}</el-avatar>
+              <el-avatar :size="44" :src="resolveAvatar(item.avatar) || ''">{{ item.author.slice(0, 1) }}</el-avatar>
               <div>
                 <div class="name-row">
                   <span class="name">{{ item.author }}</span>
@@ -675,9 +686,9 @@ onUnmounted(() => {
             <div v-if="postHotComments[item.id]?.length > 0" class="hot-comments-carousel">
               <div class="hot-comment-wrapper">
                 <Transition name="hot-comment-slide" mode="out-in">
-                  <div :key="hotCommentIndex[item.id] || 0" class="hot-comment-item">
+                  <div :key="hotCommentIndex[item.id] || 0" class="hot-comment-item" @click.stop="goToPostWithComment(item.id, postHotComments[item.id][hotCommentIndex[item.id] || 0]?.id)">
                     <div class="hot-comment-header">
-                      <el-avatar :size="24" :src="postHotComments[item.id][hotCommentIndex[item.id] || 0]?.avatar || ''">
+                      <el-avatar :size="24" :src="resolveAvatar(postHotComments[item.id][hotCommentIndex[item.id] || 0]?.avatar) || ''">
                         {{ (postHotComments[item.id][hotCommentIndex[item.id] || 0]?.author || '匿').slice(0, 1) }}
                       </el-avatar>
                       <span class="hot-comment-author">{{ postHotComments[item.id][hotCommentIndex[item.id] || 0]?.author }}</span>
@@ -1644,6 +1655,13 @@ onUnmounted(() => {
   padding: 8px;
   background: rgba(255, 255, 255, 0.8);
   border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.hot-comment-item:hover {
+  background: rgba(255, 255, 255, 1);
+  box-shadow: 0 2px 8px rgba(74, 144, 217, 0.15);
 }
 
 .hot-comment-header {

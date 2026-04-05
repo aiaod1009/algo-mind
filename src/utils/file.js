@@ -1,7 +1,16 @@
 export function getFullFileUrl(path) {
   if (!path) return ''
 
-  if (path.startsWith('http://') || path.startsWith('https://')) {
+  if (
+    path.startsWith('http://') ||
+    path.startsWith('https://') ||
+    path.startsWith('data:') ||
+    path.startsWith('blob:')
+  ) {
+    return path
+  }
+
+  if (path.startsWith('/api/')) {
     return path
   }
 

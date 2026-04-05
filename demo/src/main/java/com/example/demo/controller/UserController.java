@@ -1,11 +1,9 @@
 package com.example.demo.controller;
 
 import com.example.demo.Result;
+import com.example.demo.auth.CurrentUserService;
 import com.example.demo.entity.User;
 import com.example.demo.repository.UserRepository;
-import com.example.demo.service.UserService;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -17,20 +15,17 @@ import java.util.*;
 public class UserController {
 
     private final UserRepository userRepository;
-    private final UserService userService;
+    private final CurrentUserService currentUserService;
     private static final List<String> VALID_TRACKS = List.of("algo", "ds", "contest");
 
-    public UserController(UserRepository userRepository, UserService userService) {
+    public UserController(UserRepository userRepository, CurrentUserService currentUserService) {
         this.userRepository = userRepository;
-        this.userService = userService;
+        this.currentUserService = currentUserService;
     }
 
     @PutMapping("/me")
     public Result<User> updateUserProfile(@RequestBody User userRequest) {
-        Long currentUserId = 1L;
-        
-        // 使用 UserService 获取或创建用户
-        User user = userService.getOrCreateUser(currentUserId);
+        User user = currentUserService.requireCurrentUserEntity();
 
         if (userRequest.getName() != null && !userRequest.getName().isBlank()) {
             user.setName(userRequest.getName());
@@ -81,7 +76,7 @@ public class UserController {
     public Result<Map<String, Object>> getUserHeatmap(
             @RequestParam(required = false) Integer year) {
         int targetYear = (year != null) ? year : LocalDate.now().getYear();
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
 
         List<Map<String, Object>> records = new ArrayList<>();
         Random random = new Random(targetYear + currentUserId);
@@ -180,7 +175,7 @@ public class UserController {
 
     @GetMapping("/me/stats")
     public Result<Map<String, Object>> getUserStats() {
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
 
         User user = userRepository.findById(currentUserId).orElse(null);
         Map<String, Object> stats = new HashMap<>();
@@ -208,7 +203,7 @@ public class UserController {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer pageSize) {
 
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
 
         List<Map<String, Object>> allActivities = new ArrayList<>();
         String[] types = {"solve", "create", "achievement", "comment", "like"};
@@ -251,7 +246,7 @@ public class UserController {
 
     @GetMapping("/me/status")
     public Result<Map<String, Object>> getUserStatus() {
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
 
         User user = userRepository.findById(currentUserId).orElse(null);
         Map<String, Object> status = new HashMap<>();
@@ -275,7 +270,7 @@ public class UserController {
 
     @PutMapping("/me/status")
     public Result<Map<String, Object>> updateUserStatus(@RequestBody Map<String, Object> statusRequest) {
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
 
         User user = userRepository.findById(currentUserId).orElse(null);
         if (user == null) {
@@ -321,7 +316,7 @@ public class UserController {
     @GetMapping("/me/ranking")
     public Result<Map<String, Object>> getUserRanking(
             @RequestParam(defaultValue = "all") String track) {
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
 
         List<User> allUsers = userRepository.findRankingByTrack(track);
         int rank = 1;
@@ -349,7 +344,7 @@ public class UserController {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer pageSize) {
 
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
 
         List<Map<String, Object>> allHistory = new ArrayList<>();
         String[] sources = {"题目奖励", "连续打卡", "成就奖励", "活动奖励", "每日签到"};
@@ -384,7 +379,7 @@ public class UserController {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer pageSize) {
 
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
 
         List<Map<String, Object>> allProblems = new ArrayList<>();
         String[] types = {"single", "multi", "code", "fill"};
@@ -428,7 +423,7 @@ public class UserController {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer pageSize) {
 
-        Long currentUserId = 1L;
+        Long currentUserId = currentUserService.requireCurrentUserId();
 
         List<Map<String, Object>> allProblems = new ArrayList<>();
         String[] types = {"single", "multi", "code", "fill"};
