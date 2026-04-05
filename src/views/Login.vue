@@ -11,6 +11,7 @@ const userStore = useUserStore()
 const loading = ref(false)
 const showPassword = ref(false)
 const isTyping = ref(false)
+const isPasswordFocused = ref(false)
 const passwordValue = ref('')
 
 const form = reactive({
@@ -20,8 +21,11 @@ const form = reactive({
 })
 
 const containerRef = ref(null)
+const eyelidCanvasRef = ref(null)
+const eyelidCanvasCtxRef = ref(null)
 const mouseRef = reactive({ x: 0, y: 0 })
 const rafIdRef = ref(0)
+const eyelidOverlayState = { progress: 0 }
 
 const purpleRef = ref(null)
 const blackRef = ref(null)
@@ -47,12 +51,14 @@ const isShowingPassword = ref(false)
 
 const quickToRef = ref(null)
 
+const getNodes = (root, selector) => Array.from(root?.querySelectorAll(selector) ?? [])
+
 const updatePasswordState = () => {
-  isHidingPassword.value = passwordValue.value.length > 0 && !showPassword.value
-  isShowingPassword.value = passwordValue.value.length > 0 && showPassword.value
+  isHidingPassword.value = isPasswordFocused.value && !showPassword.value
+  isShowingPassword.value = isPasswordFocused.value && passwordValue.value.length > 0 && showPassword.value
 }
 
-watch([passwordValue, showPassword], () => {
+watch([passwordValue, showPassword, isPasswordFocused], () => {
   updatePasswordState()
 })
 
@@ -80,6 +86,243 @@ const calcEyePos = (el, maxDist) => {
   return { x: Math.cos(angle) * dist, y: Math.sin(angle) * dist }
 }
 
+const syncEyelidCanvas = () => {
+  const canvas = eyelidCanvasRef.value
+  const stage = containerRef.value
+  if (!canvas || !stage) return
+
+  const rect = stage.getBoundingClientRect()
+  const ratio = window.devicePixelRatio || 1
+  canvas.width = Math.round(rect.width * ratio)
+  canvas.height = Math.round(rect.height * ratio)
+  canvas.style.width = `${rect.width}px`
+  canvas.style.height = `${rect.height}px`
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
+  eyelidCanvasCtxRef.value = ctx
+}
+
+const getEyeCanvasMetrics = (el) => {
+  const stage = containerRef.value
+  if (!stage || !el) return null
+
+  const stageRect = stage.getBoundingClientRect()
+  const rect = el.getBoundingClientRect()
+
+  return {
+    x: rect.left - stageRect.left + rect.width / 2,
+    y: rect.top - stageRect.top + rect.height / 2,
+    width: rect.width,
+    height: rect.height,
+  }
+}
+
+const drawClosedEyeArc = (ctx, metrics, options = {}) => {
+  if (!metrics) return
+
+  const progress = eyelidOverlayState.progress
+  const {
+    strokeStyle = '#2D2D2D',
+    widthScale = 1.7,
+    lineWidth = 3.6,
+    lift = 0,
+    arch = 1,
+  } = options
+
+  const arcWidth = metrics.width * widthScale
+  const halfWidth = arcWidth / 2
+  const startX = metrics.x - halfWidth
+  const endX = metrics.x + halfWidth
+  const baselineY = metrics.y + lift - metrics.height * 0.04
+  const controlY = baselineY - (2.5 + metrics.height * 0.28) * arch * progress
+
+  ctx.beginPath()
+  ctx.moveTo(startX, baselineY)
+  ctx.quadraticCurveTo(metrics.x, controlY, endX, baselineY)
+  ctx.strokeStyle = strokeStyle
+  ctx.lineWidth = lineWidth
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.stroke()
+}
+
+const renderEyelidOverlay = () => {
+  const canvas = eyelidCanvasRef.value
+  const ctx = eyelidCanvasCtxRef.value
+  if (!canvas || !ctx) return
+
+  ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight)
+
+  const progress = eyelidOverlayState.progress
+  if (progress <= 0.02) return
+
+  ctx.save()
+  ctx.globalAlpha = Math.min(1, progress * 1.15)
+
+  getNodes(purpleRef.value, '.eyeball').forEach((el) => {
+    drawClosedEyeArc(ctx, getEyeCanvasMetrics(el), {
+      strokeStyle: '#5A31D0',
+      widthScale: 1.55,
+      lineWidth: 4.4,
+      lift: 0.5,
+      arch: 1.15,
+    })
+  })
+
+  getNodes(blackRef.value, '.eyeball').forEach((el) => {
+    drawClosedEyeArc(ctx, getEyeCanvasMetrics(el), {
+      strokeStyle: '#161616',
+      widthScale: 1.5,
+      lineWidth: 3.8,
+      arch: 0.95,
+    })
+  })
+
+  getNodes(orangeRef.value, '.pupil').forEach((el) => {
+    drawClosedEyeArc(ctx, getEyeCanvasMetrics(el), {
+      strokeStyle: '#B75F38',
+      widthScale: 1.9,
+      lineWidth: 4.8,
+      lift: 0.8,
+      arch: 1.2,
+    })
+  })
+
+  getNodes(yellowRef.value, '.pupil').forEach((el) => {
+    drawClosedEyeArc(ctx, getEyeCanvasMetrics(el), {
+      strokeStyle: '#8C7B1A',
+      widthScale: 1.85,
+      lineWidth: 4.6,
+      lift: 0.8,
+      arch: 1.1,
+    })
+  })
+
+  ctx.restore()
+}
+
+const animateEyelidOverlay = (target) => {
+  gsap.to(eyelidOverlayState, {
+    progress: target,
+    duration: target > eyelidOverlayState.progress ? 0.22 : 0.18,
+    ease: target > eyelidOverlayState.progress ? 'power2.out' : 'power2.inOut',
+    overwrite: 'auto',
+    onUpdate: renderEyelidOverlay,
+  })
+}
+
+const playGuardBlinkSequence = () => {
+  const purpleEyeballs = getNodes(purpleRef.value, '.eyeball')
+  const blackEyeballs = getNodes(blackRef.value, '.eyeball')
+  const purplePupils = getNodes(purpleRef.value, '.eyeball-pupil')
+  const blackPupils = getNodes(blackRef.value, '.eyeball-pupil')
+  const orangePupils = getNodes(orangeRef.value, '.pupil')
+  const yellowPupils = getNodes(yellowRef.value, '.pupil')
+
+  gsap.killTweensOf(eyelidOverlayState)
+  ;[
+    ...purpleEyeballs,
+    ...blackEyeballs,
+    ...purplePupils,
+    ...blackPupils,
+    ...orangePupils,
+    ...yellowPupils,
+  ].forEach((el) => gsap.killTweensOf(el))
+
+  gsap
+    .timeline({
+      defaults: { overwrite: 'auto' },
+      onUpdate: renderEyelidOverlay,
+    })
+    .to(eyelidOverlayState, {
+      progress: 0.45,
+      duration: 0.08,
+      ease: 'power2.in',
+    })
+    .to(
+      [...purpleEyeballs, ...blackEyeballs],
+      {
+        height: 3,
+        opacity: 0.45,
+        duration: 0.08,
+        ease: 'power2.in',
+      },
+      0
+    )
+    .to(
+      [...purplePupils, ...blackPupils],
+      {
+        y: 2,
+        scale: 0.92,
+        opacity: 0.82,
+        duration: 0.08,
+        ease: 'power2.in',
+      },
+      0
+    )
+    .to(
+      [...orangePupils, ...yellowPupils],
+      {
+        y: 4,
+        scaleX: 1.04,
+        scaleY: 0.42,
+        duration: 0.08,
+        ease: 'power2.in',
+      },
+      0
+    )
+    .to(eyelidOverlayState, {
+      progress: 1,
+      duration: 0.18,
+      ease: 'power2.out',
+    })
+    .to(
+      purpleEyeballs,
+      {
+        height: 4,
+        opacity: 0,
+        duration: 0.18,
+        ease: 'power2.out',
+      },
+      '<'
+    )
+    .to(
+      blackEyeballs,
+      {
+        height: 4,
+        opacity: 0,
+        duration: 0.18,
+        ease: 'power2.out',
+      },
+      '<'
+    )
+    .to(
+      [...purplePupils, ...blackPupils],
+      {
+        y: 4,
+        scale: 0.8,
+        opacity: 0.7,
+        duration: 0.18,
+        ease: 'power2.out',
+      },
+      '<'
+    )
+    .to(
+      [...orangePupils, ...yellowPupils],
+      {
+        y: 8,
+        scaleX: 1.1,
+        scaleY: 0.18,
+        duration: 0.18,
+        ease: 'power2.out',
+      },
+      '<'
+    )
+}
+
 const tick = () => {
   const container = containerRef.value
   if (!container) return
@@ -91,13 +334,14 @@ const tick = () => {
   const hiding = isHidingPassword.value
   const showing = isShowingPassword.value
   const looking = isLookingRef.value
+  const passwordLocked = hiding || showing
 
-  if (purpleRef.value && !showing) {
+  if (purpleRef.value && !passwordLocked) {
     const pp = calcPos(purpleRef.value)
-    if (typing || hiding) {
-      qt.purpleSkew(pp.bodySkew - 12)
-      qt.purpleX(40)
-      qt.purpleHeight(440)
+    if (typing) {
+      qt.purpleSkew(pp.bodySkew - 8)
+      qt.purpleX(24)
+      qt.purpleHeight(424)
     } else {
       qt.purpleSkew(pp.bodySkew)
       qt.purpleX(0)
@@ -105,62 +349,62 @@ const tick = () => {
     }
   }
 
-  if (blackRef.value && !showing) {
+  if (blackRef.value && !passwordLocked) {
     const bp = calcPos(blackRef.value)
     if (looking) {
       qt.blackSkew(bp.bodySkew * 1.5 + 10)
       qt.blackX(20)
-    } else if (typing || hiding) {
-      qt.blackSkew(bp.bodySkew * 1.5)
-      qt.blackX(0)
+    } else if (typing) {
+      qt.blackSkew(bp.bodySkew + 3)
+      qt.blackX(6)
     } else {
       qt.blackSkew(bp.bodySkew)
       qt.blackX(0)
     }
   }
 
-  if (orangeRef.value && !showing) {
+  if (orangeRef.value && !passwordLocked && !looking) {
     const op = calcPos(orangeRef.value)
     qt.orangeSkew(op.bodySkew)
   }
 
-  if (yellowRef.value && !showing) {
+  if (yellowRef.value && !passwordLocked && !looking) {
     const yp = calcPos(yellowRef.value)
     qt.yellowSkew(yp.bodySkew)
   }
 
-  if (purpleRef.value && !showing && !looking) {
+  if (purpleRef.value && !passwordLocked && !looking) {
     const pp = calcPos(purpleRef.value)
     const purpleFaceX = pp.faceX >= 0 ? Math.min(25, pp.faceX * 1.5) : pp.faceX
     qt.purpleFaceLeft(45 + purpleFaceX)
     qt.purpleFaceTop(40 + pp.faceY)
   }
 
-  if (blackRef.value && !showing && !looking) {
+  if (blackRef.value && !passwordLocked && !looking) {
     const bp = calcPos(blackRef.value)
     qt.blackFaceLeft(26 + bp.faceX)
     qt.blackFaceTop(32 + bp.faceY)
   }
 
-  if (orangeRef.value && !showing) {
+  if (orangeRef.value && !passwordLocked && !looking) {
     const op = calcPos(orangeRef.value)
     qt.orangeFaceX(op.faceX)
     qt.orangeFaceY(op.faceY)
   }
 
-  if (yellowRef.value && !showing) {
+  if (yellowRef.value && !passwordLocked && !looking) {
     const yp = calcPos(yellowRef.value)
     qt.yellowFaceX(yp.faceX)
     qt.yellowFaceY(yp.faceY)
   }
 
-  if (yellowRef.value && !showing) {
+  if (yellowRef.value && !passwordLocked && !looking) {
     const yp = calcPos(yellowRef.value)
     qt.mouthX(yp.faceX)
     qt.mouthY(yp.faceY)
   }
 
-  if (!showing) {
+  if (!passwordLocked && !looking) {
     const allPupils = container.querySelectorAll('.pupil')
     allPupils.forEach((p) => {
       const el = p
@@ -169,18 +413,18 @@ const tick = () => {
       gsap.set(el, { x: ePos.x, y: ePos.y })
     })
 
-    if (!looking) {
-      const allEyeballs = container.querySelectorAll('.eyeball')
-      allEyeballs.forEach((eb) => {
-        const el = eb
-        const maxDist = Number(el.dataset.maxDistance) || 10
-        const pupil = el.querySelector('.eyeball-pupil')
-        if (!pupil) return
-        const ePos = calcEyePos(el, maxDist)
-        gsap.set(pupil, { x: ePos.x, y: ePos.y })
-      })
-    }
+    const allEyeballs = container.querySelectorAll('.eyeball')
+    allEyeballs.forEach((eb) => {
+      const el = eb
+      const maxDist = Number(el.dataset.maxDistance) || 10
+      const pupil = el.querySelector('.eyeball-pupil')
+      if (!pupil) return
+      const ePos = calcEyePos(el, maxDist)
+      gsap.set(pupil, { x: ePos.x, y: ePos.y })
+    })
   }
+
+  renderEyelidOverlay()
 
   rafIdRef.value = requestAnimationFrame(tick)
 }
@@ -196,6 +440,10 @@ const schedulePurpleBlink = () => {
 
   purpleBlinkTimerRef.value = setTimeout(
     () => {
+      if (isHidingPassword.value || isShowingPassword.value || isLookingRef.value) {
+        schedulePurpleBlink()
+        return
+      }
       purpleEyeballs.forEach((el) => {
         gsap.to(el, { height: 2, duration: 0.08, ease: 'power2.in' })
       })
@@ -216,6 +464,10 @@ const scheduleBlackBlink = () => {
 
   blackBlinkTimerRef.value = setTimeout(
     () => {
+      if (isHidingPassword.value || isShowingPassword.value || isLookingRef.value) {
+        scheduleBlackBlink()
+        return
+      }
       blackEyeballs.forEach((el) => {
         gsap.to(el, { height: 2, duration: 0.08, ease: 'power2.in' })
       })
@@ -230,32 +482,115 @@ const scheduleBlackBlink = () => {
   )
 }
 
-const applyLookAtEachOther = () => {
+const restoreCharacterEyes = () => {
+  animateEyelidOverlay(0)
+  getNodes(purpleRef.value, '.eyeball').forEach((el) => {
+    gsap.to(el, { height: 18, opacity: 1, duration: 0.22, ease: 'power2.out', overwrite: 'auto' })
+  })
+  getNodes(blackRef.value, '.eyeball').forEach((el) => {
+    gsap.to(el, { height: 16, opacity: 1, duration: 0.22, ease: 'power2.out', overwrite: 'auto' })
+  })
+  getNodes(purpleRef.value, '.eyeball-pupil').forEach((p) => {
+    gsap.to(p, { scale: 1, opacity: 1, duration: 0.22, ease: 'power2.out', overwrite: 'auto' })
+  })
+  getNodes(blackRef.value, '.eyeball-pupil').forEach((p) => {
+    gsap.to(p, { scale: 1, opacity: 1, duration: 0.22, ease: 'power2.out', overwrite: 'auto' })
+  })
+  getNodes(orangeRef.value, '.pupil').forEach((p) => {
+    gsap.to(p, {
+      scaleX: 1,
+      scaleY: 1,
+      opacity: 1,
+      duration: 0.22,
+      ease: 'power2.out',
+      overwrite: 'auto',
+    })
+  })
+  getNodes(yellowRef.value, '.pupil').forEach((p) => {
+    gsap.to(p, {
+      scaleX: 1,
+      scaleY: 1,
+      opacity: 1,
+      duration: 0.22,
+      ease: 'power2.out',
+      overwrite: 'auto',
+    })
+  })
+  if (yellowMouthRef.value) {
+    gsap.to(yellowMouthRef.value, {
+      scaleX: 1,
+      duration: 0.22,
+      ease: 'power2.out',
+      overwrite: 'auto',
+    })
+  }
+}
+
+const applyEmailPeek = () => {
   const qt = quickToRef.value
   if (qt) {
-    qt.purpleFaceLeft(55)
-    qt.purpleFaceTop(65)
-    qt.blackFaceLeft(32)
-    qt.blackFaceTop(12)
+    qt.purpleFaceLeft(74)
+    qt.purpleFaceTop(50)
+    qt.blackFaceLeft(34)
+    qt.blackFaceTop(22)
+    qt.orangeFaceX(10)
+    qt.orangeFaceY(-4)
+    qt.yellowFaceX(10)
+    qt.yellowFaceY(-2)
+    qt.mouthX(6)
+    qt.mouthY(-2)
   }
-  purpleRef.value?.querySelectorAll('.eyeball-pupil').forEach((p) => {
-    gsap.to(p, { x: 3, y: 4, duration: 0.3, ease: 'power2.out', overwrite: 'auto' })
+  restoreCharacterEyes()
+  getNodes(purpleRef.value, '.eyeball-pupil').forEach((p) => {
+    gsap.to(p, { x: 5, y: -1, duration: 0.28, ease: 'power2.out', overwrite: 'auto' })
   })
-  blackRef.value?.querySelectorAll('.eyeball-pupil').forEach((p) => {
-    gsap.to(p, { x: 0, y: -4, duration: 0.3, ease: 'power2.out', overwrite: 'auto' })
+  getNodes(blackRef.value, '.eyeball-pupil').forEach((p) => {
+    gsap.to(p, { x: 4, y: -1, duration: 0.28, ease: 'power2.out', overwrite: 'auto' })
+  })
+  getNodes(orangeRef.value, '.pupil').forEach((p) => {
+    gsap.to(p, { x: 5, y: -1, duration: 0.28, ease: 'power2.out', overwrite: 'auto' })
+  })
+  getNodes(yellowRef.value, '.pupil').forEach((p) => {
+    gsap.to(p, { x: 5, y: -1, duration: 0.28, ease: 'power2.out', overwrite: 'auto' })
   })
 }
 
 const applyHidingPassword = () => {
   const qt = quickToRef.value
+  playGuardBlinkSequence()
   if (qt) {
-    qt.purpleFaceLeft(55)
-    qt.purpleFaceTop(65)
+    qt.purpleSkew(-14)
+    qt.blackSkew(-7)
+    qt.orangeSkew(5)
+    qt.yellowSkew(-4)
+    qt.purpleX(16)
+    qt.blackX(-4)
+    qt.purpleHeight(412)
+
+    qt.purpleFaceLeft(34)
+    qt.purpleFaceTop(84)
+    qt.blackFaceLeft(16)
+    qt.blackFaceTop(60)
+    qt.orangeFaceX(-18)
+    qt.orangeFaceY(16)
+    qt.yellowFaceX(14)
+    qt.yellowFaceY(18)
+    qt.mouthX(-8)
+    qt.mouthY(10)
+  }
+  if (yellowMouthRef.value) {
+    gsap.to(yellowMouthRef.value, {
+      scaleX: 0.72,
+      duration: 0.24,
+      ease: 'power2.out',
+      overwrite: 'auto',
+    })
   }
 }
 
 const applyShowPassword = () => {
   const qt = quickToRef.value
+  restoreCharacterEyes()
   if (qt) {
     qt.purpleSkew(0)
     qt.blackSkew(0)
@@ -335,17 +670,23 @@ const schedulePurplePeek = () => {
 }
 
 watch(isTyping, (newVal) => {
-  if (newVal && !isShowingPassword.value) {
+  if (newVal && !isHidingPassword.value && !isShowingPassword.value) {
     isLookingRef.value = true
-    applyLookAtEachOther()
+    applyEmailPeek()
 
     clearTimeout(lookingTimerRef.value)
     lookingTimerRef.value = setTimeout(() => {
       isLookingRef.value = false
-      purpleRef.value?.querySelectorAll('.eyeball-pupil').forEach((p) => {
+      getNodes(purpleRef.value, '.eyeball-pupil').forEach((p) => {
         gsap.killTweensOf(p)
       })
-      blackRef.value?.querySelectorAll('.eyeball-pupil').forEach((p) => {
+      getNodes(blackRef.value, '.eyeball-pupil').forEach((p) => {
+        gsap.killTweensOf(p)
+      })
+      getNodes(orangeRef.value, '.pupil').forEach((p) => {
+        gsap.killTweensOf(p)
+      })
+      getNodes(yellowRef.value, '.pupil').forEach((p) => {
         gsap.killTweensOf(p)
       })
     }, 800)
@@ -363,6 +704,8 @@ watch([isHidingPassword, isShowingPassword], () => {
     clearTimeout(purplePeekTimerRef.value)
     if (isHidingPassword.value) {
       applyHidingPassword()
+    } else {
+      restoreCharacterEyes()
     }
   }
 })
@@ -381,6 +724,14 @@ const handleEmailBlur = () => {
 
 const handlePasswordInput = (value) => {
   passwordValue.value = value
+}
+
+const handlePasswordFocus = () => {
+  isPasswordFocused.value = true
+}
+
+const handlePasswordBlur = () => {
+  isPasswordFocused.value = false
 }
 
 const handleTogglePassword = () => {
@@ -428,6 +779,7 @@ onMounted(async () => {
   await nextTick()
 
   if (
+    !containerRef.value ||
     !purpleRef.value ||
     !blackRef.value ||
     !orangeRef.value ||
@@ -508,7 +860,11 @@ onMounted(async () => {
   gsap.set('.pupil', { x: 0, y: 0 })
   gsap.set('.eyeball-pupil', { x: 0, y: 0 })
 
+  syncEyelidCanvas()
+  renderEyelidOverlay()
+
   window.addEventListener('mousemove', onMove, { passive: true })
+  window.addEventListener('resize', syncEyelidCanvas)
   rafIdRef.value = requestAnimationFrame(tick)
 
   schedulePurpleBlink()
@@ -517,6 +873,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('mousemove', onMove)
+  window.removeEventListener('resize', syncEyelidCanvas)
   cancelAnimationFrame(rafIdRef.value)
   clearTimeout(purpleBlinkTimerRef.value)
   clearTimeout(blackBlinkTimerRef.value)
@@ -529,6 +886,7 @@ onUnmounted(() => {
   <div class="login-page">
     <section class="left-panel">
       <div ref="containerRef" class="characters-stage">
+        <canvas ref="eyelidCanvasRef" class="eyelid-overlay"></canvas>
         <!-- 紫色柱子 -->
         <div
           ref="purpleRef"
@@ -618,6 +976,8 @@ onUnmounted(() => {
               :type="showPassword ? 'text' : 'password'"
               placeholder="请输入密码"
               size="large"
+              @focus="handlePasswordFocus"
+              @blur="handlePasswordBlur"
               @input="handlePasswordInput"
             >
               <template #suffix>
@@ -668,6 +1028,15 @@ onUnmounted(() => {
       position: relative;
       width: 550px;
       height: 400px;
+
+      .eyelid-overlay {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 6;
+      }
     }
   }
 
@@ -815,6 +1184,7 @@ onUnmounted(() => {
         border-radius: 50%;
         background-color: #2D2D2D;
         will-change: transform;
+        transform-origin: center center;
 
         &.small {
           width: 6px;
@@ -829,6 +1199,7 @@ onUnmounted(() => {
       border-radius: 50%;
       background-color: #2D2D2D;
       will-change: transform;
+      transform-origin: center center;
     }
 
     &.orange-eyes {
