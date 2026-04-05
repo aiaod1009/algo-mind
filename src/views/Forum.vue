@@ -6,6 +6,7 @@ import { useForumStore } from '../stores/forum'
 import { useUserStore } from '../stores/user'
 import FlowerPagination from '../components/FlowerPagination.vue'
 import SearchBar from '../components/SearchBar.vue'
+import api from '../api'
 
 const router = useRouter()
 const forumStore = useForumStore()
@@ -246,26 +247,43 @@ const toggleExpand = (postId) => {
   }
 }
 
-const activeCommentPost = ref(null)
-const quickComment = ref('')
+const postHotComments = ref({})
+const hotCommentIndex = ref({})
+const hotCommentTimers = ref({})
 
-const toggleCommentPanel = (postId) => {
-  if (activeCommentPost.value === postId) {
-    activeCommentPost.value = null
-  } else {
-    activeCommentPost.value = postId
-    quickComment.value = ''
+const fetchHotComments = async (postId) => {
+  try {
+    const res = await api.get(`/forum-posts/${postId}/hot-comments`)
+    if (res.data?.code === 0 && res.data?.data) {
+      postHotComments.value[postId] = res.data.data
+      if (res.data.data.length > 1) {
+        hotCommentIndex.value[postId] = 0
+        startHotCommentTimer(postId)
+      }
+    }
+  } catch (e) {
+    console.error('获取热门评论失败:', e)
   }
 }
 
-const submitQuickComment = (postId) => {
-  if (!quickComment.value.trim()) {
-    ElMessage.warning('请输入评论内容')
-    return
+const startHotCommentTimer = (postId) => {
+  if (hotCommentTimers.value[postId]) {
+    clearInterval(hotCommentTimers.value[postId])
   }
-  forumStore.addCommentCount(postId)
-  activeCommentPost.value = null
-  ElMessage.success('评论成功')
+  hotCommentTimers.value[postId] = setInterval(() => {
+    const comments = postHotComments.value[postId]
+    if (comments && comments.length > 1) {
+      const currentIndex = hotCommentIndex.value[postId] || 0
+      hotCommentIndex.value[postId] = (currentIndex + 1) % comments.length
+    }
+  }, 30000)
+}
+
+const stopHotCommentTimer = (postId) => {
+  if (hotCommentTimers.value[postId]) {
+    clearInterval(hotCommentTimers.value[postId])
+    delete hotCommentTimers.value[postId]
+  }
 }
 
 const likeEmojis = ['👍', '❤️', '😊', '🎉', '🔥', '👏', '😍', '🚀']
@@ -273,8 +291,9 @@ const showEmojiBurst = ref(null)
 const burstPosition = ref({ x: 0, y: 0 })
 
 const handleLike = (post, event) => {
+  const wasLiked = post.liked
   forumStore.toggleLike(post.id)
-  if (!post.liked) {
+  if (!wasLiked) {
     showEmojiBurst.value = post.id
     const rect = event.target.getBoundingClientRect()
     burstPosition.value = { x: rect.left + rect.width / 2, y: rect.top }
@@ -285,12 +304,33 @@ const handleLike = (post, event) => {
 }
 
 const goToPost = (postId) => {
-  router.push(`/forum/${postId}`)
+  router.push({ name: 'forum-post', params: { id: postId } })
+}
+
+const goToPostComments = (postId) => {
+  router.push({ name: 'forum-post', params: { id: postId }, hash: '#comments' })
 }
 
 const highlightedPost = ref(null)
 
-const hotQuestions = ref([
+const hotQuestions = ref([])
+const hotLoading = ref(false)
+
+const fetchHotQuestions = async () => {
+  hotLoading.value = true
+  try {
+    const res = await api.get('/hot-questions')
+    if (res.data?.code === 0 && Array.isArray(res.data?.data)) {
+      hotQuestions.value = res.data.data
+    }
+  } catch (e) {
+    console.error('获取热门题目失败:', e)
+  } finally {
+    hotLoading.value = false
+  }
+}
+
+const DEFAULT_HOT_QUESTIONS = [
   { id: 1, title: '两数之和', difficulty: '简单', passRate: '52.3%', tags: ['数组', '哈希表'], hot: 9823 },
   { id: 2, title: '反转链表', difficulty: '简单', passRate: '71.2%', tags: ['链表'], hot: 8756 },
   { id: 3, title: '二叉树层序遍历', difficulty: '中等', passRate: '64.8%', tags: ['树', 'BFS'], hot: 7234 },
@@ -306,14 +346,18 @@ const hotQuestions = ref([
   { id: 13, title: '二叉树最大深度', difficulty: '简单', passRate: '75.2%', tags: ['树', 'DFS'], hot: 3654 },
   { id: 14, title: '编辑距离', difficulty: '困难', passRate: '25.8%', tags: ['字符串', 'DP'], hot: 3421 },
   { id: 15, title: '正则表达式匹配', difficulty: '困难', passRate: '21.3%', tags: ['字符串', 'DP'], hot: 3198 },
-])
+]
+
+const displayHotQuestions = computed(() => {
+  return hotQuestions.value.length > 0 ? hotQuestions.value : DEFAULT_HOT_QUESTIONS
+})
 
 const hotCurrentPage = ref(0)
 const hotPageSize = 10
-const hotTotalPages = computed(() => Math.ceil(hotQuestions.value.length / hotPageSize))
+const hotTotalPages = computed(() => Math.ceil(displayHotQuestions.value.length / hotPageSize))
 const paginatedHotQuestions = computed(() => {
   const start = hotCurrentPage.value * hotPageSize
-  return hotQuestions.value.slice(start, start + hotPageSize)
+  return displayHotQuestions.value.slice(start, start + hotPageSize)
 })
 
 const hotPrevPage = () => {
@@ -342,11 +386,26 @@ const goToChallenge = (questionId) => {
   router.push(`/challenge/${questionId}`)
 }
 
-onMounted(() => {
+onMounted(async () => {
+  fetchHotQuestions()
   window.addEventListener('scroll', handleScroll, { passive: true })
   forumStore.hydratePostsFromLocal()
   updateSearchBarPosition()
-  forumStore.fetchPosts({ skipIfLoaded: false })
+  await forumStore.fetchPosts({ skipIfLoaded: false })
+  paginatedPosts.value.forEach(post => {
+    if (post.comments > 0) {
+      fetchHotComments(post.id)
+    }
+  })
+})
+
+watch(currentPage, async () => {
+  await nextTick()
+  paginatedPosts.value.forEach(post => {
+    if (post.comments > 0 && !postHotComments.value[post.id]) {
+      fetchHotComments(post.id)
+    }
+  })
 })
 
 onUnmounted(() => {
@@ -356,6 +415,9 @@ onUnmounted(() => {
     scrollRafId = 0
   }
   clearTimeout(hoverTimer)
+  Object.keys(hotCommentTimers.value).forEach(postId => {
+    stopHotCommentTimer(postId)
+  })
 })
 </script>
 
@@ -582,7 +644,7 @@ onUnmounted(() => {
           <span>当前展示的是本地缓存数据，服务器连接失败</span>
         </div>
         <el-card v-for="item in paginatedPosts" :key="item.id" class="feed-card"
-          :class="{ 'is-highlighted': highlightedPost === item.id }" shadow="never" @click="goToPost(item.id)">
+          :class="{ 'is-highlighted': highlightedPost === item.id }" shadow="never">
           <div class="head-row">
             <div class="user-wrap">
               <el-avatar :size="44" :src="item.avatar || ''">{{ item.author.slice(0, 1) }}</el-avatar>
@@ -597,7 +659,7 @@ onUnmounted(() => {
             <el-button link type="info">···</el-button>
           </div>
 
-          <h3 class="topic">{{ item.topic }}</h3>
+          <h3 class="topic topic-link" @click="goToPost(item.id)">{{ item.topic }}</h3>
 
           <p class="content" :class="{ 'is-expanded': expandedPosts.has(item.id) }">
             {{ item.content }}
@@ -609,25 +671,48 @@ onUnmounted(() => {
           <div class="quote" v-if="item.quote">{{ item.quote }}</div>
           <div class="hash" @click.stop>{{ item.tag }}</div>
 
+          <div v-if="item.comments > 0" class="hot-comments-section">
+            <div v-if="postHotComments[item.id]?.length > 0" class="hot-comments-carousel">
+              <div class="hot-comment-wrapper">
+                <Transition name="hot-comment-slide" mode="out-in">
+                  <div :key="hotCommentIndex[item.id] || 0" class="hot-comment-item">
+                    <div class="hot-comment-header">
+                      <el-avatar :size="24" :src="postHotComments[item.id][hotCommentIndex[item.id] || 0]?.avatar || ''">
+                        {{ (postHotComments[item.id][hotCommentIndex[item.id] || 0]?.author || '匿').slice(0, 1) }}
+                      </el-avatar>
+                      <span class="hot-comment-author">{{ postHotComments[item.id][hotCommentIndex[item.id] || 0]?.author }}</span>
+                      <span class="hot-comment-likes">👍 {{ postHotComments[item.id][hotCommentIndex[item.id] || 0]?.likes || 0 }}</span>
+                    </div>
+                    <div class="hot-comment-content">{{ postHotComments[item.id][hotCommentIndex[item.id] || 0]?.content }}</div>
+                  </div>
+                </Transition>
+              </div>
+              <div v-if="postHotComments[item.id].length > 1" class="hot-comment-dots">
+                <span
+                  v-for="(_, idx) in postHotComments[item.id]"
+                  :key="idx"
+                  class="dot"
+                  :class="{ active: idx === (hotCommentIndex[item.id] || 0) }"
+                ></span>
+              </div>
+            </div>
+          </div>
+
           <div class="action-row">
             <button class="action-btn like-btn" :class="{ 'is-liked': item.liked }"
               @click.stop="handleLike(item, $event)">
               <span class="btn-icon">👍</span>
               <span class="btn-count">{{ item.likes }}</span>
             </button>
-            <button class="action-btn comment-btn" @click.stop="toggleCommentPanel(item.id)">
+            <button class="action-btn comment-btn" @click.stop="goToPostComments(item.id)">
               <span class="btn-icon">💬</span>
               <span class="btn-count">{{ item.comments }}</span>
             </button>
+            <button class="action-btn view-detail-btn" @click.stop="goToPost(item.id)">
+              <span class="btn-icon">📖</span>
+              <span class="btn-label">查看详情</span>
+            </button>
           </div>
-
-          <Transition name="comment-slide">
-            <div v-if="activeCommentPost === item.id" class="quick-comment-panel" @click.stop>
-              <input v-model="quickComment" class="quick-comment-input" placeholder="写下你的评论..."
-                @keyup.enter="submitQuickComment(item.id)" />
-              <el-button type="primary" size="small" round @click="submitQuickComment(item.id)">发送</el-button>
-            </div>
-          </Transition>
         </el-card>
 
         <Transition name="search-slide">
@@ -678,11 +763,21 @@ onUnmounted(() => {
     </div>
 
     <Transition name="emoji-burst">
-      <div v-if="showEmojiBurst" class="emoji-burst-container"
+      <div v-if="showEmojiBurst" class="like-celebration"
         :style="{ left: burstPosition.x + 'px', top: burstPosition.y + 'px' }">
-        <span v-for="(emoji, i) in likeEmojis" :key="i" class="burst-emoji" :style="{ animationDelay: i * 0.05 + 's' }">
-          {{ emoji }}
-        </span>
+        <div class="celebration-ring"></div>
+        <div class="celebration-glow"></div>
+        <div class="celebration-particles">
+          <span v-for="i in 12" :key="'p'+i" class="particle" :style="{ '--i': i }"></span>
+        </div>
+        <div class="celebration-emojis">
+          <span v-for="(emoji, i) in likeEmojis" :key="i" class="burst-emoji" :style="{ '--i': i }">
+            {{ emoji }}
+          </span>
+        </div>
+        <div class="celebration-sparks">
+          <span v-for="i in 6" :key="'s'+i" class="spark" :style="{ '--i': i }"></span>
+        </div>
       </div>
     </Transition>
   </div>
@@ -1468,9 +1563,18 @@ onUnmounted(() => {
   color: var(--text-title);
 }
 
+.topic-link {
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.topic-link:hover {
+  color: #4a90d9;
+}
+
 .content {
   margin-top: 10px;
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1.5;
   color: var(--text-main);
   max-height: 80px;
@@ -1520,6 +1624,93 @@ onUnmounted(() => {
   border-color: transparent;
 }
 
+.hot-comments-section {
+  margin-top: 12px;
+  padding: 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f0f4f8 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(74, 144, 217, 0.1);
+}
+
+.hot-comments-carousel {
+  position: relative;
+}
+
+.hot-comment-wrapper {
+  min-height: 60px;
+}
+
+.hot-comment-item {
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+}
+
+.hot-comment-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.hot-comment-author {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-title);
+}
+
+.hot-comment-likes {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.hot-comment-content {
+  font-size: 14px;
+  color: var(--text-main);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hot-comment-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.hot-comment-dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(74, 144, 217, 0.3);
+  transition: all 0.3s;
+}
+
+.hot-comment-dots .dot.active {
+  width: 18px;
+  border-radius: 3px;
+  background: #4a90d9;
+}
+
+.hot-comment-slide-enter-active,
+.hot-comment-slide-leave-active {
+  transition: all 0.4s ease;
+}
+
+.hot-comment-slide-enter-from {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.hot-comment-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
+}
+
 .action-row {
   margin-top: 12px;
   display: flex;
@@ -1560,6 +1751,69 @@ onUnmounted(() => {
   padding: 12px;
   background: rgba(74, 144, 217, 0.05);
   border-radius: 12px;
+}
+
+.comment-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.comment-item {
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.comment-item:last-child {
+  margin-bottom: 0;
+}
+
+.comment-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.comment-author {
+  font-weight: 600;
+  font-size: 13px;
+  color: #333;
+}
+
+.comment-level {
+  font-size: 11px;
+  color: #4a90d9;
+  background: rgba(74, 144, 217, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.comment-content {
+  font-size: 14px;
+  color: #555;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.comment-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #999;
+}
+
+.comment-loading,
+.no-comments {
+  text-align: center;
+  padding: 20px;
+  color: #999;
+  font-size: 14px;
+}
+
+.comment-input-row {
   display: flex;
   gap: 10px;
 }
@@ -1759,30 +2013,159 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-.emoji-burst-container {
+.like-celebration {
   position: fixed;
   z-index: 9999;
   pointer-events: none;
-  display: flex;
-  gap: 4px;
+  transform: translate(-50%, -50%);
+  width: 200px;
+  height: 200px;
+}
+
+.celebration-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 107, 107, 0.8);
+  transform: translate(-50%, -50%);
+  animation: ring-expand 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.celebration-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 60px;
+  height: 60px;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.6) 0%, rgba(255, 107, 107, 0.3) 40%, transparent 70%);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: glow-pulse 0.5s ease-out forwards;
+}
+
+.celebration-particles {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+}
+
+.particle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: particle-burst 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  animation-delay: calc(var(--i) * 0.02s);
+}
+
+.particle:nth-child(1) { background: #ff6b6b; animation-name: particle-1; }
+.particle:nth-child(2) { background: #ffd93d; animation-name: particle-2; }
+.particle:nth-child(3) { background: #6bcb77; animation-name: particle-3; }
+.particle:nth-child(4) { background: #4d96ff; animation-name: particle-4; }
+.particle:nth-child(5) { background: #ff6b9d; animation-name: particle-5; }
+.particle:nth-child(6) { background: #c44dff; animation-name: particle-6; }
+.particle:nth-child(7) { background: #ff9f43; animation-name: particle-7; }
+.particle:nth-child(8) { background: #00d2d3; animation-name: particle-8; }
+.particle:nth-child(9) { background: #ff6b6b; animation-name: particle-9; }
+.particle:nth-child(10) { background: #ffd93d; animation-name: particle-10; }
+.particle:nth-child(11) { background: #6bcb77; animation-name: particle-11; }
+.particle:nth-child(12) { background: #4d96ff; animation-name: particle-12; }
+
+.celebration-emojis {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
 }
 
 .burst-emoji {
-  font-size: 24px;
-  animation: burst-up 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  position: absolute;
+  font-size: 28px;
+  animation: emoji-burst 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation-delay: calc(var(--i) * 0.04s);
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
 }
 
-@keyframes burst-up {
-  0% {
-    opacity: 1;
-    transform: translateY(0) scale(0.5);
-  }
+.burst-emoji:nth-child(1) { animation-name: emoji-1; }
+.burst-emoji:nth-child(2) { animation-name: emoji-2; }
+.burst-emoji:nth-child(3) { animation-name: emoji-3; }
+.burst-emoji:nth-child(4) { animation-name: emoji-4; }
+.burst-emoji:nth-child(5) { animation-name: emoji-5; }
+.burst-emoji:nth-child(6) { animation-name: emoji-6; }
+.burst-emoji:nth-child(7) { animation-name: emoji-7; }
+.burst-emoji:nth-child(8) { animation-name: emoji-8; }
 
-  100% {
-    opacity: 0;
-    transform: translateY(-60px) scale(1.2);
-  }
+.celebration-sparks {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
 }
+
+.spark {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 6px 2px rgba(255, 255, 255, 0.8);
+  animation: spark-fly 0.5s ease-out forwards;
+  animation-delay: calc(var(--i) * 0.03s);
+}
+
+.spark:nth-child(1) { animation-name: spark-1; }
+.spark:nth-child(2) { animation-name: spark-2; }
+.spark:nth-child(3) { animation-name: spark-3; }
+.spark:nth-child(4) { animation-name: spark-4; }
+.spark:nth-child(5) { animation-name: spark-5; }
+.spark:nth-child(6) { animation-name: spark-6; }
+
+@keyframes ring-expand {
+  0% { width: 20px; height: 20px; opacity: 1; border-width: 3px; }
+  100% { width: 120px; height: 120px; opacity: 0; border-width: 1px; }
+}
+
+@keyframes glow-pulse {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+  50% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+}
+
+@keyframes particle-1 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(20px, -50px) scale(0.3); } }
+@keyframes particle-2 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(45px, -35px) scale(0.3); } }
+@keyframes particle-3 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(55px, -5px) scale(0.3); } }
+@keyframes particle-4 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(50px, 25px) scale(0.3); } }
+@keyframes particle-5 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(30px, 50px) scale(0.3); } }
+@keyframes particle-6 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-5px, 60px) scale(0.3); } }
+@keyframes particle-7 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-40px, 50px) scale(0.3); } }
+@keyframes particle-8 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-60px, 20px) scale(0.3); } }
+@keyframes particle-9 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-55px, -15px) scale(0.3); } }
+@keyframes particle-10 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-40px, -45px) scale(0.3); } }
+@keyframes particle-11 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-10px, -55px) scale(0.3); } }
+@keyframes particle-12 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(10px, -60px) scale(0.3); } }
+
+@keyframes emoji-1 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(-25px, -75px) scale(0.8) rotate(20deg); } }
+@keyframes emoji-2 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(15px, -80px) scale(0.8) rotate(-15deg); } }
+@keyframes emoji-3 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(45px, -60px) scale(0.8) rotate(25deg); } }
+@keyframes emoji-4 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(60px, -25px) scale(0.8) rotate(-20deg); } }
+@keyframes emoji-5 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(50px, 20px) scale(0.8) rotate(15deg); } }
+@keyframes emoji-6 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(20px, 55px) scale(0.8) rotate(-25deg); } }
+@keyframes emoji-7 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(-35px, 50px) scale(0.8) rotate(20deg); } }
+@keyframes emoji-8 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(-55px, 15px) scale(0.8) rotate(-15deg); } }
+
+@keyframes spark-1 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-15px, -40px) scale(0); } }
+@keyframes spark-2 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(20px, -35px) scale(0); } }
+@keyframes spark-3 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(35px, -10px) scale(0); } }
+@keyframes spark-4 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(30px, 25px) scale(0); } }
+@keyframes spark-5 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-25px, 35px) scale(0); } }
+@keyframes spark-6 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-40px, 5px) scale(0); } }
 
 .composer-expand-enter-active {
   animation: composer-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);

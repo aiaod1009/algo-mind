@@ -6,6 +6,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 /**
  * 论坛帖子数据访问层
  */
@@ -18,4 +20,6 @@ public interface ForumPostRepository extends JpaRepository<ForumPost, Long> {
      * @return 分页结果
      */
     Page<ForumPost> findAll(Pageable pageable);
+
+    Optional<ForumPost> findByTopic(String topic);
 }

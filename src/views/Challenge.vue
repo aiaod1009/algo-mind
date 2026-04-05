@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useLevelStore } from '../stores/level'
 import { useErrorStore } from '../stores/error'
 import { useUserStore } from '../stores/user'
+import api from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +21,13 @@ const attemptsInRun = ref(0)
 const startTimestamp = ref(Date.now())
 const evaluationResult = ref(null)
 const DRAFT_KEY_PREFIX = 'challenge-draft-'
+
+const languageLabelMap = {
+  cpp: 'C++',
+  java: 'Java',
+  python: 'Python',
+  js: 'JavaScript',
+}
 
 const currentLevelId = computed(() => Number(route.params.id))
 const currentLevel = computed(() => levelStore.findLevelById(currentLevelId.value))
@@ -40,17 +48,28 @@ const practiceWindowText = computed(() => {
 const maxAttempts = computed(() => 5)
 const isCodeChallenge = computed(() => currentLevel.value?.type === 'code')
 const showEvaluationPanel = computed(() => isCodeChallenge.value && Boolean(evaluationResult.value))
-const submitButtonText = computed(() => (isCodeChallenge.value ? '提交' : '开始评估'))
+const submitButtonText = computed(() => (isCodeChallenge.value ? '开始评估' : '开始评估'))
+
+const starsDisplay = computed(() => {
+  if (!evaluationResult.value?.stars) return '☆☆☆'
+  const stars = Math.min(3, Math.max(0, evaluationResult.value.stars))
+  return '★'.repeat(stars) + '☆'.repeat(3 - stars)
+})
 
 const normalizeEvaluationResult = (result) => {
   if (!result) return null
   const scoreNumber = Number(result.score)
   return {
     score: Number.isFinite(scoreNumber) ? Math.max(0, Math.min(100, Math.round(scoreNumber))) : null,
+    stars: Number.isFinite(result.stars) ? Math.max(0, Math.min(3, Math.round(result.stars))) : 0,
     output: String(result.output ?? result.stdout ?? result.runOutput ?? '').trim(),
     analysis: String(result.analysis ?? result.aiAnalysis ?? result.feedback ?? '').trim(),
+    correctness: String(result.correctness ?? '').trim(),
+    quality: String(result.quality ?? '').trim(),
+    efficiency: String(result.efficiency ?? '').trim(),
+    suggestions: Array.isArray(result.suggestions) ? result.suggestions : [],
     pointsEarned: Number(result.pointsEarned || 0),
-    updatedAt: Date.now(),
+    updatedAt: new Date().toLocaleString(),
   }
 }
 
@@ -154,6 +173,29 @@ const handleSubmit = async () => {
   loading.value = true
   attemptsInRun.value += 1
   try {
+    if (isCodeChallenge.value) {
+      const res = await api.evaluateCode({
+        code: answer.value,
+        language: languageLabelMap[language.value] || language.value,
+        question: currentLevel.value.question,
+        description: currentLevel.value.description,
+        stdinInput: stdinInput.value,
+      })
+      
+      if (res.data?.code === 0 && res.data.data) {
+        evaluationResult.value = normalizeEvaluationResult(res.data.data)
+        const pointsEarned = Math.round((evaluationResult.value.score || 0) * (currentLevel.value.rewardPoints || 100) / 100)
+        if (pointsEarned > 0) {
+          userStore.addPoints(pointsEarned)
+          evaluationResult.value.pointsEarned = pointsEarned
+        }
+        ElMessage.success('AI评估完成')
+      } else {
+        ElMessage.error('评估失败，请稍后重试')
+      }
+      return
+    }
+
     const timeMs = Date.now() - startTimestamp.value
     const result = await levelStore.submitAnswer(currentLevelId.value, answer.value, {
       attempts: attemptsInRun.value,
@@ -163,15 +205,6 @@ const handleSubmit = async () => {
     })
     if (!result) {
       ElMessage.error('提交失败，请稍后重试')
-      return
-    }
-
-    if (isCodeChallenge.value) {
-      evaluationResult.value = normalizeEvaluationResult(result)
-      if (result.pointsEarned > 0) {
-        userStore.addPoints(result.pointsEarned)
-      }
-      ElMessage.success('提交成功，已生成评估结果')
       return
     }
 
@@ -197,6 +230,7 @@ const handleSubmit = async () => {
     })
     await ElMessageBox.alert('回答错误，已加入错题本。', '继续加油', { type: 'warning' })
   } catch (error) {
+    console.error('提交异常：', error)
     ElMessage.error('提交异常，请稍后重试')
   } finally {
     loading.value = false
@@ -295,19 +329,47 @@ watch(currentLevelId, loadLevel)
           <Transition name="eval-slide">
             <aside v-if="showEvaluationPanel" class="eval-panel">
               <div class="eval-title">评估结果</div>
+              
               <div class="eval-score-row">
                 <span class="label">评估分数</span>
                 <span class="score">{{ evaluationResult.score ?? '--' }}</span>
               </div>
-              <div class="eval-meta" v-if="evaluationResult.pointsEarned > 0">本次奖励：{{ evaluationResult.pointsEarned }} 分
+              
+              <div class="eval-stars-row">
+                <span class="label">星级评定</span>
+                <span class="stars" :class="'stars-' + (evaluationResult.stars || 0)">{{ starsDisplay }}</span>
               </div>
-              <div class="eval-meta">更新时间：{{ evaluationResult.updatedAt }}</div>
+              
+              <div class="eval-meta" v-if="evaluationResult.pointsEarned > 0">
+                本次奖励：{{ evaluationResult.pointsEarned }} 分
+              </div>
+              <div class="eval-meta">评估时间：{{ evaluationResult.updatedAt }}</div>
 
               <div class="eval-section-title">程序输出</div>
               <pre class="eval-pre">{{ evaluationResult.output || '暂无输出' }}</pre>
 
               <div class="eval-section-title">AI分析</div>
               <p class="eval-analysis">{{ evaluationResult.analysis || '暂无分析内容' }}</p>
+              
+              <template v-if="evaluationResult.correctness || evaluationResult.quality || evaluationResult.efficiency">
+                <div class="eval-section-title">详细评价</div>
+                <div class="eval-detail" v-if="evaluationResult.correctness">
+                  <span class="detail-label">正确性：</span>{{ evaluationResult.correctness }}
+                </div>
+                <div class="eval-detail" v-if="evaluationResult.quality">
+                  <span class="detail-label">代码质量：</span>{{ evaluationResult.quality }}
+                </div>
+                <div class="eval-detail" v-if="evaluationResult.efficiency">
+                  <span class="detail-label">效率：</span>{{ evaluationResult.efficiency }}
+                </div>
+              </template>
+              
+              <template v-if="evaluationResult.suggestions?.length > 0">
+                <div class="eval-section-title">改进建议</div>
+                <ul class="eval-suggestions">
+                  <li v-for="(suggestion, index) in evaluationResult.suggestions" :key="index">{{ suggestion }}</li>
+                </ul>
+              </template>
             </aside>
           </Transition>
         </div>
@@ -520,6 +582,62 @@ watch(currentLevelId, loadLevel)
   color: var(--brand-blue-strong);
   font-size: 24px;
   font-weight: 700;
+}
+
+.eval-stars-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.eval-stars-row .label {
+  color: var(--text-sub);
+  font-size: 13px;
+}
+
+.eval-stars-row .stars {
+  font-size: 20px;
+  letter-spacing: 2px;
+}
+
+.eval-stars-row .stars-3 {
+  color: #f59e0b;
+}
+
+.eval-stars-row .stars-2 {
+  color: #f59e0b;
+}
+
+.eval-stars-row .stars-1 {
+  color: #f59e0b;
+}
+
+.eval-stars-row .stars-0 {
+  color: #d1d5db;
+}
+
+.eval-detail {
+  font-size: 13px;
+  color: var(--text-main);
+  margin: 4px 0;
+  line-height: 1.5;
+}
+
+.eval-detail .detail-label {
+  color: var(--text-sub);
+  font-weight: 500;
+}
+
+.eval-suggestions {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+.eval-suggestions li {
+  margin: 4px 0;
+  line-height: 1.5;
 }
 
 .eval-meta {

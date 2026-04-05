@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import ErrorAnalysisDialog from '../components/ErrorAnalysisDialog.vue'
+import FlowerPagination from '../components/FlowerPagination.vue'
 import { useErrorStore } from '../stores/error'
 
 const router = useRouter()
@@ -12,11 +13,14 @@ const analysisLoading = ref(false)
 const addDialogVisible = ref(false)
 const analysisDialogVisible = ref(false)
 const analysisText = ref('')
+const analysisData = ref(null)
 const sortBy = ref('urgent')
 const subjectFilter = ref('all')
 const statusFilter = ref('all')
 const masteredIds = ref([])
 const masteredIdSet = computed(() => new Set(masteredIds.value))
+const currentPage = ref(1)
+const pageSize = 5
 
 const addForm = reactive({
   question: '',
@@ -35,6 +39,40 @@ const inferSubject = (item) => {
 const toTimestamp = (value) => {
   const ts = new Date(value || '').getTime()
   return Number.isFinite(ts) ? ts : 0
+}
+
+const formatTime = (value) => {
+  if (!value) return ''
+  const ts = Number.isFinite(Number(value)) ? Number(value) : new Date(value).getTime()
+  if (!Number.isFinite(ts)) return String(value)
+  const date = new Date(ts)
+  const now = new Date()
+  const diffMs = now.getTime() - ts
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+  if (diffMins < 1) return '刚刚'
+  if (diffMins < 60) return `${diffMins} 分钟前`
+  if (diffHours < 24) return `${diffHours} 小时前`
+  if (diffDays < 7) return `${diffDays} 天前`
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+const formatAnswer = (value) => {
+  if (!value) return '（空）'
+  if (Array.isArray(value)) {
+    return value.map(v => String(v).trim()).filter(Boolean).join('、') || '（空）'
+  }
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) {
+      return parsed.map(v => String(v).trim()).filter(Boolean).join('、') || '（空）'
+    }
+  } catch (e) {}
+  return String(value)
 }
 
 const getUrgency = (item) => {
@@ -66,7 +104,7 @@ const subjectOptions = computed(() => {
   return ['all', ...Array.from(set)]
 })
 
-const visibleItems = computed(() => {
+const filteredItems = computed(() => {
   let list = [...errorItems.value]
 
   if (subjectFilter.value !== 'all') {
@@ -91,6 +129,18 @@ const visibleItems = computed(() => {
   }
 
   return list
+})
+
+const totalPages = computed(() => Math.ceil(filteredItems.value.length / pageSize))
+
+const visibleItems = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  const end = start + pageSize
+  return filteredItems.value.slice(start, end)
+})
+
+watch([sortBy, subjectFilter, statusFilter], () => {
+  currentPage.value = 1
 })
 
 const totalCount = computed(() => errorItems.value.length)
@@ -155,14 +205,17 @@ const handleAnalyze = async (row) => {
   analysisDialogVisible.value = true
   analysisLoading.value = true
   analysisText.value = ''
+  analysisData.value = null
   try {
-    const result = await errorStore.getAnalysis(row.id, row.description)
-    analysisText.value = result
-    errorStore.markAnalysis(row.id, result)
+    const result = await errorStore.getAnalysis(row)
+    analysisText.value = result.analysis
+    analysisData.value = result.analysisData
+    errorStore.markAnalysis(row.id, result.analysis)
   } catch (error) {
     const serverMessage = error?.response?.data?.message || error?.message || 'AI 分析失败，请稍后重试'
     ElMessage.error(serverMessage)
     analysisText.value = ''
+    analysisData.value = null
   } finally {
     analysisLoading.value = false
   }
@@ -201,18 +254,61 @@ onMounted(loadData)
 
 <template>
   <div class="page-container errors-page">
-    <div class="overview-card">
-      <div class="stat-item">
-        <div class="stat-label">总计</div>
-        <div class="stat-value">{{ totalCount }}</div>
+    <div class="stats-showcase">
+      <div class="stat-card total">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            <line x1="12" y1="6" x2="12" y2="12"/>
+            <line x1="9" y1="9" x2="15" y2="9"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-number">{{ totalCount }}</span>
+          <span class="stat-label">错题总数</span>
+        </div>
+        <div class="stat-decoration">
+          <span></span><span></span><span></span>
+        </div>
       </div>
-      <div class="stat-item active">
-        <div class="stat-label">待复习</div>
-        <div class="stat-value">{{ pendingCount }}</div>
+      
+      <div class="stat-card pending">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-number">{{ pendingCount }}</span>
+          <span class="stat-label">待复习</span>
+        </div>
+        <div class="stat-progress">
+          <div class="progress-bar" :style="{ width: totalCount > 0 ? (pendingCount / totalCount * 100) + '%' : '0%' }"></div>
+        </div>
       </div>
-      <div class="stat-item">
-        <div class="stat-label">掌握度</div>
-        <div class="stat-value mastery">{{ masteryRate }}%</div>
+      
+      <div class="stat-card mastery">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-number">{{ masteryRate }}<small>%</small></span>
+          <span class="stat-label">掌握度</span>
+        </div>
+        <div class="mastery-ring">
+          <svg viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="3"/>
+            <circle cx="18" cy="18" r="16" fill="none" stroke="currentColor" stroke-width="3" 
+              stroke-dasharray="100 100" 
+              :stroke-dashoffset="100 - masteryRate"
+              transform="rotate(-90 18 18)"/>
+          </svg>
+        </div>
       </div>
     </div>
 
@@ -242,10 +338,10 @@ onMounted(loadData)
         <div class="card-main">
           <div class="card-tags">
             <span class="subject-chip">{{ item.subject }}</span>
-            <span class="time-chip">{{ item.createdAt }}</span>
+            <span class="time-chip">{{ formatTime(item.createdAt) }}</span>
           </div>
           <h3 class="card-title">{{ item.question }}</h3>
-          <p class="card-answer">你的答案：{{ item.userAnswer || '（空）' }}</p>
+          <p class="card-answer">你的答案：{{ formatAnswer(item.userAnswer) }}</p>
           <p class="card-desc">{{ item.description }}</p>
           <div class="card-foot">
             <div class="status-group">
@@ -321,6 +417,13 @@ onMounted(loadData)
       </div>
     </div>
 
+    <FlowerPagination 
+      v-if="totalPages > 1" 
+      :total="totalPages" 
+      :default-page="currentPage"
+      @change="currentPage = $event"
+    />
+
     <el-dialog v-model="addDialogVisible" title="添加错题" width="560px">
       <el-form label-width="82px">
         <el-form-item label="题目">
@@ -339,7 +442,12 @@ onMounted(loadData)
       </template>
     </el-dialog>
 
-    <ErrorAnalysisDialog v-model="analysisDialogVisible" :loading="analysisLoading" :content="analysisText" />
+    <ErrorAnalysisDialog 
+      v-model="analysisDialogVisible" 
+      :loading="analysisLoading" 
+      :content="analysisText"
+      :analysis-data="analysisData"
+    />
   </div>
 </template>
 
@@ -367,38 +475,128 @@ onMounted(loadData)
   gap: 16px;
 }
 
-.overview-card {
-  background: linear-gradient(140deg, var(--overview-start) 0%, var(--overview-end) 100%);
-  border-radius: 24px;
-  padding: 18px;
+.stats-showcase {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
 }
 
-.stat-item {
+.stat-card {
+  position: relative;
+  padding: 24px;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.16);
-  padding: 16px;
-  color: var(--overview-text);
-  text-align: center;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.stat-item.active {
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+.stat-card:hover {
+  transform: translateY(-4px);
 }
 
-.stat-label {
-  font-size: 15px;
-  color: var(--overview-muted);
+.stat-card.total {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
 }
 
-.stat-value {
-  margin-top: 8px;
-  font-size: 46px;
+.stat-card.pending {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+}
+
+.stat-card.mastery {
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+  color: white;
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 16px;
+  opacity: 0.9;
+}
+
+.stat-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.stat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-number {
+  font-size: 42px;
+  font-weight: 800;
   line-height: 1;
-  font-weight: 700;
-  color: var(--overview-text);
+  letter-spacing: -2px;
+}
+
+.stat-number small {
+  font-size: 24px;
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+.stat-card .stat-label {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.85;
+  letter-spacing: 0.5px;
+}
+
+.stat-decoration {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  gap: 6px;
+}
+
+.stat-decoration span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.stat-decoration span:nth-child(2) {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.stat-decoration span:nth-child(3) {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.stat-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.stat-progress .progress-bar {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.6);
+  transition: width 0.6s ease;
+}
+
+.mastery-ring {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 48px;
+  height: 48px;
+}
+
+.mastery-ring svg {
+  width: 100%;
+  height: 100%;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .stat-value.mastery {
@@ -434,6 +632,12 @@ onMounted(loadData)
   grid-template-columns: 1fr auto;
   gap: 12px;
   align-items: start;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.error-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.12);
 }
 
 .error-card.done {
@@ -543,6 +747,11 @@ onMounted(loadData)
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.check-btn:hover {
+  transform: scale(1.1);
 }
 
 .check-btn.checked {
@@ -594,8 +803,16 @@ onMounted(loadData)
 }
 
 @media (max-width: 960px) {
-  .overview-card {
+  .stats-showcase {
     grid-template-columns: 1fr;
+  }
+
+  .stat-card {
+    padding: 20px;
+  }
+
+  .stat-number {
+    font-size: 36px;
   }
 
   .filter-select,

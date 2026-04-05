@@ -18,7 +18,10 @@ public class User {
     private Integer points;
     private String bio;
     private String gender;
+
+    @Column(columnDefinition = "TEXT")
     private String avatar;
+
     private String targetTrack;
     private Integer weeklyGoal;
     private OffsetDateTime createdAt;

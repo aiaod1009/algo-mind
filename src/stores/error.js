@@ -85,11 +85,30 @@ export const useErrorStore = defineStore('error', () => {
     }
   }
 
-  const getAnalysis = async (errorId, description) => {
+  const getAnalysis = async (errorItem) => {
     try {
-      const res = await api.post('/error-analysis', { errorId, description })
+      const payload = {
+        errorId: errorItem.id,
+        question: errorItem.question || '',
+        userAnswer: errorItem.userAnswer || '',
+        description: errorItem.description || '',
+        difficulty: errorItem.difficulty || 'medium',
+        track: errorItem.track || 'algo',
+        solveRate: errorItem.solveRate || null,
+        avgTimeSeconds: errorItem.avgTimeSeconds || null,
+        userAttempts: errorItem.userAttempts || null,
+        relatedTopics: errorItem.relatedTopics || [],
+        userLevel: errorItem.userLevel || 'beginner'
+      }
+      
+      const res = await api.post('/error-analysis', payload, {
+        timeout: 60000
+      })
       if (res.data?.code === 0) {
-        return res.data.data.analysis
+        return {
+          analysis: res.data.data.analysis,
+          analysisData: res.data.data.analysisData
+        }
       }
       throw new Error(res.data?.message || 'AI 分析失败')
     } catch (error) {

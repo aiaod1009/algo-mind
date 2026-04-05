@@ -1,6 +1,8 @@
 package com.example.demo.controller;
 
 import com.example.demo.Result;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -10,11 +12,10 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import java.util.NoSuchElementException;
 
-/**
- * 全局异常处理器，统一返回规范错误响应
- */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     /**
      * 资源不存在异常（如findById空）
@@ -40,12 +41,10 @@ public class GlobalExceptionHandler {
         return Result.fail(40001, "参数校验失败：" + e.getBindingResult().getFieldError().getDefaultMessage());
     }
 
-    /**
-     * 通用运行时异常
-     */
     @ExceptionHandler(RuntimeException.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Result<Void> handleRuntimeException(RuntimeException e) {
+        log.error("服务器内部错误", e);
         return Result.fail(50001, "服务器内部错误：" + e.getMessage());
     }
 }

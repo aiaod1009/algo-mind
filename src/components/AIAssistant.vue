@@ -346,14 +346,41 @@ const sendMessage = async (message) => {
   await nextTick()
   scrollToBottom()
 
-  await new Promise(r => setTimeout(r, 600))
+  try {
+    const response = await api.aiChat({
+      message: message,
+      context: {
+        track: props.selectedTrack,
+        trackLabel: getTrackLabel(props.selectedTrack),
+        weeklyGoal: props.weeklyGoal,
+        weakTopics: studyHabits.value.weakTopics,
+        strongTopics: studyHabits.value.strongTopics,
+        totalErrors: errorAnalysis.value.totalErrors,
+        consistencyScore: studyHabits.value.consistencyScore,
+      }
+    })
 
-  const response = generateResponse(message)
-  chatMessages.value.push({
-    role: 'assistant',
-    content: response,
-    time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-  })
+    let responseContent = ''
+    if (response.data && response.data.code === 0 && response.data.data) {
+      responseContent = response.data.data.content
+    } else {
+      responseContent = generateResponse(message)
+    }
+
+    chatMessages.value.push({
+      role: 'assistant',
+      content: responseContent,
+      time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    })
+  } catch (error) {
+    console.error('AI对话失败:', error)
+    const fallbackResponse = generateResponse(message)
+    chatMessages.value.push({
+      role: 'assistant',
+      content: fallbackResponse,
+      time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    })
+  }
 
   isTyping.value = false
   await nextTick()

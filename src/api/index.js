@@ -69,5 +69,7 @@ api.uploadAvatar = userApi.uploadAvatar
 api.uploadAvatarFromUrl = userApi.uploadAvatarFromUrl
 api.getAvatar = userApi.getAvatar
 api.deleteAvatar = userApi.deleteAvatar
+api.aiChat = userApi.aiChat
+api.evaluateCode = userApi.evaluateCode
 
 export default api

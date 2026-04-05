@@ -30,6 +30,7 @@ public class ForumPost {
     /**
      * 作者头像
      */
+    @Column(columnDefinition = "TEXT")
     private String avatar;
 
     /**

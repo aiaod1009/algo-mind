@@ -116,6 +116,14 @@ export const userApi = {
   deleteAvatar() {
     return api.delete('/users/me/avatar')
   },
+
+  aiChat(data) {
+    return api.post('/ai/chat', data, { timeout: AI_TIMEOUT })
+  },
+
+  evaluateCode(data) {
+    return api.post('/ai/evaluate-code', data, { timeout: AI_TIMEOUT })
+  },
 }
 
 export default userApi

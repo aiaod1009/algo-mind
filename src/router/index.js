@@ -8,6 +8,7 @@ import Ranking from '../views/Ranking.vue'
 import Profile from '../views/Profile.vue'
 import Courses from '../views/Courses.vue'
 import Forum from '../views/Forum.vue'
+import ForumPost from '../views/ForumPost.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -57,6 +58,12 @@ const router = createRouter({
       path: '/forum',
       name: 'forum',
       component: Forum,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/forum/:id',
+      name: 'forum-post',
+      component: ForumPost,
       meta: { requiresAuth: true },
     },
     {
