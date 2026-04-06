@@ -2,13 +2,13 @@
 
 # 服务器端口（宝塔面板通常用 8080 或其他非 80 端口，由 Nginx 转发）
 server:
-  port: 8080
+  port: 8000
   servlet:
     context-path: /api
 
 # CORS 跨域配置 - 必须改成你的真实域名
 cors:
-  allowed-origins: https://www.yourdomain.com,https://yourdomain.com
+  allowed-origins: "http://localhost:5173,https://www.yourdomain.com,https://yourdomain.com"
 
 # 文件上传配置
 file:
@@ -20,18 +20,22 @@ ai:
 
 # 数据库配置（生产环境，连接服务器MySQL）
 spring:
+  # MySQL 数据库配置（你服务器上的库）
   datasource:
-    url: jdbc:mysql://43.139.148.97:9191/algomind_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://43.139.148.97:9191/algomind_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
     username: algomind_user
     password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # JPA 真实连接 MySQL
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     show-sql: true
     properties:
       hibernate:
         format_sql: true
+    database-platform: org.hibernate.dialect.MySQL8Dialect
     
 # 日志配置
 logging:

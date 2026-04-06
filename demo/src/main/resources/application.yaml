@@ -1,5 +1,5 @@
 server:
-  port: 3000
+  port: 8000
   servlet:
     context-path: /api
 
@@ -20,18 +20,18 @@ ip:
 
 spring:
   profiles:
-    active: dev
+    active: prod
 
 ---
 spring:
   config:
     activate:
-      on-profile: dev
+      on-profile: prod
   datasource:
-    url: jdbc:h2:file:./data/algodb;MODE=MySQL;DB_CLOSE_ON_EXIT=FALSE;AUTO_RECONNECT=TRUE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
+    url: jdbc:mysql://43.139.148.97:9191/algomind_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: algomind_user
+    password: 123456
   jpa:
     hibernate:
       ddl-auto: update
@@ -39,13 +39,6 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.H2Dialect
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
-    console-settings:
-      web-allow-others: false
   servlet:
     multipart:
       enabled: true
