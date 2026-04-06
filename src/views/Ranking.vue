@@ -18,6 +18,8 @@ const trackColors = {
 
 const rankingRows = computed(() => userStore.getLeaderboard())
 
+const isEmpty = computed(() => rankingRows.value.length === 0)
+
 const topThree = computed(() => rankingRows.value.slice(0, 3))
 
 const restRanking = computed(() => rankingRows.value.slice(3))
@@ -75,16 +77,25 @@ const statsData = computed(() => [
     </div>
 
     <section class="stats-section">
-      <div v-for="(stat, index) in statsData" :key="stat.label" class="stat-card" :style="{ '--delay': index * 0.1 + 's', '--color': stat.color }">
+      <div v-if="isEmpty" class="empty-state">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 15l-2 5l9-11h-6l2-5l-9 11h6z"/>
+        </svg>
+        <h3>暂无排行数据</h3>
+        <p>完成关卡挑战，成为第一个上榜的用户吧！</p>
+      </div>
+      <template v-else>
+        <div v-for="(stat, index) in statsData" :key="stat.label" class="stat-card" :style="{ '--delay': index * 0.1 + 's', '--color': stat.color }">
         <div class="stat-icon">{{ stat.icon }}</div>
         <div class="stat-info">
           <span class="stat-value">{{ stat.value }}</span>
           <span class="stat-label">{{ stat.label }}</span>
         </div>
       </div>
+      </template>
     </section>
 
-    <section class="podium-section">
+    <section v-if="!isEmpty" class="podium-section">
       <div class="podium-container">
         <div v-if="topThree[1]" class="podium-item second" :style="{ '--podium-height': getRankStyle(2).height }">
           <div class="podium-card" :style="{ background: getRankStyle(2).bg, boxShadow: getRankStyle(2).shadow }">
@@ -151,7 +162,7 @@ const statsData = computed(() => [
       </div>
     </section>
 
-    <section class="ranking-list-section">
+    <section v-if="!isEmpty" class="ranking-list-section">
       <div class="section-header">
         <h2 class="section-title">
           <span class="title-deco">📊</span>
@@ -215,6 +226,33 @@ const statsData = computed(() => [
 </template>
 
 <style scoped>
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-sub);
+}
+
+.empty-state svg {
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-title);
+  margin-bottom: 8px;
+}
+
+.empty-state p {
+  font-size: 14px;
+  color: var(--text-sub);
+}
+
 .ranking-page {
   padding: 20px;
   max-width: 1200px;

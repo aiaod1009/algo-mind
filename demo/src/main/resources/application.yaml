@@ -1,0 +1,115 @@
+server:
+  port: 3000
+  servlet:
+    context-path: /api
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+
+auth:
+  jwt:
+    issuer: ${JWT_ISSUER:algo-mind}
+    secret: ${JWT_SECRET:algo-mind-demo-jwt-secret-key-change-me-2026}
+    expiration-minutes: ${JWT_EXPIRATION_MINUTES:10080}
+
+ip:
+  location:
+    enabled: true
+    db-path: classpath:ipdb/ip2region.xdb
+    fail-fast: false
+
+spring:
+  profiles:
+    active: dev
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:h2:file:./data/algodb;MODE=MySQL;DB_CLOSE_ON_EXIT=FALSE;AUTO_RECONNECT=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+    console-settings:
+      web-allow-others: false
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB
+      max-request-size: 10MB
+
+file:
+  upload-dir: ./uploads/avatars
+  max-size: 5242880
+  allowed-types: image/jpeg,image/png,image/gif,image/webp
+
+doubao:
+  api:
+    key: 40d60324-a9dd-4505-b1c6-1ef4d0d63556
+    url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+    model: doubao-seed-1-8-251228
+    timeout: 30000
+    max-retries: 3
+    temperature: 0.7
+    max-tokens: 4096
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:algo_challenge}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+  jackson:
+    date-format: yyyy-MM-dd'T'HH:mm:ss.SSS'Z'
+    time-zone: Asia/Shanghai
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB
+      max-request-size: 10MB
+
+file:
+  upload-dir: ${FILE_UPLOAD_DIR:/var/www/uploads/avatars}
+  max-size: 5242880
+  allowed-types: image/jpeg,image/png,image/gif,image/webp
+
+doubao:
+  api:
+    key: ${DOUBAO_API_KEY:}
+    url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+    model: ${DOUBAO_MODEL:doubao-seed-1-8-251228}
+    timeout: 30000
+    max-retries: 3
+    temperature: 0.7
+    max-tokens: 4096

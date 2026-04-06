@@ -2,12 +2,12 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../views/Login.vue'
 import Home from '../views/Home.vue'
 import Levels from '../views/Levels.vue'
-import Challenge from '../views/Challenge.vue'
 import Errors from '../views/Errors.vue'
 import Ranking from '../views/Ranking.vue'
 import Profile from '../views/Profile.vue'
 import Courses from '../views/Courses.vue'
 import Forum from '../views/Forum.vue'
+import ForumPost from '../views/ForumPost.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -32,7 +32,7 @@ const router = createRouter({
     {
       path: '/challenge/:id',
       name: 'challenge',
-      component: Challenge,
+      component: () => import('../views/Challenge.vue'),
       meta: { requiresAuth: true },
     },
     {
@@ -60,6 +60,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/forum/:id',
+      name: 'forum-post',
+      component: ForumPost,
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/profile',
       name: 'profile',
       component: Profile,
@@ -68,13 +74,11 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to) => {
   const user = localStorage.getItem('user')
   if (to.meta.requiresAuth && !user) {
-    next('/')
-    return
+    return '/'
   }
-  next()
 })
 
 export default router

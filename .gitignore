@@ -37,3 +37,12 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# Database files
+data/
+mysql-data/
+*.mv.db
+*.trace.db
+
+# Uploads
+uploads/

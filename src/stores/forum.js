@@ -54,6 +54,7 @@ const saveLocalPosts = (posts) => {
 
 export const useForumStore = defineStore('forum', () => {
   const posts = ref([])
+  const isFromCache = ref(false)
 
   const hydratePostsFromLocal = () => {
     const local = readLocalPosts()
@@ -61,39 +62,42 @@ export const useForumStore = defineStore('forum', () => {
       posts.value = local
       return true
     }
-    posts.value = DEFAULT_POSTS
-    saveLocalPosts(posts.value)
     return false
   }
 
   const fetchPosts = async ({ skipIfLoaded = true } = {}) => {
     if (skipIfLoaded && Array.isArray(posts.value) && posts.value.length > 0) {
-      return
+      return { fromCache: isFromCache.value }
     }
 
-    // Render something first so UI does not wait for network timeout.
     const hasHydrated = hydratePostsFromLocal()
 
     try {
       const res = await api.get('/forum-posts')
-      if (res.data?.code === 0 && Array.isArray(res.data.data)) {
-        posts.value = res.data.data
+      const list = res.data?.data?.list
+      if (res.data?.code === 0 && Array.isArray(list)) {
+        posts.value = list
         saveLocalPosts(posts.value)
-        return
+        isFromCache.value = false
+        return { fromCache: false }
       }
     } catch (error) {
-      console.warn('论坛接口不可用，使用本地论坛数据。', error)
+      console.warn('论坛接口不可用，使用本地缓存数据。', error)
     }
 
-    if (!hasHydrated) {
-      posts.value = DEFAULT_POSTS
-      saveLocalPosts(posts.value)
+    if (hasHydrated) {
+      isFromCache.value = true
+      return { fromCache: true }
     }
+
+    posts.value = DEFAULT_POSTS
+    saveLocalPosts(posts.value)
+    isFromCache.value = true
+    return { fromCache: true }
   }
 
   const addPost = async (postPayload) => {
-    const nextPost = {
-      id: Date.now(),
+    const payload = {
       author: postPayload.author || '匿名用户',
       authorLevel: postPayload.authorLevel || 'LV.1',
       avatar: postPayload.avatar || '',
@@ -101,19 +105,28 @@ export const useForumStore = defineStore('forum', () => {
       content: postPayload.content || '',
       quote: postPayload.quote || '',
       tag: postPayload.tag || '# 未分类',
-      likes: 0,
-      comments: 0,
-      liked: false,
-      createdAt: Date.now(),
     }
 
-    posts.value.unshift(nextPost)
-    saveLocalPosts(posts.value)
-
     try {
-      await api.post('/forum-posts', nextPost)
+      const res = await api.post('/forum-posts', payload)
+      if (res.data?.code === 0) {
+        const newPost = res.data.data || {
+          ...payload,
+          id: Date.now(),
+          likes: 0,
+          comments: 0,
+          liked: false,
+          createdAt: new Date().toISOString(),
+        }
+        posts.value.unshift(newPost)
+        saveLocalPosts(posts.value)
+        return { success: true, synced: true }
+      } else {
+        throw new Error(res.data?.message || '发帖失败')
+      }
     } catch (error) {
-      console.warn('论坛发帖接口不可用，已保存在本地。', error)
+      console.error('发帖失败:', error)
+      return { success: false, error: error.message || '网络错误，发帖失败' }
     }
   }
 
@@ -137,5 +150,5 @@ export const useForumStore = defineStore('forum', () => {
     saveLocalPosts(posts.value)
   }
 
-  return { posts, hydratePostsFromLocal, fetchPosts, addPost, toggleLike, addCommentCount }
+  return { posts, isFromCache, hydratePostsFromLocal, fetchPosts, addPost, toggleLike, addCommentCount }
 })

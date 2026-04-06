@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useUserStore } from '../stores/user'
+import api from '../api'
 
 const props = defineProps({
   course: {
@@ -25,34 +26,27 @@ const videoDuration = ref(3600)
 const videoProgress = computed(() => (currentTime.value / videoDuration.value) * 100)
 
 const fetchComments = async () => {
-  comments.value = [
-    {
-      id: 1,
-      user: { name: '张同学', avatar: '' },
-      content: '老师讲得很清楚，动态规划终于入门了！',
-      time: '2024-01-15 14:30',
-      likes: 23,
-      replies: [
-        { id: 11, user: { name: '李同学' }, content: '同感！之前一直搞不懂状态转移', time: '2024-01-15 15:00' },
-      ],
-    },
-    {
-      id: 2,
-      user: { name: '王同学', avatar: '' },
-      content: '希望能多出一些练习题讲解视频',
-      time: '2024-01-14 10:20',
-      likes: 15,
-      replies: [],
-    },
-    {
-      id: 3,
-      user: { name: '刘同学', avatar: '' },
-      content: '背包问题讲得太好了，终于理解了01背包和完全背包的区别',
-      time: '2024-01-13 16:45',
-      likes: 32,
-      replies: [],
-    },
-  ]
+  try {
+    const courseId = props.course?.id || 1
+    const res = await api.get(`/courses/${courseId}/comments`)
+    if (res.data?.code === 0 && Array.isArray(res.data.data)) {
+      comments.value = res.data.data.map(item => ({
+        id: item.id,
+        user: { name: item.userName, avatar: item.userAvatar || '' },
+        content: item.content,
+        time: item.time,
+        likes: item.likes,
+        replies: (item.replies || []).map(r => ({
+          id: r.id,
+          user: { name: r.userName },
+          content: r.content,
+          time: r.time
+        }))
+      }))
+    }
+  } catch (e) {
+    console.error('获取评论失败', e)
+  }
   return comments.value
 }
 
@@ -70,15 +64,32 @@ const fetchDanmakus = async () => {
 
 const submitComment = async () => {
   if (!newComment.value.trim()) return
-  comments.value.unshift({
-    id: Date.now(),
-    user: { name: userStore.userInfo?.name || '我', avatar: '' },
-    content: newComment.value,
-    time: new Date().toLocaleString('zh-CN'),
-    likes: 0,
-    replies: [],
-  })
-  newComment.value = ''
+  try {
+    const courseId = props.course?.id || 1
+    const res = await api.post(`/courses/${courseId}/comments`, {
+      userId: userStore.userInfo?.id || 1,
+      userName: userStore.userInfo?.name || '匿名用户',
+      userAvatar: userStore.userInfo?.avatar || '',
+      content: newComment.value
+    })
+    if (res.data?.code === 0) {
+      await fetchComments()
+      newComment.value = ''
+    }
+  } catch (e) {
+    console.error('发表评论失败', e)
+  }
+}
+
+const likeComment = async (comment) => {
+  try {
+    const res = await api.post(`/comments/${comment.id}/like`)
+    if (res.data?.code === 0) {
+      comment.likes = res.data.data.likes
+    }
+  } catch (e) {
+    console.error('点赞失败', e)
+  }
 }
 
 const submitDanmaku = async () => {
@@ -100,10 +111,6 @@ const toggleDanmakuInput = () => {
       document.querySelector('.danmaku-input')?.focus()
     })
   }
-}
-
-const likeComment = (comment) => {
-  comment.likes++
 }
 
 const formatTime = (seconds) => {
@@ -133,59 +140,12 @@ onMounted(() => {
   <div class="course-detail">
     <div class="video-section">
       <div class="video-player">
-        <div class="video-placeholder">
-          <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5">
-            <polygon points="5 3 19 12 5 21 5 3"/>
-          </svg>
-          <span>点击播放视频</span>
-        </div>
-        <div class="danmaku-layer">
-          <div
-            v-for="dm in danmakus.filter(d => d.time >= currentTime && d.time < currentTime + 10)"
-            :key="dm.id"
-            class="danmaku-item"
-            :style="{ color: dm.color, top: Math.random() * 80 + '%' }"
-          >
-            {{ dm.content }}
-          </div>
-        </div>
-        <div class="video-controls">
-          <div class="progress-bar-wrap">
-            <div class="video-progress">
-              <div class="progress-fill" :style="{ width: videoProgress + '%' }"></div>
-            </div>
-          </div>
-          <div class="controls-row">
-            <div class="controls-left">
-              <button class="control-btn">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                  <polygon points="5 3 19 12 5 21 5 3"/>
-                </svg>
-              </button>
-              <span class="time-display">{{ formatTime(currentTime) }} / {{ formatTime(videoDuration) }}</span>
-            </div>
-            <div class="controls-right">
-              <button class="control-btn danmaku-toggle" @click="toggleDanmakuInput">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-                发弹幕
-              </button>
-            </div>
-          </div>
-        </div>
-        <Transition name="slide">
-          <div v-if="showDanmakuInput" class="danmaku-input-wrap">
-            <input
-              v-model="newDanmaku"
-              type="text"
-              class="danmaku-input"
-              placeholder="发送弹幕..."
-              @keyup.enter="submitDanmaku"
-            />
-            <button class="send-danmaku" @click="submitDanmaku">发送</button>
-          </div>
-        </Transition>
+        <iframe
+          class="video-iframe"
+          src="https://player.bilibili.com/player.html?bvid=BV19e4y1q7JJ&poster=1"
+          frameborder="0"
+          allowfullscreen
+        ></iframe>
       </div>
     </div>
 
@@ -357,15 +317,12 @@ onMounted(() => {
   background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
 }
 
-.video-placeholder {
+.video-iframe {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  color: #64748b;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
 }
 
 .danmaku-layer {
