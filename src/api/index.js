@@ -9,16 +9,19 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const userRaw = localStorage.getItem('user')
-  if (userRaw) {
-    try {
-      const token = JSON.parse(userRaw)?.token
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-    } catch (error) {
-      console.warn('用户信息解析失败，忽略 token 注入。', error)
-    }
+  if (!userRaw) {
+    return config
   }
+
+  try {
+    const token = JSON.parse(userRaw)?.token
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+  } catch (error) {
+    console.warn('用户信息解析失败，忽略 token 注入。', error)
+  }
+
   return config
 })
 
@@ -27,10 +30,16 @@ api.interceptors.response.use(
   (error) => {
     const status = error?.response?.status
     const message = error?.response?.data?.message || error?.message || '请求失败'
+    const preserveSessionOn401 = Boolean(error?.config?.preserveSessionOn401)
+    const suppressAuthMessage = Boolean(error?.config?.suppressAuthMessage)
 
     if (status === 401) {
-      localStorage.removeItem('user')
-      ElMessage.error('登录已过期，请重新登录')
+      if (!preserveSessionOn401) {
+        localStorage.removeItem('user')
+      }
+      if (!suppressAuthMessage) {
+        ElMessage.error('登录已过期，请重新登录')
+      }
     } else if (status === 403) {
       ElMessage.error('无权限访问该资源')
     } else if (status === 500) {
@@ -71,5 +80,6 @@ api.getAvatar = userApi.getAvatar
 api.deleteAvatar = userApi.deleteAvatar
 api.aiChat = userApi.aiChat
 api.evaluateCode = userApi.evaluateCode
+api.getCourseRecommendations = userApi.getCourseRecommendations
 
 export default api

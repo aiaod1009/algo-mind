@@ -1,23 +1,8 @@
 import api from './index'
+import { withNonBlockingAuth } from './requestOptions'
 
 const AI_TIMEOUT = 60000
 const LONG_TIMEOUT = 30000
-
-const createApiCall = (method, url, timeout) => {
-  return async (dataOrParams) => {
-    const config = { timeout }
-    if (method === 'get') {
-      config.params = dataOrParams
-      return api.get(url, config)
-    } else if (method === 'post') {
-      return api.post(url, dataOrParams, config)
-    } else if (method === 'put') {
-      return api.put(url, dataOrParams, config)
-    } else if (method === 'delete') {
-      return api.delete(url, config)
-    }
-  }
-}
 
 export const userApi = {
   getUserProblemHeatmap(year) {
@@ -81,11 +66,18 @@ export const userApi = {
   },
 
   getCurrentLearningPlan(track = 'algo') {
-    return api.get(`/learning-plans/current?track=${track}`, { timeout: LONG_TIMEOUT })
+    return api.get(
+      `/learning-plans/current?track=${track}`,
+      withNonBlockingAuth({ timeout: LONG_TIMEOUT }),
+    )
   },
 
   generateLearningPlan(data) {
-    return api.post('/learning-plans/generate', data, { timeout: AI_TIMEOUT })
+    return api.post(
+      '/learning-plans/generate',
+      data,
+      withNonBlockingAuth({ timeout: AI_TIMEOUT }),
+    )
   },
 
   saveLearningPlan(data) {
@@ -101,7 +93,7 @@ export const userApi = {
     formData.append('file', file)
     return api.post('/users/me/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: LONG_TIMEOUT
+      timeout: LONG_TIMEOUT,
     })
   },
 
@@ -118,11 +110,15 @@ export const userApi = {
   },
 
   aiChat(data) {
-    return api.post('/ai/chat', data, { timeout: AI_TIMEOUT })
+    return api.post('/ai/chat', data, withNonBlockingAuth({ timeout: AI_TIMEOUT }))
   },
 
   evaluateCode(data) {
     return api.post('/ai/evaluate-code', data, { timeout: AI_TIMEOUT })
+  },
+
+  getCourseRecommendations() {
+    return api.get('/course-recommendations', withNonBlockingAuth())
   },
 }
 

@@ -719,10 +719,6 @@ onUnmounted(() => {
               <span class="btn-icon">💬</span>
               <span class="btn-count">{{ item.comments }}</span>
             </button>
-            <button class="action-btn view-detail-btn" @click.stop="goToPost(item.id)">
-              <span class="btn-icon">📖</span>
-              <span class="btn-label">查看详情</span>
-            </button>
           </div>
         </el-card>
 

@@ -78,6 +78,40 @@ export const useLevelStore = defineStore('level', () => {
       .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
   }
 
+  const applySubmissionResult = (levelId, result, meta = {}) => {
+    const currentLevel = findLevelById(levelId)
+    if (!currentLevel || !result) {
+      return
+    }
+
+    currentLevel.attemptCount = Math.max(0, Math.floor(normalizeNumber(currentLevel.attemptCount, 0)) + 1)
+
+    if (result.correct) {
+      const earnedStars = clampStars(result.bestStars ?? result.starsEarned ?? 1)
+      currentLevel.bestStars = Math.max(clampStars(currentLevel.bestStars ?? 0), earnedStars)
+      currentLevel.stars = currentLevel.bestStars
+      currentLevel.isCompleted = true
+
+      const timeMs = Math.max(0, Math.floor(normalizeNumber(meta.timeMs, 0)))
+      if (timeMs > 0) {
+        currentLevel.bestTimeMs = currentLevel.bestTimeMs == null
+          ? timeMs
+          : Math.min(currentLevel.bestTimeMs, timeMs)
+      }
+    }
+
+    if (result.nextLevelUnlocked) {
+      const nextLevel = levels.value.find(
+        (item) => item.track === currentLevel.track && Number(item.order || 0) === Number(currentLevel.order || 0) + 1,
+      )
+      if (nextLevel) {
+        nextLevel.isUnlocked = true
+      }
+    }
+
+    saveLocalLevels(levels.value)
+  }
+
   const submitAnswer = async (levelId, answer, meta = {}) => {
     const payload = { levelId, answer, meta }
     if (meta?.language) {
@@ -86,12 +120,15 @@ export const useLevelStore = defineStore('level', () => {
     if (meta?.stdinInput != null) {
       payload.stdinInput = meta.stdinInput
     }
-    if (typeof answer === 'string') {
+    if (typeof meta?.code === 'string' && meta.code.trim()) {
+      payload.code = meta.code
+    } else if (typeof answer === 'string') {
       payload.code = answer
     }
 
     const res = await api.post('/submit', payload)
     if (res.data?.code === 0) {
+      applySubmissionResult(levelId, res.data.data, meta)
       return res.data.data
     }
     throw new Error(res.data?.message || '提交失败')

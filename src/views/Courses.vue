@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import CourseDetail from '../components/CourseDetail.vue'
+import api from '../api'
 
 const router = useRouter()
 const activeTrack = ref('all')
@@ -147,12 +148,37 @@ const fetchCourses = async () => {
 
 const fetchAIRecommendations = async () => {
   isLoadingRecommendations.value = true
-  aiRecommendations.value = [
+  try {
+    const res = await api.getCourseRecommendations()
+    if (res.data?.code === 0 && Array.isArray(res.data?.data)) {
+      aiRecommendations.value = res.data.data.map((rec, index) => ({
+        id: rec.id || 100 + index,
+        title: rec.title,
+        reason: rec.reason,
+        matchScore: rec.matchScore,
+        teacher: rec.teacher || { name: '专业讲师', title: '资深专家' },
+        duration: rec.duration,
+        tags: rec.tags || [],
+      }))
+    } else {
+      aiRecommendations.value = getFallbackRecommendations()
+    }
+  } catch (e) {
+    console.error('获取AI推荐失败:', e)
+    aiRecommendations.value = getFallbackRecommendations()
+  } finally {
+    isLoadingRecommendations.value = false
+  }
+  return aiRecommendations.value
+}
+
+const getFallbackRecommendations = () => {
+  return [
     {
       id: 101,
       title: '动态规划强化训练',
-      reason: '根据您的错题分析，DP类题目错误率较高，推荐此课程针对性提升',
-      matchScore: 95,
+      reason: '根据您的学习数据，建议系统学习动态规划，提升算法能力',
+      matchScore: 85,
       teacher: { name: '张老师', title: 'DP专家' },
       duration: '12课时',
       tags: ['DP优化', '状态压缩'],
@@ -160,15 +186,13 @@ const fetchAIRecommendations = async () => {
     {
       id: 102,
       title: '图论算法精讲',
-      reason: '您的学习计划中包含图论内容，此课程与您的学习目标高度匹配',
-      matchScore: 88,
+      reason: '您的学习计划中包含图论内容，此课程与您的学习目标匹配',
+      matchScore: 80,
       teacher: { name: '刘老师', title: '图论专家' },
       duration: '15课时',
       tags: ['BFS', 'DFS', '最短路'],
     },
   ]
-  isLoadingRecommendations.value = false
-  return aiRecommendations.value
 }
 
 const filteredCourses = computed(() => {
