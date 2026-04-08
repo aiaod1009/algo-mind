@@ -932,16 +932,16 @@ onUnmounted(() => {
 
     <section class="right-panel">
       <div class="form-wrap">
-        <h1>Welcome back!</h1>
-        <p class="subtitle">Please enter your details</p>
+        <h1>欢迎回来！</h1>
+        <p class="subtitle">请输入你的登录信息</p>
 
         <el-form :model="form" @keyup.enter="handleLogin">
-          <el-form-item label="Email" label-position="top">
+          <el-form-item label="邮箱" label-position="top">
             <el-input v-model="form.email" placeholder="you@example.com" size="large" @focus="handleEmailFocus"
               @blur="handleEmailBlur" />
           </el-form-item>
 
-          <el-form-item label="Password" label-position="top">
+          <el-form-item label="密码" label-position="top">
             <el-input v-model="form.password" :type="showPassword ? 'text' : 'password'" placeholder="请输入密码"
               size="large" @focus="handlePasswordFocus" @blur="handlePasswordBlur" @input="handlePasswordInput">
               <template #suffix>
@@ -958,18 +958,18 @@ onUnmounted(() => {
           </el-form-item>
 
           <div class="helper-row">
-            <el-checkbox v-model="form.remember">Remember for 30 days</el-checkbox>
-            <a href="#" class="link" @click.prevent="handleForgetPassword">Forgot password?</a>
+            <el-checkbox v-model="form.remember">记住我 30 天</el-checkbox>
+            <a href="#" class="link" @click.prevent="handleForgetPassword">忘记密码？</a>
           </div>
 
           <el-button type="primary" size="large" class="action-btn" :loading="loading" @click="handleLogin">
-            Log in
+            登录
           </el-button>
         </el-form>
 
         <p class="register-row">
-          Don't have an account?
-          <a href="#" class="register-link" @click.prevent="handleRegister">Sign Up</a>
+          还没有账户？
+          <a href="#" class="register-link" @click.prevent="handleRegister">立即注册</a>
         </p>
         <p class="demo-hint">演示账号：admin@example.com / 123456</p>
       </div>

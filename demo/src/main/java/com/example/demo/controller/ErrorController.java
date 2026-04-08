@@ -150,7 +150,8 @@ public class ErrorController {
         StringBuilder prompt = new StringBuilder();
         prompt.append("请分析以下错题：\n\n");
         prompt.append("题目：").append(request.getQuestion() == null ? "未知" : request.getQuestion()).append("\n");
-        prompt.append("用户答案：").append(request.getUserAnswer() == null ? "未提交" : request.getUserAnswer()).append("\n");
+        String userAnswerStr = request.getUserAnswer() == null ? "未提交" : String.join(", ", request.getUserAnswer());
+        prompt.append("用户答案：").append(userAnswerStr).append("\n");
         if (request.getDescription() != null && !request.getDescription().isBlank()) {
             prompt.append("补充描述：").append(request.getDescription()).append("\n");
         }

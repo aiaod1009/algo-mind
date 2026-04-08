@@ -34,7 +34,7 @@ const attemptsInRun = ref(0)
 const startTimestamp = ref(Date.now())
 const evaluationResult = ref(null)
 const runResult = ref(null)
-const evaluationDrawerVisible = ref(false)
+const isAiDockExpanded = ref(false)
 
 const typeLabelMap = {
   single: '单选题',
@@ -225,7 +225,7 @@ const initializeChallenge = async () => {
   attemptsInRun.value = 0
   startTimestamp.value = Date.now()
   evaluationResult.value = null
-  evaluationDrawerVisible.value = false
+  isAiDockExpanded.value = false
   runResult.value = null
   answer.value = createEmptyAnswer()
   stdinInput.value = ''
@@ -302,7 +302,7 @@ const submitCodeChallenge = async () => {
 
   evaluationResult.value = normalizeEvaluationResult(response.data.data)
   evaluationResult.value.pointsEarned = 0
-  evaluationDrawerVisible.value = true
+  isAiDockExpanded.value = true
 
   if ((evaluationResult.value.score || 0) < CODE_PASS_SCORE) {
     ElMessage.warning(`评测已完成，达到 ${CODE_PASS_SCORE} 分即可通关`)
@@ -441,7 +441,7 @@ const handleQuickRun = () => {
 const handleResetTemplate = () => {
   applyCodeTemplate(true)
   evaluationResult.value = null
-  evaluationDrawerVisible.value = false
+  isAiDockExpanded.value = false
   runResult.value = null
   ElMessage.success('已恢复当前语言的默认模板')
 }
@@ -451,7 +451,7 @@ const openEvaluationDialog = () => {
     ElMessage.info('请先运行评测')
     return
   }
-  evaluationDrawerVisible.value = true
+  isAiDockExpanded.value = !isAiDockExpanded.value
 }
 
 const goBack = () => {
@@ -468,7 +468,7 @@ watch(language, (nextLanguage, previousLanguage) => {
   }
 
   evaluationResult.value = null
-  evaluationDrawerVisible.value = false
+  isAiDockExpanded.value = false
   runResult.value = null
 
   if (isTemplateLikeCode(answer.value)) {
@@ -533,7 +533,7 @@ watch(
         </section>
       </div>
 
-      <aside v-if="isCodeChallenge" class="surface-card ai-dock">
+      <aside v-if="isCodeChallenge" class="surface-card ai-dock" :class="{ expanded: isAiDockExpanded }">
         <div class="ai-dock-head">
           <h3>AI评估结果</h3>
           <span class="ai-status"
@@ -542,30 +542,38 @@ watch(
           </span>
         </div>
 
-        <div class="ai-dock-meta">
-          <div class="meta-item">
-            <span>总分</span>
-            <strong>{{ evaluationSummary.scoreText }} 分</strong>
+        <!-- 收起状态：显示摘要 -->
+        <template v-if="!isAiDockExpanded">
+          <div class="ai-dock-meta">
+            <div class="meta-item">
+              <span>总分</span>
+              <strong>{{ evaluationSummary.scoreText }} 分</strong>
+            </div>
+            <div class="meta-item">
+              <span>星级</span>
+              <strong class="stars">{{ evaluationSummary.starsText }}</strong>
+            </div>
           </div>
-          <div class="meta-item">
-            <span>星级</span>
-            <strong class="stars">{{ evaluationSummary.starsText }}</strong>
+
+          <p class="ai-dock-tip">点击下方按钮查看完整代码评审与优化建议。</p>
+
+          <el-button type="primary" plain class="open-eval-btn" :disabled="!hasEvaluationResult"
+            @click="openEvaluationDialog">
+            展开评估详情
+          </el-button>
+        </template>
+
+        <!-- 展开状态：显示完整评估内容 -->
+        <template v-else>
+          <div class="ai-dock-full-content">
+            <ChallengeEvaluationPanel v-if="hasEvaluationResult" :result="evaluationResult" :pass-score="CODE_PASS_SCORE" />
           </div>
-        </div>
-
-        <p class="ai-dock-tip">点击下方按钮查看完整代码评审与优化建议。</p>
-
-        <el-button type="primary" plain class="open-eval-btn" :disabled="!hasEvaluationResult"
-          @click="openEvaluationDialog">
-          打开右侧评估
-        </el-button>
+          <el-button type="primary" plain class="open-eval-btn" @click="openEvaluationDialog">
+            收起评估详情
+          </el-button>
+        </template>
       </aside>
     </div>
-
-    <el-drawer v-model="evaluationDrawerVisible" direction="rtl" size="520px" title="AI 代码评估结果"
-      class="evaluation-drawer">
-      <ChallengeEvaluationPanel v-if="hasEvaluationResult" :result="evaluationResult" :pass-score="CODE_PASS_SCORE" />
-    </el-drawer>
 
     <div class="action-row">
       <el-button @click="goBack">返回关卡</el-button>
@@ -706,13 +714,27 @@ watch(
   width: 100%;
 }
 
-:deep(.evaluation-drawer .el-drawer__header) {
-  margin-bottom: 8px;
+/* AI Dock 展开状态样式 */
+.ai-dock {
+  transition: all 0.3s ease;
+  max-height: 300px;
+  overflow: hidden;
 }
 
-:deep(.evaluation-drawer .el-drawer__body) {
-  padding: 0 14px 14px;
+.ai-dock.expanded {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  grid-column: 3;
+  width: 520px;
 }
+
+.ai-dock-full-content {
+  padding: 16px 0;
+  border-top: 1px solid var(--line-soft);
+  margin-top: 12px;
+}
+
+
 
 .run-result-panel {
   border: 1px solid var(--line-soft);

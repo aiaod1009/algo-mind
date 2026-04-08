@@ -3,14 +3,19 @@ package com.example.demo.controller;
 import com.example.demo.Result;
 import com.example.demo.dto.ai.ChatMessage;
 import com.example.demo.service.AIService;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Resource;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @RestController
@@ -81,18 +86,9 @@ public class AIController {
         log.info("收到AI对话请求，消息数量：{}", request.getMessages() != null ? request.getMessages().size() : 0);
         
         try {
-            List<ChatMessage> messages = new ArrayList<>();
-            messages.add(ChatMessage.system(ASSISTANT_SYSTEM_PROMPT));
+            List<ChatMessage> messages = buildAssistantMessages(request);
             
-            if (request.getMessages() != null && !request.getMessages().isEmpty()) {
-                messages.addAll(request.getMessages());
-            }
-            
-            if (request.getMessage() != null && !request.getMessage().isBlank()) {
-                messages.add(ChatMessage.user(request.getMessage()));
-            }
-            
-            if (request.getContext() != null) {
+            if (false && request.getContext() != null) {
                 StringBuilder contextPrompt = new StringBuilder("\n\n【学生信息】\n");
                 if (request.getContext().getTrack() != null) {
                     contextPrompt.append("- 当前赛道：").append(request.getContext().getTrackLabel() != null ? request.getContext().getTrackLabel() : request.getContext().getTrack()).append("\n");
@@ -128,7 +124,7 @@ public class AIController {
             
         } catch (AIService.AIException e) {
             log.warn("AI对话失败，使用降级回复：{}", e.getMessage());
-            String fallbackResponse = generateFallbackResponse(request);
+            String fallbackResponse = buildChatFailureResponse(request, e);
             
             ChatResponse chatResponse = new ChatResponse();
             chatResponse.setContent(fallbackResponse);
@@ -139,6 +135,126 @@ public class AIController {
             log.error("AI对话异常：{}", e.getMessage(), e);
             return Result.fail(500, "AI服务暂时不可用，请稍后重试");
         }
+    }
+
+    @PostMapping(path = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter chatStream(@RequestBody ChatRequest request) {
+        log.info("鏀跺埌AI娴佸紡瀵硅瘽璇锋眰锛屾秷鎭暟閲忥細{}", request.getMessages() != null ? request.getMessages().size() : 0);
+
+        SseEmitter emitter = new SseEmitter(0L);
+        List<ChatMessage> messages = buildAssistantMessages(request);
+
+        emitter.onTimeout(emitter::complete);
+        emitter.onCompletion(() -> log.debug("AI stream completed"));
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                aiService.chatStream(messages, delta -> sendStreamPayload(emitter, "delta", delta));
+                sendStreamPayload(emitter, "done", null);
+                emitter.complete();
+                log.info("AI娴佸紡瀵硅瘽鍝嶅簲鎴愬姛");
+            } catch (AIService.AIException e) {
+                log.warn("AI娴佸紡瀵硅瘽澶辫触锛屽洖閫€鍒伴檷绾у洖澶嶏細{}", e.getMessage());
+                sendStreamPayload(emitter, "error", buildChatFailureResponse(request, e));
+                emitter.complete();
+            } catch (Exception e) {
+                log.error("AI娴佸紡瀵硅瘽寮傚父锛歿}", e.getMessage(), e);
+                sendStreamPayload(emitter, "error", "AI service is temporarily unavailable. Please try again later.");
+                emitter.complete();
+            }
+        });
+
+        return emitter;
+    }
+
+    private List<ChatMessage> buildAssistantMessages(ChatRequest request) {
+        List<ChatMessage> messages = new ArrayList<>();
+        messages.add(ChatMessage.system(ASSISTANT_SYSTEM_PROMPT));
+
+        ChatMessage contextMessage = buildContextMessage(request.getContext());
+        if (contextMessage != null) {
+            messages.add(contextMessage);
+        }
+
+        if (request.getMessages() != null && !request.getMessages().isEmpty()) {
+            messages.addAll(request.getMessages());
+        }
+
+        if (request.getMessage() != null && !request.getMessage().isBlank()) {
+            messages.add(ChatMessage.user(request.getMessage()));
+        }
+
+        return messages;
+    }
+
+    private ChatMessage buildContextMessage(ChatContext context) {
+        if (context == null) {
+            return null;
+        }
+
+        StringBuilder contextPrompt = new StringBuilder();
+        boolean hasContent = false;
+
+        if (context.getTrack() != null) {
+            contextPrompt.append("\n\nTrack: ")
+                    .append(context.getTrackLabel() != null ? context.getTrackLabel() : context.getTrack())
+                    .append("\n");
+            hasContent = true;
+        }
+        if (context.getWeeklyGoal() != null) {
+            contextPrompt.append("- Weekly goal: ").append(context.getWeeklyGoal()).append("\n");
+            hasContent = true;
+        }
+        if (context.getWeakTopics() != null && !context.getWeakTopics().isEmpty()) {
+            contextPrompt.append("- Weak topics: ").append(String.join(", ", context.getWeakTopics())).append("\n");
+            hasContent = true;
+        }
+        if (context.getStrongTopics() != null && !context.getStrongTopics().isEmpty()) {
+            contextPrompt.append("- Strong topics: ").append(String.join(", ", context.getStrongTopics())).append("\n");
+            hasContent = true;
+        }
+        if (context.getTotalErrors() != null) {
+            contextPrompt.append("- Total errors: ").append(context.getTotalErrors()).append("\n");
+            hasContent = true;
+        }
+        if (context.getConsistencyScore() != null) {
+            contextPrompt.append("- Consistency score: ").append(context.getConsistencyScore()).append("/100\n");
+            hasContent = true;
+        }
+
+        return hasContent ? ChatMessage.system(contextPrompt.toString()) : null;
+    }
+
+    private void sendStreamPayload(SseEmitter emitter, String type, String content) {
+        try {
+            com.fasterxml.jackson.databind.node.ObjectNode payload = objectMapper.createObjectNode();
+            payload.put("type", type);
+            if (content != null) {
+                payload.put("content", content);
+            }
+            emitter.send(SseEmitter.event().data(objectMapper.writeValueAsString(payload)));
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Failed to serialize AI stream payload", e);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to send AI stream payload", e);
+        }
+    }
+
+    private String buildChatFailureResponse(ChatRequest request, AIService.AIException e) {
+        String errorMessage = e.getMessage() == null ? "" : e.getMessage();
+
+        if (errorMessage.contains("401")) {
+            return """
+                    AI service authentication failed.
+
+                    Please check:
+                    - `doubao.api.key` is valid
+                    - the key has access to the configured model
+                    - the deployed environment is loading the expected config file
+                    """;
+        }
+
+        return generateFallbackResponse(request);
     }
 
     @PostMapping("/evaluate-code")

@@ -1,5 +1,7 @@
 package com.example.demo.dto.ai;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,6 +16,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ChatRequest {
     
     /**
@@ -34,6 +37,7 @@ public class ChatRequest {
     /**
      * 最大生成token数
      */
+    @JsonProperty("max_tokens")
     private Integer maxTokens;
     
     /**

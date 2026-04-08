@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/user'
 import { useLevelStore } from '../stores/level'
 import AIAssistant from '../components/AIAssistant.vue'
+import DailyTasks from '../components/DailyTasks.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -59,32 +60,7 @@ if (!levelStore.levels.length) {
       <el-button type="primary" size="large" @click="goTo('/levels')">开始闯关</el-button>
     </section>
 
-    <section class="stats-grid">
-      <el-card class="stat-item" shadow="never">
-        <div class="stat-title">当前积分</div>
-        <div class="stat-value">{{ userStore.points }}</div>
-      </el-card>
-      <el-card class="stat-item" shadow="never">
-        <div class="stat-title">计划完成度</div>
-        <div class="stat-value">{{ progress }}%</div>
-      </el-card>
-      <el-card class="stat-item" shadow="never">
-        <div class="stat-title">周目标达成</div>
-        <div class="stat-value">{{ weeklyStatus.doneCount }} / {{ weeklyGoal }}</div>
-      </el-card>
-    </section>
-
-    <section class="surface-card target-card">
-      <h3 class="section-title">赛道目标设置</h3>
-      <div class="target-grid">
-        <el-select v-model="selectedTrack" class="target-input">
-          <el-option v-for="option in trackOptions" :key="option.value" :label="option.label" :value="option.value" />
-        </el-select>
-        <el-input-number v-model="weeklyGoal" :min="3" :max="40" class="target-input" />
-        <el-button type="primary" @click="savePlanTarget">更新计划</el-button>
-      </div>
-      <el-progress :percentage="weeklyStatus.ratio" :stroke-width="14" />
-    </section>
+    <DailyTasks />
 
     <AIAssistant
       :selected-track="selectedTrack"
@@ -120,57 +96,11 @@ if (!levelStore.levels.length) {
   color: var(--text-sub);
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.stat-item {
-  border-radius: 14px;
-  border: 1px solid var(--line-soft);
-}
-
-.stat-title {
-  color: var(--text-sub);
-}
-
-.stat-value {
-  margin-top: 8px;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-title);
-}
-
-.target-card {
-  padding: 20px 24px;
-  display: grid;
-  gap: 12px;
-}
-
-.target-grid {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.target-input {
-  width: 240px;
-}
-
 @media (max-width: 900px) {
   .hero {
     flex-direction: column;
     align-items: flex-start;
     gap: 14px;
-  }
-
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .target-grid {
-    flex-wrap: wrap;
   }
 }
 </style>

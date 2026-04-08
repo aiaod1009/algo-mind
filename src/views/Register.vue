@@ -65,36 +65,36 @@ const goLogin = () => {
   <div class="register-page">
     <div class="register-card">
       <div class="hug-icon">🤗</div>
-      <h1>Join Algo Mind</h1>
-      <p class="subtitle">Join the community of machine learners!</p>
+      <h1>加入 Algo Mind</h1>
+      <p class="subtitle">加入算法学习者的社区！</p>
 
       <el-form :model="form" @keyup.enter="handleRegister">
-        <el-form-item label="Nickname" label-position="top">
-          <el-input v-model="form.name" placeholder="Your nickname (optional)" size="large" />
+        <el-form-item label="昵称" label-position="top">
+          <el-input v-model="form.name" placeholder="你的昵称（可选）" size="large" />
         </el-form-item>
 
-        <el-form-item label="Email Address" label-position="top">
-          <el-input v-model="form.email" placeholder="Email Address" size="large" />
-          <p class="hint">Hint: Use your email to sign in next time.</p>
+        <el-form-item label="电子邮箱" label-position="top">
+          <el-input v-model="form.email" placeholder="电子邮箱" size="large" />
+          <p class="hint">提示：下次使用你的邮箱登录。</p>
         </el-form-item>
 
-        <el-form-item label="Password" label-position="top">
-          <el-input v-model="form.password" type="password" placeholder="Password" show-password size="large" />
+        <el-form-item label="密码" label-position="top">
+          <el-input v-model="form.password" type="password" placeholder="密码" show-password size="large" />
         </el-form-item>
 
-        <el-form-item label="Confirm Password" label-position="top">
-          <el-input v-model="form.confirmPassword" type="password" placeholder="Confirm Password" show-password
+        <el-form-item label="确认密码" label-position="top">
+          <el-input v-model="form.confirmPassword" type="password" placeholder="确认密码" show-password
             size="large" />
         </el-form-item>
 
         <el-button class="next-btn" :loading="loading" @click="handleRegister">
-          {{ loading ? 'Registering...' : 'Next' }}
+          {{ loading ? '注册中...' : '下一步' }}
         </el-button>
       </el-form>
 
       <p class="login-row">
-        Already have an account?
-        <a href="#" @click.prevent="goLogin">Log in</a>
+        已有账户？
+        <a href="#" @click.prevent="goLogin">立即登录</a>
       </p>
     </div>
   </div>

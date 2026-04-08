@@ -52,7 +52,7 @@ file:
 
 doubao:
   api:
-    key: 40d60324-a9dd-4505-b1c6-1ef4d0d63556
+    key: 03a61838-4454-49e5-acca-c0d372f0207d
     url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
     model: doubao-seed-1-8-251228
     timeout: 30000
@@ -99,7 +99,7 @@ file:
 
 doubao:
   api:
-    key: ${DOUBAO_API_KEY:}
+    key: ${DOUBAO_API_KEY:03a61838-4454-49e5-acca-c0d372f0207d}
     url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
     model: ${DOUBAO_MODEL:doubao-seed-1-8-251228}
     timeout: 30000

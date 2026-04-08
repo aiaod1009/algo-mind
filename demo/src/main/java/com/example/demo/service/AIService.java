@@ -11,12 +11,24 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.function.Consumer;
 
 /**
  * AI服务：封装豆包AI调用逻辑
@@ -34,7 +46,7 @@ public class AIService {
     private final AIConfig aiConfig;
     private final ObjectMapper objectMapper;
     
-    private static final int AI_CALL_TIMEOUT_SECONDS = 15;
+    private static final int AI_CALL_TIMEOUT_SECONDS = 60;
     
     private static final String LEARNING_PLAN_SYSTEM_PROMPT = """
         你是一位专业的算法学习规划师，擅长根据学生的学习数据制定个性化的学习计划。
@@ -106,6 +118,146 @@ public class AIService {
         } catch (Exception e) {
             log.warn("AI生成学习计划失败：{}，将使用本地算法降级", e.getMessage());
             throw new AIException("AI生成学习计划失败：" + e.getMessage(), e);
+        }
+    }
+
+    public void chatStream(List<ChatMessage> messages, Consumer<String> onDelta) {
+        ChatRequest request = ChatRequest.builder()
+                .model(aiConfig.getModel())
+                .messages(messages)
+                .temperature(aiConfig.getTemperature())
+                .maxTokens(aiConfig.getMaxTokens())
+                .stream(true)
+                .build();
+
+        callAIStream(request, onDelta);
+    }
+
+    private void callAIStream(ChatRequest request, Consumer<String> onDelta) {
+        try {
+            HttpClient httpClient = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(10))
+                    .build();
+
+            HttpRequest httpRequest = HttpRequest.newBuilder(URI.create(aiConfig.getUrl()))
+                    .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                    .header("Authorization", "Bearer " + aiConfig.getKey())
+                    .timeout(Duration.ofMillis(Math.max(aiConfig.getTimeout(), 60000)))
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(request), StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<InputStream> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofInputStream());
+            if (response.body() == null) {
+                throw new AIException("AI stream response body is empty");
+            }
+
+            if (response.statusCode() >= 400) {
+                String responseBody = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+                log.error("AI stream HTTP error: {}, body={}", response.statusCode(), responseBody);
+                throw new AIException(
+                        "AI service HTTP error: " + response.statusCode()
+                                + (responseBody == null || responseBody.isBlank() ? "" : " - " + responseBody));
+            }
+
+            consumeStream(response.body(), onDelta);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AIException("AI stream was interrupted", e);
+        } catch (IOException e) {
+            log.error("AI stream read error: {}", e.getMessage(), e);
+            throw new AIException("AI stream read error: " + e.getMessage(), e);
+        }
+    }
+
+    private void consumeStream(InputStream inputStream, Consumer<String> onDelta) throws IOException {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+            String line;
+            StringBuilder eventData = new StringBuilder();
+
+            while ((line = reader.readLine()) != null) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new AIException("AI stream was interrupted");
+                }
+
+                if (line.isBlank()) {
+                    if (processStreamEvent(eventData.toString(), onDelta)) {
+                        return;
+                    }
+                    eventData.setLength(0);
+                    continue;
+                }
+
+                if (line.startsWith("data:")) {
+                    String dataLine = line.substring(5);
+                    if (!dataLine.isEmpty() && dataLine.charAt(0) == ' ') {
+                        dataLine = dataLine.substring(1);
+                    }
+                    eventData.append(dataLine);
+                }
+            }
+
+            processStreamEvent(eventData.toString(), onDelta);
+        }
+    }
+
+    private boolean processStreamEvent(String rawEventData, Consumer<String> onDelta) throws JsonProcessingException {
+        String eventData = rawEventData == null ? "" : rawEventData.trim();
+        if (eventData.isEmpty()) {
+            return false;
+        }
+
+        if ("[DONE]".equals(eventData)) {
+            return true;
+        }
+
+        String delta = extractStreamContent(objectMapper.readTree(eventData));
+        if (!delta.isEmpty()) {
+            onDelta.accept(delta);
+        }
+        return false;
+    }
+
+    private String extractStreamContent(com.fasterxml.jackson.databind.JsonNode rootNode) {
+        StringBuilder content = new StringBuilder();
+        com.fasterxml.jackson.databind.JsonNode choicesNode = rootNode.path("choices");
+
+        if (!choicesNode.isArray()) {
+            return "";
+        }
+
+        for (com.fasterxml.jackson.databind.JsonNode choiceNode : choicesNode) {
+            appendContentNode(content, choiceNode.path("delta").path("content"));
+            if (content.isEmpty()) {
+                appendContentNode(content, choiceNode.path("message").path("content"));
+            }
+        }
+
+        return content.toString();
+    }
+
+    private void appendContentNode(StringBuilder content, com.fasterxml.jackson.databind.JsonNode contentNode) {
+        if (contentNode == null || contentNode.isMissingNode() || contentNode.isNull()) {
+            return;
+        }
+
+        if (contentNode.isTextual()) {
+            content.append(contentNode.asText());
+            return;
+        }
+
+        if (!contentNode.isArray()) {
+            return;
+        }
+
+        for (com.fasterxml.jackson.databind.JsonNode itemNode : contentNode) {
+            if (itemNode.isTextual()) {
+                content.append(itemNode.asText());
+                continue;
+            }
+
+            if ("output_text".equals(itemNode.path("type").asText()) && itemNode.path("text").isTextual()) {
+                content.append(itemNode.path("text").asText());
+            }
         }
     }
     
@@ -191,6 +343,13 @@ public class AIService {
             
             return content;
             
+        } catch (HttpStatusCodeException e) {
+            String responseBody = e.getResponseBodyAsString();
+            log.error("AI HTTP error: {} {}, body={}", e.getStatusCode().value(), e.getStatusText(), responseBody);
+            throw new AIException(
+                    "AI service HTTP error: " + e.getStatusCode().value() + " " + e.getStatusText()
+                            + (responseBody == null || responseBody.isBlank() ? "" : " - " + responseBody),
+                    e);
         } catch (RestClientException e) {
             log.error("AI调用网络错误：{}", e.getMessage());
             throw new AIException("AI服务网络错误：" + e.getMessage(), e);

@@ -7,6 +7,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.*;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.UUID;
 
@@ -120,7 +122,7 @@ public class CodeController {
      * 读取进程标准输出
      */
     private String readOutput(Process p) throws IOException {
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream(), Charset.defaultCharset()))) {
             StringBuilder sb = new StringBuilder();
             String line;
             while ((line = br.readLine()) != null) {
@@ -134,7 +136,7 @@ public class CodeController {
      * 读取进程错误输出
      */
     private String readError(Process p) throws IOException {
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getErrorStream()))) {
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getErrorStream(), Charset.defaultCharset()))) {
             StringBuilder sb = new StringBuilder();
             String line;
             while ((line = br.readLine()) != null) {
