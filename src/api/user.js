@@ -117,6 +117,10 @@ export const userApi = {
     return api.post('/ai/evaluate-code', data, { timeout: AI_TIMEOUT })
   },
 
+  runCode(data) {
+    return api.post('/run-code', data, { timeout: AI_TIMEOUT })
+  },
+
   getCourseRecommendations() {
     return api.get('/course-recommendations', withNonBlockingAuth())
   },

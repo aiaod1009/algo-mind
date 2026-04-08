@@ -80,6 +80,7 @@ api.getAvatar = userApi.getAvatar
 api.deleteAvatar = userApi.deleteAvatar
 api.aiChat = userApi.aiChat
 api.evaluateCode = userApi.evaluateCode
+api.runCode = userApi.runCode
 api.getCourseRecommendations = userApi.getCourseRecommendations
 
 export default api

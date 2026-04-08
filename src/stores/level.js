@@ -43,6 +43,7 @@ export const useLevelStore = defineStore('level', () => {
       track: item.track || 'algo',
       order: Number(item.order || 1),
       type: item.type || 'single',
+      options: Array.isArray(item.options) ? item.options : [],
       isUnlocked: Boolean(item.isUnlocked),
       stars: clampStars(item.stars ?? item.bestStars ?? 0),
       bestStars: clampStars(item.bestStars ?? item.stars ?? 0),
@@ -66,7 +67,21 @@ export const useLevelStore = defineStore('level', () => {
   const hydrateLevelsFromLocal = () => {
     const local = readLocalLevels()
     if (!Array.isArray(local) || !local.length) return false
-    levels.value = normalizeLevels(local)
+
+    const normalizedLocal = normalizeLevels(local)
+    const hasBrokenChoiceOptions = normalizedLocal.some((item) => {
+      if (!['single', 'multi', 'judge'].includes(item.type)) {
+        return false
+      }
+      return !Array.isArray(item.options) || item.options.length === 0
+    })
+
+    if (hasBrokenChoiceOptions) {
+      localStorage.removeItem(LOCAL_LEVEL_KEY)
+      return false
+    }
+
+    levels.value = normalizedLocal
     return true
   }
 

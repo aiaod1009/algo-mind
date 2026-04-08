@@ -70,6 +70,19 @@ const stdinModel = computed({
   set: (value) => emit('update:stdinInput', value),
 })
 
+const normalizedOptions = computed(() => (Array.isArray(props.level?.options) ? props.level.options : []))
+const hasOptions = computed(() => normalizedOptions.value.length > 0)
+const multiTextModel = computed({
+  get: () => (Array.isArray(props.answer) ? props.answer.join(',') : String(props.answer || '')),
+  set: (value) => {
+    const parsed = String(value || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+    emit('update:answer', parsed)
+  },
+})
+
 const title = computed(() => (props.isCodeChallenge ? '代码作答区' : '作答区域'))
 const toolbarLeftText = computed(() => {
   if (props.isCodeChallenge) {
@@ -102,16 +115,26 @@ const toolbarRightText = computed(() => {
         <div class="toolbar-right">{{ toolbarRightText }}</div>
       </div>
 
-      <div class="answer-wrap" v-if="level.type === 'single'">
+      <div class="answer-wrap" v-if="level.type === 'single' && hasOptions">
         <el-radio-group v-model="answerModel" class="option-group">
-          <el-radio v-for="item in level.options" :key="item" :value="item">{{ item }}</el-radio>
+          <el-radio v-for="item in normalizedOptions" :key="item" :value="item">{{ item }}</el-radio>
         </el-radio-group>
       </div>
 
-      <div class="answer-wrap" v-else-if="level.type === 'multi'">
+      <div class="answer-wrap" v-else-if="level.type === 'single' && !hasOptions">
+        <div class="option-missing-tip">该题选项数据缺失，请先手动输入你的答案。</div>
+        <el-input v-model="answerModel" type="textarea" :rows="4" placeholder="请输入你的答案" />
+      </div>
+
+      <div class="answer-wrap" v-else-if="level.type === 'multi' && hasOptions">
         <el-checkbox-group v-model="answerModel" class="option-group">
-          <el-checkbox v-for="item in level.options" :key="item" :value="item">{{ item }}</el-checkbox>
+          <el-checkbox v-for="item in normalizedOptions" :key="item" :value="item">{{ item }}</el-checkbox>
         </el-checkbox-group>
+      </div>
+
+      <div class="answer-wrap" v-else-if="level.type === 'multi' && !hasOptions">
+        <div class="option-missing-tip">该题选项数据缺失，请用英文逗号分隔填写多个答案。</div>
+        <el-input v-model="multiTextModel" type="textarea" :rows="4" placeholder="示例：A,B" />
       </div>
 
       <div class="answer-wrap" v-else-if="level.type === 'judge'">
@@ -123,31 +146,17 @@ const toolbarRightText = computed(() => {
       </div>
 
       <div class="answer-wrap" v-else-if="level.type === 'fill'">
-        <el-input
-          v-model="answerModel"
-          type="textarea"
-          :rows="6"
-          placeholder="请输入你的答案"
-        />
+        <el-input v-model="answerModel" type="textarea" :rows="6" placeholder="请输入你的答案" />
       </div>
 
       <div class="answer-wrap code-answer-wrap" v-else-if="isCodeChallenge">
-        <CodeEditor
-          v-model="answerModel"
-          v-model:language="languageModel"
-          class="challenge-code-editor"
-          :disabled="loading"
-          :prompt="level.question || level.name"
-          placeholder="在这里输入你的代码"
-          :min-height="420"
-          :show-submit-button="true"
-          submit-text="运行评测"
-          @submit="$emit('quick-run')"
-          @reset-template="$emit('reset-template')"
-        />
+        <CodeEditor v-model="answerModel" v-model:language="languageModel" class="challenge-code-editor"
+          :disabled="loading" :prompt="level.question || level.name" placeholder="在这里输入你的代码" :min-height="420"
+          :show-submit-button="true" submit-text="仅运行" @submit="$emit('quick-run')"
+          @reset-template="$emit('reset-template')" />
 
         <div class="editor-help">
-          <span>支持语言切换、行号、自动布局和 Ctrl/Cmd + Enter 快捷提交</span>
+          <span>支持语言切换、行号、自动布局和 Ctrl/Cmd + Enter 快捷运行</span>
           <span>代码评测达到 {{ passScore }} 分即可通关</span>
         </div>
       </div>
@@ -230,6 +239,12 @@ const toolbarRightText = computed(() => {
   gap: 12px;
 }
 
+.option-missing-tip {
+  margin-bottom: 10px;
+  color: #9a6700;
+  font-size: 13px;
+}
+
 .code-answer-wrap {
   display: grid;
   gap: 10px;
@@ -269,6 +284,7 @@ const toolbarRightText = computed(() => {
 }
 
 @media (max-width: 720px) {
+
   .pane-head,
   .editor-help,
   .editor-toolbar {

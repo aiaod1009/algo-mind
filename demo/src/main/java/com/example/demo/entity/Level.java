@@ -56,7 +56,9 @@ public class Level {
     /**
      * 选项（单选/多选题用）
      */
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "t_level_options", joinColumns = @JoinColumn(name = "level_id"))
+    @Column(name = "options")
     private List<String> options;
 
     /**

@@ -33,6 +33,8 @@ const loading = ref(false)
 const attemptsInRun = ref(0)
 const startTimestamp = ref(Date.now())
 const evaluationResult = ref(null)
+const runResult = ref(null)
+const evaluationDrawerVisible = ref(false)
 
 const typeLabelMap = {
   single: '单选题',
@@ -46,8 +48,26 @@ const currentLevelId = computed(() => Number(route.params.id))
 const currentLevel = computed(() => levelStore.findLevelById(currentLevelId.value))
 const maxAttempts = computed(() => MAX_ATTEMPTS)
 const isCodeChallenge = computed(() => currentLevel.value?.type === 'code')
-const showEvaluationPanel = computed(() => isCodeChallenge.value && Boolean(evaluationResult.value))
+const hasEvaluationResult = computed(() => isCodeChallenge.value && Boolean(evaluationResult.value))
+const showRunPanel = computed(() => isCodeChallenge.value && Boolean(runResult.value))
 const submitButtonText = computed(() => (isCodeChallenge.value ? '运行评测' : '提交答案'))
+const evaluationSummary = computed(() => {
+  if (!evaluationResult.value) {
+    return {
+      scoreText: '--',
+      starsText: '☆☆☆',
+      statusText: '未评测',
+    }
+  }
+
+  const stars = Math.max(0, Math.min(3, Number(evaluationResult.value.stars || 0)))
+  const score = Number(evaluationResult.value.score)
+  return {
+    scoreText: Number.isFinite(score) ? `${score}` : '--',
+    starsText: '★'.repeat(stars) + '☆'.repeat(3 - stars),
+    statusText: score >= CODE_PASS_SCORE ? '已达标' : '待改进',
+  }
+})
 const practiceRuleText = computed(() => `练习得分以历史最高成绩为准，当前关卡满分 ${currentLevel.value?.rewardPoints || 0} 分`)
 const practiceWindowText = computed(() => {
   const now = new Date()
@@ -70,6 +90,10 @@ const isTemplateLikeCode = (value) => {
 }
 
 const createEmptyAnswer = () => (currentLevel.value?.type === 'multi' ? [] : '')
+
+const hasChoiceOptions = (level) => {
+  return Array.isArray(level?.options) && level.options.length > 0
+}
 
 const applyCodeTemplate = (force = false) => {
   if (!isCodeChallenge.value) {
@@ -102,6 +126,14 @@ const normalizeEvaluationResult = (result) => {
     efficiency: String(result.efficiency ?? '').trim(),
     suggestions: Array.isArray(result.suggestions) ? result.suggestions : [],
     pointsEarned: Number.isFinite(pointsEarnedNumber) ? Math.max(0, Math.round(pointsEarnedNumber)) : 0,
+    updatedAt: new Date().toLocaleString(),
+  }
+}
+
+const normalizeRunResult = (result) => {
+  return {
+    output: String(result?.output ?? '').trim(),
+    error: String(result?.error ?? '').trim(),
     updatedAt: new Date().toLocaleString(),
   }
 }
@@ -193,6 +225,8 @@ const initializeChallenge = async () => {
   attemptsInRun.value = 0
   startTimestamp.value = Date.now()
   evaluationResult.value = null
+  evaluationDrawerVisible.value = false
+  runResult.value = null
   answer.value = createEmptyAnswer()
   stdinInput.value = ''
   language.value = DEFAULT_EDITOR_LANGUAGE
@@ -205,8 +239,19 @@ const validateCurrentAnswer = () => {
   }
 
   if (currentLevel.value.type === 'multi') {
-    if (!Array.isArray(answer.value) || answer.value.length === 0) {
-      ElMessage.warning('请至少选择一个答案')
+    if (hasChoiceOptions(currentLevel.value)) {
+      if (!Array.isArray(answer.value) || answer.value.length === 0) {
+        ElMessage.warning('请至少选择一个答案')
+        return false
+      }
+      return true
+    }
+
+    const textValue = Array.isArray(answer.value)
+      ? answer.value.join(',').trim()
+      : String(answer.value || '').trim()
+    if (!textValue) {
+      ElMessage.warning('请先填写答案')
       return false
     }
     return true
@@ -257,6 +302,7 @@ const submitCodeChallenge = async () => {
 
   evaluationResult.value = normalizeEvaluationResult(response.data.data)
   evaluationResult.value.pointsEarned = 0
+  evaluationDrawerVisible.value = true
 
   if ((evaluationResult.value.score || 0) < CODE_PASS_SCORE) {
     ElMessage.warning(`评测已完成，达到 ${CODE_PASS_SCORE} 分即可通关`)
@@ -276,6 +322,44 @@ const submitCodeChallenge = async () => {
   evaluationResult.value.pointsEarned = progressResult.pointsEarned || 0
   removeDraft()
   ElMessage.success('代码评测通过，关卡进度已同步')
+}
+
+const runCodeOnly = async () => {
+  if (!isCodeChallenge.value) {
+    return
+  }
+
+  if (!validateCurrentAnswer()) {
+    return
+  }
+
+  loading.value = true
+
+  try {
+    const response = await api.runCode({
+      code: String(answer.value || ''),
+      language: language.value,
+      stdinInput: stdinInput.value,
+    })
+
+    if (response.data?.code !== 0 || !response.data?.data) {
+      ElMessage.error(response.data?.message || '代码运行失败，请稍后重试')
+      return
+    }
+
+    runResult.value = normalizeRunResult(response.data.data)
+
+    if (runResult.value.error) {
+      ElMessage.warning('代码已运行，存在错误输出')
+    } else {
+      ElMessage.success('代码运行成功')
+    }
+  } catch (error) {
+    console.error('代码运行异常。', error)
+    ElMessage.error('代码运行异常，请稍后重试')
+  } finally {
+    loading.value = false
+  }
 }
 
 const submitStandardChallenge = async () => {
@@ -351,13 +435,23 @@ const handleSaveDraft = () => {
 }
 
 const handleQuickRun = () => {
-  handleSubmit()
+  runCodeOnly()
 }
 
 const handleResetTemplate = () => {
   applyCodeTemplate(true)
   evaluationResult.value = null
+  evaluationDrawerVisible.value = false
+  runResult.value = null
   ElMessage.success('已恢复当前语言的默认模板')
+}
+
+const openEvaluationDialog = () => {
+  if (!hasEvaluationResult.value) {
+    ElMessage.info('请先运行评测')
+    return
+  }
+  evaluationDrawerVisible.value = true
 }
 
 const goBack = () => {
@@ -374,6 +468,8 @@ watch(language, (nextLanguage, previousLanguage) => {
   }
 
   evaluationResult.value = null
+  evaluationDrawerVisible.value = false
+  runResult.value = null
 
   if (isTemplateLikeCode(answer.value)) {
     answer.value = getCodeTemplate(nextLanguage)
@@ -403,46 +499,77 @@ watch(
 
       <div class="top-action-group">
         <el-button plain @click="router.push('/errors')">错题本</el-button>
+        <el-button v-if="isCodeChallenge" plain :loading="loading" @click="runCodeOnly">仅运行</el-button>
         <el-button type="primary" :loading="loading" @click="handleSubmit">{{ submitButtonText }}</el-button>
       </div>
     </header>
 
-    <div class="challenge-layout">
-      <ChallengeTaskPanel
-        :level="currentLevel"
-        :practice-rule-text="practiceRuleText"
-        :practice-window-text="practiceWindowText"
-        :max-attempts="maxAttempts"
-        :type-label="typeLabelMap[currentLevel.type]"
-      />
+    <div class="challenge-layout" :class="{ 'with-ai-dock': isCodeChallenge }">
+      <ChallengeTaskPanel :level="currentLevel" :practice-rule-text="practiceRuleText"
+        :practice-window-text="practiceWindowText" :max-attempts="maxAttempts"
+        :type-label="typeLabelMap[currentLevel.type]" />
 
-      <div class="workspace-layout" :class="{ 'with-evaluation': showEvaluationPanel }">
-        <ChallengeAnswerPane
-          v-model:answer="answer"
-          v-model:language="language"
-          v-model:stdin-input="stdinInput"
-          :level="currentLevel"
-          :is-code-challenge="isCodeChallenge"
-          :loading="loading"
-          :max-attempts="maxAttempts"
-          :attempts-in-run="attemptsInRun"
-          :pass-score="CODE_PASS_SCORE"
-          :type-label="typeLabelMap[currentLevel.type]"
-          @save-draft="handleSaveDraft"
-          @quick-run="handleQuickRun"
-          @reset-template="handleResetTemplate"
-        />
+      <div class="workspace-layout">
+        <ChallengeAnswerPane v-model:answer="answer" v-model:language="language" v-model:stdin-input="stdinInput"
+          :level="currentLevel" :is-code-challenge="isCodeChallenge" :loading="loading" :max-attempts="maxAttempts"
+          :attempts-in-run="attemptsInRun" :pass-score="CODE_PASS_SCORE" :type-label="typeLabelMap[currentLevel.type]"
+          @save-draft="handleSaveDraft" @quick-run="handleQuickRun" @reset-template="handleResetTemplate" />
 
-        <ChallengeEvaluationPanel
-          v-if="showEvaluationPanel"
-          :result="evaluationResult"
-          :pass-score="CODE_PASS_SCORE"
-        />
+        <section v-if="showRunPanel" class="surface-card run-result-panel">
+          <div class="run-result-head">
+            <h3>运行结果</h3>
+            <span class="run-time">{{ runResult.updatedAt }}</span>
+          </div>
+
+          <div class="run-block">
+            <div class="run-label">标准输出</div>
+            <pre class="run-pre">{{ runResult.output || '暂无输出' }}</pre>
+          </div>
+
+          <div class="run-block">
+            <div class="run-label">错误输出</div>
+            <pre class="run-pre run-pre-error">{{ runResult.error || '无错误输出' }}</pre>
+          </div>
+        </section>
       </div>
+
+      <aside v-if="isCodeChallenge" class="surface-card ai-dock">
+        <div class="ai-dock-head">
+          <h3>AI评估结果</h3>
+          <span class="ai-status"
+            :class="{ passed: hasEvaluationResult && Number(evaluationSummary.scoreText) >= CODE_PASS_SCORE }">
+            {{ evaluationSummary.statusText }}
+          </span>
+        </div>
+
+        <div class="ai-dock-meta">
+          <div class="meta-item">
+            <span>总分</span>
+            <strong>{{ evaluationSummary.scoreText }} 分</strong>
+          </div>
+          <div class="meta-item">
+            <span>星级</span>
+            <strong class="stars">{{ evaluationSummary.starsText }}</strong>
+          </div>
+        </div>
+
+        <p class="ai-dock-tip">点击下方按钮查看完整代码评审与优化建议。</p>
+
+        <el-button type="primary" plain class="open-eval-btn" :disabled="!hasEvaluationResult"
+          @click="openEvaluationDialog">
+          打开右侧评估
+        </el-button>
+      </aside>
     </div>
+
+    <el-drawer v-model="evaluationDrawerVisible" direction="rtl" size="520px" title="AI 代码评估结果"
+      class="evaluation-drawer">
+      <ChallengeEvaluationPanel v-if="hasEvaluationResult" :result="evaluationResult" :pass-score="CODE_PASS_SCORE" />
+    </el-drawer>
 
     <div class="action-row">
       <el-button @click="goBack">返回关卡</el-button>
+      <el-button v-if="isCodeChallenge" plain :loading="loading" @click="runCodeOnly">仅运行</el-button>
       <el-button type="primary" :loading="loading" @click="handleSubmit">{{ submitButtonText }}</el-button>
     </div>
   </div>
@@ -450,6 +577,8 @@ watch(
 
 <style scoped>
 .challenge-page {
+  width: min(1720px, calc(100vw - 24px));
+  max-width: min(1720px, calc(100vw - 24px));
   padding-bottom: 28px;
   display: grid;
   gap: 16px;
@@ -488,18 +617,18 @@ watch(
 
 .challenge-layout {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.challenge-layout.with-ai-dock {
+  grid-template-columns: 300px minmax(0, 1fr) 320px;
 }
 
 .workspace-layout {
   display: grid;
-  gap: 12px;
-}
-
-.workspace-layout.with-evaluation {
-  grid-template-columns: minmax(0, 1fr) 320px;
-  align-items: start;
+  gap: 14px;
 }
 
 .action-row {
@@ -508,9 +637,147 @@ watch(
   gap: 10px;
 }
 
+.ai-dock {
+  border: 1px solid var(--line-soft);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  position: sticky;
+  top: 12px;
+}
+
+.ai-dock-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-dock-head h3 {
+  margin: 0;
+  color: var(--text-title);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.ai-status {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #596579;
+  background: #edf1f7;
+}
+
+.ai-status.passed {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.ai-dock-meta {
+  display: grid;
+  gap: 8px;
+}
+
+.meta-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-sub);
+  font-size: 14px;
+}
+
+.meta-item strong {
+  color: var(--text-title);
+  font-size: 20px;
+}
+
+.meta-item .stars {
+  color: #f59e0b;
+  letter-spacing: 2px;
+}
+
+.ai-dock-tip {
+  margin: 0;
+  color: var(--text-sub);
+  line-height: 1.6;
+}
+
+.open-eval-btn {
+  width: 100%;
+}
+
+:deep(.evaluation-drawer .el-drawer__header) {
+  margin-bottom: 8px;
+}
+
+:deep(.evaluation-drawer .el-drawer__body) {
+  padding: 0 14px 14px;
+}
+
+.run-result-panel {
+  border: 1px solid var(--line-soft);
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.run-result-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.run-result-head h3 {
+  margin: 0;
+  color: var(--text-title);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.run-time {
+  color: var(--text-sub);
+  font-size: 12px;
+}
+
+.run-block {
+  display: grid;
+  gap: 6px;
+}
+
+.run-label {
+  color: var(--text-title);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.run-pre {
+  margin: 0;
+  min-height: 72px;
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-main);
+  font-size: 12px;
+}
+
+.run-pre-error {
+  color: #b42318;
+}
+
 @media (max-width: 1200px) {
-  .workspace-layout.with-evaluation {
-    grid-template-columns: 1fr;
+  .challenge-layout.with-ai-dock {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+
+  .ai-dock {
+    grid-column: 1 / -1;
+    position: static;
   }
 }
 
@@ -525,6 +792,7 @@ watch(
 }
 
 @media (max-width: 720px) {
+
   .challenge-top,
   .action-row {
     flex-direction: column;
