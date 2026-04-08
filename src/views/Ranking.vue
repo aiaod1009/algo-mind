@@ -1,6 +1,8 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import { useUserStore } from '../stores/user'
+import api from '../api'
+import { getFullFileUrl } from '../utils/file'
 
 const userStore = useUserStore()
 
@@ -16,7 +18,8 @@ const trackColors = {
   contest: { primary: '#fa8c16', secondary: '#d46b08', gradient: 'linear-gradient(135deg, #fa8c16 0%, #f5222d 100%)' },
 }
 
-const rankingRows = computed(() => userStore.getLeaderboard())
+const rankingRows = ref([])
+const resolveAvatar = (avatar) => getFullFileUrl(avatar || '')
 
 const isEmpty = computed(() => rankingRows.value.length === 0)
 
@@ -44,12 +47,33 @@ const getRankStyle = (rank) => {
 
 const animatedScores = ref({})
 
-onMounted(() => {
+const loadRanking = async () => {
+  try {
+    const res = await api.get('/ranking', {
+      params: { track: 'all', period: 'all' },
+      preserveSessionOn401: true,
+      suppressAuthMessage: true,
+    })
+    const list = Array.isArray(res.data?.data) ? res.data.data : []
+    rankingRows.value = list.map((item, index) => ({
+      ...item,
+      rank: Number(item.rank || index + 1),
+      points: Number(item.points || 0),
+      avatar: item.avatar || '',
+    }))
+  } catch (error) {
+    rankingRows.value = userStore.getLeaderboard()
+  }
+
   rankingRows.value.forEach((row, index) => {
     setTimeout(() => {
       animatedScores.value[row.id] = row.points
     }, index * 100)
   })
+}
+
+onMounted(() => {
+  loadRanking()
 })
 
 const statsData = computed(() => [
@@ -79,19 +103,20 @@ const statsData = computed(() => [
     <section class="stats-section">
       <div v-if="isEmpty" class="empty-state">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M12 15l-2 5l9-11h-6l2-5l-9 11h6z"/>
+          <path d="M12 15l-2 5l9-11h-6l2-5l-9 11h6z" />
         </svg>
         <h3>暂无排行数据</h3>
         <p>完成关卡挑战，成为第一个上榜的用户吧！</p>
       </div>
       <template v-else>
-        <div v-for="(stat, index) in statsData" :key="stat.label" class="stat-card" :style="{ '--delay': index * 0.1 + 's', '--color': stat.color }">
-        <div class="stat-icon">{{ stat.icon }}</div>
-        <div class="stat-info">
-          <span class="stat-value">{{ stat.value }}</span>
-          <span class="stat-label">{{ stat.label }}</span>
+        <div v-for="(stat, index) in statsData" :key="stat.label" class="stat-card"
+          :style="{ '--delay': index * 0.1 + 's', '--color': stat.color }">
+          <div class="stat-icon">{{ stat.icon }}</div>
+          <div class="stat-info">
+            <span class="stat-value">{{ stat.value }}</span>
+            <span class="stat-label">{{ stat.label }}</span>
+          </div>
         </div>
-      </div>
       </template>
     </section>
 
@@ -102,7 +127,11 @@ const statsData = computed(() => [
             <div class="crown">👑</div>
             <div class="medal">{{ getRankStyle(2).medal }}</div>
             <div class="avatar-wrapper">
-              <div class="avatar">{{ topThree[1].name.slice(0, 1) }}</div>
+              <div class="avatar">
+                <img v-if="resolveAvatar(topThree[1].avatar)" :src="resolveAvatar(topThree[1].avatar)"
+                  :alt="topThree[1].name" class="avatar-image" />
+                <span v-else>{{ topThree[1].name.slice(0, 1) }}</span>
+              </div>
               <div class="rank-badge">2</div>
             </div>
             <h3 class="user-name">{{ topThree[1].name }}</h3>
@@ -125,7 +154,11 @@ const statsData = computed(() => [
               <span v-for="i in 6" :key="i" class="sparkle" :style="{ '--i': i }">✨</span>
             </div>
             <div class="avatar-wrapper champion">
-              <div class="avatar">{{ topThree[0].name.slice(0, 1) }}</div>
+              <div class="avatar">
+                <img v-if="resolveAvatar(topThree[0].avatar)" :src="resolveAvatar(topThree[0].avatar)"
+                  :alt="topThree[0].name" class="avatar-image" />
+                <span v-else>{{ topThree[0].name.slice(0, 1) }}</span>
+              </div>
               <div class="rank-badge gold">1</div>
             </div>
             <h3 class="user-name">{{ topThree[0].name }}</h3>
@@ -145,7 +178,11 @@ const statsData = computed(() => [
             <div class="crown">👑</div>
             <div class="medal">{{ getRankStyle(3).medal }}</div>
             <div class="avatar-wrapper">
-              <div class="avatar">{{ topThree[2].name.slice(0, 1) }}</div>
+              <div class="avatar">
+                <img v-if="resolveAvatar(topThree[2].avatar)" :src="resolveAvatar(topThree[2].avatar)"
+                  :alt="topThree[2].name" class="avatar-image" />
+                <span v-else>{{ topThree[2].name.slice(0, 1) }}</span>
+              </div>
               <div class="rank-badge">3</div>
             </div>
             <h3 class="user-name">{{ topThree[2].name }}</h3>
@@ -172,20 +209,18 @@ const statsData = computed(() => [
       </div>
 
       <div class="ranking-list">
-        <div 
-          v-for="(item, index) in rankingRows" 
-          :key="item.id" 
-          class="ranking-row"
+        <div v-for="(item, index) in rankingRows" :key="item.id" class="ranking-row"
           :class="{ 'is-self': userStore.userInfo && Number(item.id) === Number(userStore.userInfo.id), 'is-top-three': item.rank <= 3 }"
-          :style="{ '--delay': index * 0.05 + 's' }"
-        >
+          :style="{ '--delay': index * 0.05 + 's' }">
           <div class="row-rank">
             <span v-if="item.rank <= 3" class="rank-medal">{{ ['🥇', '🥈', '🥉'][item.rank - 1] }}</span>
             <span v-else class="rank-number">{{ item.rank }}</span>
           </div>
           <div class="row-user">
             <div class="user-avatar" :style="{ background: getTrackColor(item.targetTrack).gradient }">
-              {{ item.name.slice(0, 1) }}
+              <img v-if="resolveAvatar(item.avatar)" :src="resolveAvatar(item.avatar)" :alt="item.name"
+                class="user-avatar-image" />
+              <span v-else>{{ item.name.slice(0, 1) }}</span>
             </div>
             <div class="user-info">
               <span class="user-name">{{ item.name }}</span>
@@ -196,21 +231,17 @@ const statsData = computed(() => [
           </div>
           <div class="row-score">
             <div class="score-bar-wrapper">
-              <div 
-                class="score-bar" 
-                :style="{ 
-                  width: `${Math.min(100, (item.points / (rankingRows[0]?.points || 1)) * 100)}%`,
-                  background: getTrackColor(item.targetTrack).gradient 
-                }"
-              ></div>
+              <div class="score-bar" :style="{
+                width: `${Math.min(100, (item.points / (rankingRows[0]?.points || 1)) * 100)}%`,
+                background: getTrackColor(item.targetTrack).gradient
+              }"></div>
             </div>
             <span class="score-text">{{ item.points }} 分</span>
           </div>
           <div class="row-status">
             <span class="status-badge" :class="{ 'top': item.rank <= 3, 'rising': item.rank > 3 }">
               <span class="status-icon">{{ item.rank <= 3 ? '🔥' : '📈' }}</span>
-              {{ item.rank <= 3 ? '领跑中' : '上升中' }}
-            </span>
+                  {{ item.rank <= 3 ? '领跑中' : '上升中' }} </span>
           </div>
         </div>
       </div>
@@ -283,8 +314,15 @@ const statsData = computed(() => [
 }
 
 @keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 .page-title {
@@ -342,8 +380,15 @@ const statsData = computed(() => [
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-20px) rotate(10deg); }
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-20px) rotate(10deg);
+  }
 }
 
 .stats-section {
@@ -373,6 +418,7 @@ const statsData = computed(() => [
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -450,6 +496,7 @@ const statsData = computed(() => [
     opacity: 0;
     transform: translateY(50px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -491,13 +538,27 @@ const statsData = computed(() => [
 }
 
 @keyframes crownFloat {
-  0%, 100% { transform: translateY(0) rotate(-5deg); }
-  50% { transform: translateY(-6px) rotate(5deg); }
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(-5deg);
+  }
+
+  50% {
+    transform: translateY(-6px) rotate(5deg);
+  }
 }
 
 @keyframes glow {
-  0%, 100% { filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8)); }
-  50% { filter: drop-shadow(0 0 16px rgba(255, 215, 0, 1)); }
+
+  0%,
+  100% {
+    filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
+  }
+
+  50% {
+    filter: drop-shadow(0 0 16px rgba(255, 215, 0, 1));
+  }
 }
 
 .medal {
@@ -521,16 +582,48 @@ const statsData = computed(() => [
   animation-delay: calc(var(--i) * 0.3s);
 }
 
-.sparkle:nth-child(1) { top: 10%; left: 10%; }
-.sparkle:nth-child(2) { top: 20%; right: 15%; }
-.sparkle:nth-child(3) { top: 40%; left: 5%; }
-.sparkle:nth-child(4) { top: 60%; right: 10%; }
-.sparkle:nth-child(5) { bottom: 30%; left: 15%; }
-.sparkle:nth-child(6) { bottom: 20%; right: 20%; }
+.sparkle:nth-child(1) {
+  top: 10%;
+  left: 10%;
+}
+
+.sparkle:nth-child(2) {
+  top: 20%;
+  right: 15%;
+}
+
+.sparkle:nth-child(3) {
+  top: 40%;
+  left: 5%;
+}
+
+.sparkle:nth-child(4) {
+  top: 60%;
+  right: 10%;
+}
+
+.sparkle:nth-child(5) {
+  bottom: 30%;
+  left: 15%;
+}
+
+.sparkle:nth-child(6) {
+  bottom: 20%;
+  right: 20%;
+}
 
 @keyframes sparkleAnim {
-  0%, 100% { opacity: 0.3; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.2); }
+
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
 }
 
 .avatar-wrapper {
@@ -546,6 +639,7 @@ const statsData = computed(() => [
   width: 64px;
   height: 64px;
   border-radius: 50%;
+  overflow: hidden;
   background: rgba(255, 255, 255, 0.9);
   display: flex;
   align-items: center;
@@ -555,6 +649,13 @@ const statsData = computed(() => [
   color: #333;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border: 3px solid rgba(255, 255, 255, 0.8);
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .rank-badge {
@@ -698,6 +799,7 @@ const statsData = computed(() => [
     opacity: 0;
     transform: translateX(-20px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -752,6 +854,7 @@ const statsData = computed(() => [
   width: 44px;
   height: 44px;
   border-radius: 12px;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -759,6 +862,13 @@ const statsData = computed(() => [
   font-weight: 700;
   color: white;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.user-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .user-info {
@@ -858,17 +968,50 @@ const statsData = computed(() => [
   animation: floatAround 20s linear infinite;
 }
 
-.float-item.f1 { top: 10%; left: 5%; animation-delay: 0s; }
-.float-item.f2 { top: 30%; right: 8%; animation-delay: -5s; }
-.float-item.f3 { bottom: 20%; left: 10%; animation-delay: -10s; }
-.float-item.f4 { bottom: 40%; right: 5%; animation-delay: -15s; }
+.float-item.f1 {
+  top: 10%;
+  left: 5%;
+  animation-delay: 0s;
+}
+
+.float-item.f2 {
+  top: 30%;
+  right: 8%;
+  animation-delay: -5s;
+}
+
+.float-item.f3 {
+  bottom: 20%;
+  left: 10%;
+  animation-delay: -10s;
+}
+
+.float-item.f4 {
+  bottom: 40%;
+  right: 5%;
+  animation-delay: -15s;
+}
 
 @keyframes floatAround {
-  0% { transform: translate(0, 0) rotate(0deg); }
-  25% { transform: translate(30px, -30px) rotate(90deg); }
-  50% { transform: translate(0, -60px) rotate(180deg); }
-  75% { transform: translate(-30px, -30px) rotate(270deg); }
-  100% { transform: translate(0, 0) rotate(360deg); }
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+
+  25% {
+    transform: translate(30px, -30px) rotate(90deg);
+  }
+
+  50% {
+    transform: translate(0, -60px) rotate(180deg);
+  }
+
+  75% {
+    transform: translate(-30px, -30px) rotate(270deg);
+  }
+
+  100% {
+    transform: translate(0, 0) rotate(360deg);
+  }
 }
 
 @media (max-width: 900px) {

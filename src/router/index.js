@@ -8,6 +8,7 @@ import Profile from '../views/Profile.vue'
 import Courses from '../views/Courses.vue'
 import Forum from '../views/Forum.vue'
 import ForumPost from '../views/ForumPost.vue'
+import Register from '../views/Register.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -16,6 +17,11 @@ const router = createRouter({
       path: '/',
       name: 'login',
       component: Login,
+    },
+    {
+      path: '/register',
+      name: 'register',
+      component: Register,
     },
     {
       path: '/home',

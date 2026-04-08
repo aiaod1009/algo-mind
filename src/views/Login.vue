@@ -223,14 +223,14 @@ const playGuardBlinkSequence = () => {
   const yellowPupils = getNodes(yellowRef.value, '.pupil')
 
   gsap.killTweensOf(eyelidOverlayState)
-  ;[
-    ...purpleEyeballs,
-    ...blackEyeballs,
-    ...purplePupils,
-    ...blackPupils,
-    ...orangePupils,
-    ...yellowPupils,
-  ].forEach((el) => gsap.killTweensOf(el))
+    ;[
+      ...purpleEyeballs,
+      ...blackEyeballs,
+      ...purplePupils,
+      ...blackPupils,
+      ...orangePupils,
+      ...yellowPupils,
+    ].forEach((el) => gsap.killTweensOf(el))
 
   gsap
     .timeline({
@@ -772,7 +772,7 @@ const handleForgetPassword = () => {
 }
 
 const handleRegister = () => {
-  ElMessage.info('注册入口开发中，当前可使用演示账号登录')
+  router.push('/register')
 }
 
 onMounted(async () => {
@@ -888,14 +888,8 @@ onUnmounted(() => {
       <div ref="containerRef" class="characters-stage">
         <canvas ref="eyelidCanvasRef" class="eyelid-overlay"></canvas>
         <!-- 紫色柱子 -->
-        <div
-          ref="purpleRef"
-          class="character purple"
-        >
-          <div
-            ref="purpleFaceRef"
-            class="eyes-container"
-          >
+        <div ref="purpleRef" class="character purple">
+          <div ref="purpleFaceRef" class="eyes-container">
             <div class="eyeball" data-max-distance="5">
               <div class="eyeball-pupil"></div>
             </div>
@@ -906,14 +900,8 @@ onUnmounted(() => {
         </div>
 
         <!-- 黑色柱子 -->
-        <div
-          ref="blackRef"
-          class="character black"
-        >
-          <div
-            ref="blackFaceRef"
-            class="eyes-container"
-          >
+        <div ref="blackRef" class="character black">
+          <div ref="blackFaceRef" class="eyes-container">
             <div class="eyeball small" data-max-distance="4">
               <div class="eyeball-pupil small"></div>
             </div>
@@ -924,28 +912,16 @@ onUnmounted(() => {
         </div>
 
         <!-- 橙色柱子 -->
-        <div
-          ref="orangeRef"
-          class="character orange"
-        >
-          <div
-            ref="orangeFaceRef"
-            class="eyes-container orange-eyes"
-          >
+        <div ref="orangeRef" class="character orange">
+          <div ref="orangeFaceRef" class="eyes-container orange-eyes">
             <div class="pupil" data-max-distance="5"></div>
             <div class="pupil" data-max-distance="5"></div>
           </div>
         </div>
 
         <!-- 黄色柱子 -->
-        <div
-          ref="yellowRef"
-          class="character yellow"
-        >
-          <div
-            ref="yellowFaceRef"
-            class="eyes-container yellow-eyes"
-          >
+        <div ref="yellowRef" class="character yellow">
+          <div ref="yellowFaceRef" class="eyes-container yellow-eyes">
             <div class="pupil" data-max-distance="5"></div>
             <div class="pupil" data-max-distance="5"></div>
           </div>
@@ -961,29 +937,21 @@ onUnmounted(() => {
 
         <el-form :model="form" @keyup.enter="handleLogin">
           <el-form-item label="Email" label-position="top">
-            <el-input
-              v-model="form.email"
-              placeholder="you@example.com"
-              size="large"
-              @focus="handleEmailFocus"
-              @blur="handleEmailBlur"
-            />
+            <el-input v-model="form.email" placeholder="you@example.com" size="large" @focus="handleEmailFocus"
+              @blur="handleEmailBlur" />
           </el-form-item>
 
           <el-form-item label="Password" label-position="top">
-            <el-input
-              v-model="form.password"
-              :type="showPassword ? 'text' : 'password'"
-              placeholder="请输入密码"
-              size="large"
-              @focus="handlePasswordFocus"
-              @blur="handlePasswordBlur"
-              @input="handlePasswordInput"
-            >
+            <el-input v-model="form.password" :type="showPassword ? 'text' : 'password'" placeholder="请输入密码"
+              size="large" @focus="handlePasswordFocus" @blur="handlePasswordBlur" @input="handlePasswordInput">
               <template #suffix>
                 <span class="eye-toggle" @click="handleTogglePassword">
-                  <el-icon v-if="showPassword"><View /></el-icon>
-                  <el-icon v-else><Hide /></el-icon>
+                  <el-icon v-if="showPassword">
+                    <View />
+                  </el-icon>
+                  <el-icon v-else>
+                    <Hide />
+                  </el-icon>
                 </span>
               </template>
             </el-input>
@@ -1129,7 +1097,7 @@ onUnmounted(() => {
           position: absolute;
           inset: 0;
           border-radius: 999px;
-          background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%);
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, transparent 50%);
           pointer-events: none;
         }
       }

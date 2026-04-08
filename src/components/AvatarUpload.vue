@@ -2,12 +2,7 @@
   <div class="avatar-upload">
     <!-- 头像预览区域 -->
     <div class="avatar-preview" @click="triggerFileSelect">
-      <img
-        v-if="displayUrl"
-        :src="displayUrl"
-        alt="头像预览"
-        :key="displayUrl"
-      />
+      <img v-if="displayUrl" :src="displayUrl" alt="头像预览" :key="displayUrl" />
       <div v-else class="placeholder">
         <span class="icon">+</span>
         <span class="text">上传头像</span>
@@ -22,15 +17,10 @@
       <div v-if="uploading" class="progress-overlay">
         <div class="progress-ring">
           <svg viewBox="0 0 36 36">
-            <path
-              class="progress-ring-bg"
-              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-            />
-            <path
-              class="progress-ring-fill"
-              :stroke-dasharray="`${progress}, 100`"
-              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-            />
+            <path class="progress-ring-bg"
+              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            <path class="progress-ring-fill" :stroke-dasharray="`${progress}, 100`"
+              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
           </svg>
           <span class="progress-text">{{ progress }}%</span>
         </div>
@@ -38,13 +28,7 @@
     </div>
 
     <!-- 隐藏的文件输入框 -->
-    <input
-      ref="fileInputRef"
-      type="file"
-      :accept="acceptFormats"
-      hidden
-      @change="handleFileChange"
-    />
+    <input ref="fileInputRef" type="file" :accept="acceptFormats" hidden @change="handleFileChange" />
 
     <!-- 格式提示 -->
     <p class="hint">

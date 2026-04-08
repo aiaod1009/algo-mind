@@ -51,6 +51,7 @@ public class RankingController {
             // 修复空指针：points为null时赋值0
             map.put("points", user.getPoints() == null ? 0 : user.getPoints());
             map.put("targetTrack", user.getTargetTrack());
+            map.put("avatar", user.getAvatar());
             rankingList.add(map);
         }
 

@@ -16,6 +16,44 @@ const userStore = useUserStore()
 const posts = computed(() => forumStore.posts)
 const resolveAvatar = (avatar) => getFullFileUrl(avatar || '')
 
+const isCurrentUsersPost = (post) => {
+  const currentUserId = userStore.userInfo?.id
+  const currentName = (userStore.userInfo?.name || '').trim()
+  const currentUserAvatar = resolveAvatar(userStore.userInfo?.avatar)
+  const postAvatar = resolveAvatar(post?.avatar)
+
+  const sameUserById = currentUserId && post?.userId && Number(post.userId) === Number(currentUserId)
+  const sameUserByName = currentName && post?.author === currentName
+  const sameUserByAvatar = currentUserAvatar && postAvatar && currentUserAvatar === postAvatar
+
+  return Boolean(sameUserById || sameUserByName || sameUserByAvatar)
+}
+
+const resolvePostAvatar = (post) => {
+  const currentUserAvatar = resolveAvatar(userStore.userInfo?.avatar)
+
+  // 对当前用户自己发的帖子，优先使用当前头像，避免旧帖子里的坏链接影响展示
+  if (isCurrentUsersPost(post) && currentUserAvatar) {
+    return currentUserAvatar
+  }
+
+  const postAvatar = resolveAvatar(post?.avatar)
+  if (postAvatar) return postAvatar
+
+  return ''
+}
+
+const resolvePostAuthor = (post) => {
+  const currentName = (userStore.userInfo?.name || '').trim()
+  if (!currentName) return post?.author || '同学'
+
+  if (isCurrentUsersPost(post)) {
+    return currentName
+  }
+
+  return post?.author || '同学'
+}
+
 const formatTime = (timestamp) => {
   if (!timestamp) return '刚刚'
   const diff = Date.now() - Number(timestamp)
@@ -151,7 +189,7 @@ const handlePublish = async () => {
       quote: postForm.quote.trim(),
       tag: postForm.tag.trim() || '# 学习交流',
     })
-    
+
     if (result.success) {
       postForm.topic = ''
       postForm.content = ''
@@ -314,11 +352,11 @@ const goToPostComments = (postId) => {
 }
 
 const goToPostWithComment = (postId, commentId) => {
-  router.push({ 
-    name: 'forum-post', 
-    params: { id: postId }, 
+  router.push({
+    name: 'forum-post',
+    params: { id: postId },
     query: { commentId: commentId },
-    hash: '#comments' 
+    hash: '#comments'
   })
 }
 
@@ -648,9 +686,9 @@ onUnmounted(() => {
       <section class="feed-list">
         <div v-if="forumStore.isFromCache" class="cache-warning">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           <span>当前展示的是本地缓存数据，服务器连接失败</span>
         </div>
@@ -658,10 +696,10 @@ onUnmounted(() => {
           :class="{ 'is-highlighted': highlightedPost === item.id }" shadow="never">
           <div class="head-row">
             <div class="user-wrap">
-              <el-avatar :size="44" :src="resolveAvatar(item.avatar) || ''">{{ item.author.slice(0, 1) }}</el-avatar>
+              <el-avatar :size="44" :src="resolvePostAvatar(item)">{{ resolvePostAuthor(item).slice(0, 1) }}</el-avatar>
               <div>
                 <div class="name-row">
-                  <span class="name">{{ item.author }}</span>
+                  <span class="name">{{ resolvePostAuthor(item) }}</span>
                   <el-tag type="info" effect="light" size="small">{{ item.authorLevel || 'LV.1' }}</el-tag>
                 </div>
                 <div class="meta">算法社区 · {{ formatTime(item.createdAt) }}</div>
@@ -686,25 +724,26 @@ onUnmounted(() => {
             <div v-if="postHotComments[item.id]?.length > 0" class="hot-comments-carousel">
               <div class="hot-comment-wrapper">
                 <Transition name="hot-comment-slide" mode="out-in">
-                  <div :key="hotCommentIndex[item.id] || 0" class="hot-comment-item" @click.stop="goToPostWithComment(item.id, postHotComments[item.id][hotCommentIndex[item.id] || 0]?.id)">
+                  <div :key="hotCommentIndex[item.id] || 0" class="hot-comment-item"
+                    @click.stop="goToPostWithComment(item.id, postHotComments[item.id][hotCommentIndex[item.id] || 0]?.id)">
                     <div class="hot-comment-header">
-                      <el-avatar :size="24" :src="resolveAvatar(postHotComments[item.id][hotCommentIndex[item.id] || 0]?.avatar) || ''">
+                      <el-avatar :size="24"
+                        :src="resolveAvatar(postHotComments[item.id][hotCommentIndex[item.id] || 0]?.avatar) || ''">
                         {{ (postHotComments[item.id][hotCommentIndex[item.id] || 0]?.author || '匿').slice(0, 1) }}
                       </el-avatar>
-                      <span class="hot-comment-author">{{ postHotComments[item.id][hotCommentIndex[item.id] || 0]?.author }}</span>
-                      <span class="hot-comment-likes">👍 {{ postHotComments[item.id][hotCommentIndex[item.id] || 0]?.likes || 0 }}</span>
+                      <span class="hot-comment-author">{{ postHotComments[item.id][hotCommentIndex[item.id] ||
+                        0]?.author }}</span>
+                      <span class="hot-comment-likes">👍 {{ postHotComments[item.id][hotCommentIndex[item.id] ||
+                        0]?.likes || 0 }}</span>
                     </div>
-                    <div class="hot-comment-content">{{ postHotComments[item.id][hotCommentIndex[item.id] || 0]?.content }}</div>
+                    <div class="hot-comment-content">{{ postHotComments[item.id][hotCommentIndex[item.id] || 0]?.content
+                    }}</div>
                   </div>
                 </Transition>
               </div>
               <div v-if="postHotComments[item.id].length > 1" class="hot-comment-dots">
-                <span
-                  v-for="(_, idx) in postHotComments[item.id]"
-                  :key="idx"
-                  class="dot"
-                  :class="{ active: idx === (hotCommentIndex[item.id] || 0) }"
-                ></span>
+                <span v-for="(_, idx) in postHotComments[item.id]" :key="idx" class="dot"
+                  :class="{ active: idx === (hotCommentIndex[item.id] || 0) }"></span>
               </div>
             </div>
           </div>
@@ -775,7 +814,7 @@ onUnmounted(() => {
         <div class="celebration-ring"></div>
         <div class="celebration-glow"></div>
         <div class="celebration-particles">
-          <span v-for="i in 12" :key="'p'+i" class="particle" :style="{ '--i': i }"></span>
+          <span v-for="i in 12" :key="'p' + i" class="particle" :style="{ '--i': i }"></span>
         </div>
         <div class="celebration-emojis">
           <span v-for="(emoji, i) in likeEmojis" :key="i" class="burst-emoji" :style="{ '--i': i }">
@@ -783,7 +822,7 @@ onUnmounted(() => {
           </span>
         </div>
         <div class="celebration-sparks">
-          <span v-for="i in 6" :key="'s'+i" class="spark" :style="{ '--i': i }"></span>
+          <span v-for="i in 6" :key="'s' + i" class="spark" :style="{ '--i': i }"></span>
         </div>
       </div>
     </Transition>
@@ -2077,18 +2116,65 @@ onUnmounted(() => {
   animation-delay: calc(var(--i) * 0.02s);
 }
 
-.particle:nth-child(1) { background: #ff6b6b; animation-name: particle-1; }
-.particle:nth-child(2) { background: #ffd93d; animation-name: particle-2; }
-.particle:nth-child(3) { background: #6bcb77; animation-name: particle-3; }
-.particle:nth-child(4) { background: #4d96ff; animation-name: particle-4; }
-.particle:nth-child(5) { background: #ff6b9d; animation-name: particle-5; }
-.particle:nth-child(6) { background: #c44dff; animation-name: particle-6; }
-.particle:nth-child(7) { background: #ff9f43; animation-name: particle-7; }
-.particle:nth-child(8) { background: #00d2d3; animation-name: particle-8; }
-.particle:nth-child(9) { background: #ff6b6b; animation-name: particle-9; }
-.particle:nth-child(10) { background: #ffd93d; animation-name: particle-10; }
-.particle:nth-child(11) { background: #6bcb77; animation-name: particle-11; }
-.particle:nth-child(12) { background: #4d96ff; animation-name: particle-12; }
+.particle:nth-child(1) {
+  background: #ff6b6b;
+  animation-name: particle-1;
+}
+
+.particle:nth-child(2) {
+  background: #ffd93d;
+  animation-name: particle-2;
+}
+
+.particle:nth-child(3) {
+  background: #6bcb77;
+  animation-name: particle-3;
+}
+
+.particle:nth-child(4) {
+  background: #4d96ff;
+  animation-name: particle-4;
+}
+
+.particle:nth-child(5) {
+  background: #ff6b9d;
+  animation-name: particle-5;
+}
+
+.particle:nth-child(6) {
+  background: #c44dff;
+  animation-name: particle-6;
+}
+
+.particle:nth-child(7) {
+  background: #ff9f43;
+  animation-name: particle-7;
+}
+
+.particle:nth-child(8) {
+  background: #00d2d3;
+  animation-name: particle-8;
+}
+
+.particle:nth-child(9) {
+  background: #ff6b6b;
+  animation-name: particle-9;
+}
+
+.particle:nth-child(10) {
+  background: #ffd93d;
+  animation-name: particle-10;
+}
+
+.particle:nth-child(11) {
+  background: #6bcb77;
+  animation-name: particle-11;
+}
+
+.particle:nth-child(12) {
+  background: #4d96ff;
+  animation-name: particle-12;
+}
 
 .celebration-emojis {
   position: absolute;
@@ -2103,17 +2189,40 @@ onUnmounted(() => {
   font-size: 28px;
   animation: emoji-burst 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   animation-delay: calc(var(--i) * 0.04s);
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
-.burst-emoji:nth-child(1) { animation-name: emoji-1; }
-.burst-emoji:nth-child(2) { animation-name: emoji-2; }
-.burst-emoji:nth-child(3) { animation-name: emoji-3; }
-.burst-emoji:nth-child(4) { animation-name: emoji-4; }
-.burst-emoji:nth-child(5) { animation-name: emoji-5; }
-.burst-emoji:nth-child(6) { animation-name: emoji-6; }
-.burst-emoji:nth-child(7) { animation-name: emoji-7; }
-.burst-emoji:nth-child(8) { animation-name: emoji-8; }
+.burst-emoji:nth-child(1) {
+  animation-name: emoji-1;
+}
+
+.burst-emoji:nth-child(2) {
+  animation-name: emoji-2;
+}
+
+.burst-emoji:nth-child(3) {
+  animation-name: emoji-3;
+}
+
+.burst-emoji:nth-child(4) {
+  animation-name: emoji-4;
+}
+
+.burst-emoji:nth-child(5) {
+  animation-name: emoji-5;
+}
+
+.burst-emoji:nth-child(6) {
+  animation-name: emoji-6;
+}
+
+.burst-emoji:nth-child(7) {
+  animation-name: emoji-7;
+}
+
+.burst-emoji:nth-child(8) {
+  animation-name: emoji-8;
+}
 
 .celebration-sparks {
   position: absolute;
@@ -2134,52 +2243,414 @@ onUnmounted(() => {
   animation-delay: calc(var(--i) * 0.03s);
 }
 
-.spark:nth-child(1) { animation-name: spark-1; }
-.spark:nth-child(2) { animation-name: spark-2; }
-.spark:nth-child(3) { animation-name: spark-3; }
-.spark:nth-child(4) { animation-name: spark-4; }
-.spark:nth-child(5) { animation-name: spark-5; }
-.spark:nth-child(6) { animation-name: spark-6; }
+.spark:nth-child(1) {
+  animation-name: spark-1;
+}
+
+.spark:nth-child(2) {
+  animation-name: spark-2;
+}
+
+.spark:nth-child(3) {
+  animation-name: spark-3;
+}
+
+.spark:nth-child(4) {
+  animation-name: spark-4;
+}
+
+.spark:nth-child(5) {
+  animation-name: spark-5;
+}
+
+.spark:nth-child(6) {
+  animation-name: spark-6;
+}
 
 @keyframes ring-expand {
-  0% { width: 20px; height: 20px; opacity: 1; border-width: 3px; }
-  100% { width: 120px; height: 120px; opacity: 0; border-width: 1px; }
+  0% {
+    width: 20px;
+    height: 20px;
+    opacity: 1;
+    border-width: 3px;
+  }
+
+  100% {
+    width: 120px;
+    height: 120px;
+    opacity: 0;
+    border-width: 1px;
+  }
 }
 
 @keyframes glow-pulse {
-  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
-  50% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.8; }
-  100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 1;
+  }
+
+  50% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
 }
 
-@keyframes particle-1 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(20px, -50px) scale(0.3); } }
-@keyframes particle-2 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(45px, -35px) scale(0.3); } }
-@keyframes particle-3 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(55px, -5px) scale(0.3); } }
-@keyframes particle-4 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(50px, 25px) scale(0.3); } }
-@keyframes particle-5 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(30px, 50px) scale(0.3); } }
-@keyframes particle-6 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-5px, 60px) scale(0.3); } }
-@keyframes particle-7 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-40px, 50px) scale(0.3); } }
-@keyframes particle-8 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-60px, 20px) scale(0.3); } }
-@keyframes particle-9 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-55px, -15px) scale(0.3); } }
-@keyframes particle-10 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-40px, -45px) scale(0.3); } }
-@keyframes particle-11 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-10px, -55px) scale(0.3); } }
-@keyframes particle-12 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(10px, -60px) scale(0.3); } }
+@keyframes particle-1 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
 
-@keyframes emoji-1 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(-25px, -75px) scale(0.8) rotate(20deg); } }
-@keyframes emoji-2 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(15px, -80px) scale(0.8) rotate(-15deg); } }
-@keyframes emoji-3 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(45px, -60px) scale(0.8) rotate(25deg); } }
-@keyframes emoji-4 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(60px, -25px) scale(0.8) rotate(-20deg); } }
-@keyframes emoji-5 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(50px, 20px) scale(0.8) rotate(15deg); } }
-@keyframes emoji-6 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(20px, 55px) scale(0.8) rotate(-25deg); } }
-@keyframes emoji-7 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(-35px, 50px) scale(0.8) rotate(20deg); } }
-@keyframes emoji-8 { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(0deg); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.3) rotate(-10deg); } 100% { opacity: 0; transform: translate(-55px, 15px) scale(0.8) rotate(-15deg); } }
+  100% {
+    opacity: 0;
+    transform: translate(20px, -50px) scale(0.3);
+  }
+}
 
-@keyframes spark-1 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-15px, -40px) scale(0); } }
-@keyframes spark-2 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(20px, -35px) scale(0); } }
-@keyframes spark-3 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(35px, -10px) scale(0); } }
-@keyframes spark-4 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(30px, 25px) scale(0); } }
-@keyframes spark-5 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-25px, 35px) scale(0); } }
-@keyframes spark-6 { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-40px, 5px) scale(0); } }
+@keyframes particle-2 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(45px, -35px) scale(0.3);
+  }
+}
+
+@keyframes particle-3 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(55px, -5px) scale(0.3);
+  }
+}
+
+@keyframes particle-4 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(50px, 25px) scale(0.3);
+  }
+}
+
+@keyframes particle-5 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(30px, 50px) scale(0.3);
+  }
+}
+
+@keyframes particle-6 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-5px, 60px) scale(0.3);
+  }
+}
+
+@keyframes particle-7 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-40px, 50px) scale(0.3);
+  }
+}
+
+@keyframes particle-8 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-60px, 20px) scale(0.3);
+  }
+}
+
+@keyframes particle-9 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-55px, -15px) scale(0.3);
+  }
+}
+
+@keyframes particle-10 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-40px, -45px) scale(0.3);
+  }
+}
+
+@keyframes particle-11 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-10px, -55px) scale(0.3);
+  }
+}
+
+@keyframes particle-12 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(10px, -60px) scale(0.3);
+  }
+}
+
+@keyframes emoji-1 {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0) rotate(0deg);
+  }
+
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.3) rotate(-10deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-25px, -75px) scale(0.8) rotate(20deg);
+  }
+}
+
+@keyframes emoji-2 {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0) rotate(0deg);
+  }
+
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.3) rotate(-10deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(15px, -80px) scale(0.8) rotate(-15deg);
+  }
+}
+
+@keyframes emoji-3 {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0) rotate(0deg);
+  }
+
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.3) rotate(-10deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(45px, -60px) scale(0.8) rotate(25deg);
+  }
+}
+
+@keyframes emoji-4 {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0) rotate(0deg);
+  }
+
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.3) rotate(-10deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(60px, -25px) scale(0.8) rotate(-20deg);
+  }
+}
+
+@keyframes emoji-5 {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0) rotate(0deg);
+  }
+
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.3) rotate(-10deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(50px, 20px) scale(0.8) rotate(15deg);
+  }
+}
+
+@keyframes emoji-6 {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0) rotate(0deg);
+  }
+
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.3) rotate(-10deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(20px, 55px) scale(0.8) rotate(-25deg);
+  }
+}
+
+@keyframes emoji-7 {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0) rotate(0deg);
+  }
+
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.3) rotate(-10deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-35px, 50px) scale(0.8) rotate(20deg);
+  }
+}
+
+@keyframes emoji-8 {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0) rotate(0deg);
+  }
+
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.3) rotate(-10deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-55px, 15px) scale(0.8) rotate(-15deg);
+  }
+}
+
+@keyframes spark-1 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-15px, -40px) scale(0);
+  }
+}
+
+@keyframes spark-2 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(20px, -35px) scale(0);
+  }
+}
+
+@keyframes spark-3 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(35px, -10px) scale(0);
+  }
+}
+
+@keyframes spark-4 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(30px, 25px) scale(0);
+  }
+}
+
+@keyframes spark-5 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-25px, 35px) scale(0);
+  }
+}
+
+@keyframes spark-6 {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-40px, 5px) scale(0);
+  }
+}
 
 .composer-expand-enter-active {
   animation: composer-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);

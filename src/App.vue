@@ -8,7 +8,7 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
-const showTopbar = computed(() => route.path !== '/')
+const showTopbar = computed(() => !['/', '/register'].includes(route.path))
 
 const menuItems = [
   { path: '/home', label: '学习计划' },
@@ -149,7 +149,9 @@ const clearNavSearch = () => {
                 </el-avatar>
                 <div class="avatar-pendant">
                   <svg viewBox="0 0 24 24" class="pendant-icon">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor"/>
+                    <polygon
+                      points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                      fill="currentColor" />
                   </svg>
                 </div>
                 <div class="avatar-ring"></div>
@@ -474,8 +476,15 @@ const clearNavSearch = () => {
 }
 
 @keyframes pendantTwinkle {
-  0%, 100% { transform: scale(1) rotate(0deg); }
-  50% { transform: scale(1.2) rotate(15deg); }
+
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+
+  50% {
+    transform: scale(1.2) rotate(15deg);
+  }
 }
 
 /* 光环效果 */
@@ -507,8 +516,13 @@ const clearNavSearch = () => {
 }
 
 @keyframes ringRotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 闪烁星星 */
@@ -550,8 +564,17 @@ const clearNavSearch = () => {
 }
 
 @keyframes sparkleFloat {
-  0%, 100% { transform: translateY(0) scale(0.8); opacity: 0; }
-  50% { transform: translateY(-8px) scale(1.2); opacity: 1; }
+
+  0%,
+  100% {
+    transform: translateY(0) scale(0.8);
+    opacity: 0;
+  }
+
+  50% {
+    transform: translateY(-8px) scale(1.2);
+    opacity: 1;
+  }
 }
 
 :deep(.main-menu.el-menu--horizontal > .el-menu-item) {

@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -22,8 +23,8 @@ public class LoginController {
     private final JwtService jwtService;
 
     public LoginController(UserRepository userRepository,
-                           PasswordEncoder passwordEncoder,
-                           JwtService jwtService) {
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
@@ -65,6 +66,62 @@ public class LoginController {
         result.put("user", userInfo);
         result.put("points", user.getPoints() != null ? user.getPoints() : 0);
 
+        return Result.success(result);
+    }
+
+    @PostMapping("/register")
+    public Result<Map<String, Object>> register(@RequestBody RegisterRequest req) {
+        String email = normalize(req.getEmail()).toLowerCase();
+        String rawPassword = normalize(req.getPassword());
+        String confirmPassword = normalize(req.getConfirmPassword());
+        String name = normalize(req.getName());
+
+        if (!StringUtils.hasText(email) || !StringUtils.hasText(rawPassword)) {
+            return Result.fail(40001, "邮箱和密码不能为空");
+        }
+        if (!email.contains("@") || email.startsWith("@") || email.endsWith("@")) {
+            return Result.fail(40001, "请输入有效邮箱");
+        }
+        if (rawPassword.length() < 6) {
+            return Result.fail(40001, "密码长度至少6位");
+        }
+        if (StringUtils.hasText(confirmPassword) && !rawPassword.equals(confirmPassword)) {
+            return Result.fail(40001, "两次输入的密码不一致");
+        }
+        if (userRepository.findByEmailIgnoreCase(email).isPresent()) {
+            return Result.fail(40001, "该邮箱已注册");
+        }
+
+        if (!StringUtils.hasText(name)) {
+            int atIndex = email.indexOf('@');
+            name = atIndex > 0 ? email.substring(0, atIndex) : "同学";
+        }
+
+        String baseName = name;
+        int suffix = 1;
+        while (userRepository.findFirstByNameIgnoreCase(name).isPresent()) {
+            suffix++;
+            name = baseName + suffix;
+        }
+
+        User user = new User();
+        user.setName(name);
+        user.setEmail(email);
+        user.setPassword(passwordEncoder.encode(rawPassword));
+        user.setPoints(0);
+        user.setBio("Keep a steady pace.");
+        user.setGender("unknown");
+        user.setTargetTrack("algo");
+        user.setWeeklyGoal(10);
+        user.setCreatedAt(OffsetDateTime.now());
+        user.setUpdatedAt(OffsetDateTime.now());
+
+        userRepository.save(user);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("id", user.getId());
+        result.put("name", user.getName());
+        result.put("email", user.getEmail());
         return Result.success(result);
     }
 
@@ -129,6 +186,45 @@ public class LoginController {
 
         public void setPassword(String password) {
             this.password = password;
+        }
+    }
+
+    public static class RegisterRequest {
+        private String name;
+        private String email;
+        private String password;
+        private String confirmPassword;
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
+
+        public String getConfirmPassword() {
+            return confirmPassword;
+        }
+
+        public void setConfirmPassword(String confirmPassword) {
+            this.confirmPassword = confirmPassword;
         }
     }
 }

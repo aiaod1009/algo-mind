@@ -8,6 +8,7 @@ import com.example.demo.entity.User;
 import com.example.demo.entity.UserPostLike;
 import com.example.demo.repository.ForumCommentRepository;
 import com.example.demo.repository.ForumPostRepository;
+import com.example.demo.repository.UserRepository;
 import com.example.demo.repository.UserPostLikeRepository;
 import com.example.demo.util.IpLocation;
 import com.example.demo.util.IpLocationUtil;
@@ -39,17 +40,20 @@ public class ForumPostController {
     private final ForumPostRepository forumPostRepository;
     private final ForumCommentRepository forumCommentRepository;
     private final UserPostLikeRepository userPostLikeRepository;
+    private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
     private final IpLocationUtil ipLocationUtil;
 
     public ForumPostController(ForumPostRepository forumPostRepository,
-                               ForumCommentRepository forumCommentRepository,
-                               UserPostLikeRepository userPostLikeRepository,
-                               CurrentUserService currentUserService,
-                               IpLocationUtil ipLocationUtil) {
+            ForumCommentRepository forumCommentRepository,
+            UserPostLikeRepository userPostLikeRepository,
+            UserRepository userRepository,
+            CurrentUserService currentUserService,
+            IpLocationUtil ipLocationUtil) {
         this.forumPostRepository = forumPostRepository;
         this.forumCommentRepository = forumCommentRepository;
         this.userPostLikeRepository = userPostLikeRepository;
+        this.userRepository = userRepository;
         this.currentUserService = currentUserService;
         this.ipLocationUtil = ipLocationUtil;
     }
@@ -71,7 +75,10 @@ public class ForumPostController {
         Set<Long> likedPostIds = currentUserService.getCurrentUserId()
                 .map(userPostLikeRepository::findPostIdsByUserId)
                 .orElse(Set.of());
-        posts.forEach(post -> post.setLiked(likedPostIds.contains(post.getId())));
+        posts.forEach(post -> {
+            post.setLiked(likedPostIds.contains(post.getId()));
+            fillPostAvatarIfMissing(post);
+        });
 
         Map<String, Object> responseData = new HashMap<>();
         responseData.put("list", posts);
@@ -93,6 +100,7 @@ public class ForumPostController {
                 .map(userId -> userPostLikeRepository.existsByUserIdAndPostId(userId, id))
                 .orElse(false);
         post.setLiked(liked);
+        fillPostAvatarIfMissing(post);
         return Result.success(post);
     }
 
@@ -132,7 +140,7 @@ public class ForumPostController {
     @Transactional
     @PostMapping("/forum-posts/{id}/like")
     public Result<Map<String, Object>> likePost(@PathVariable Long id,
-                                                @RequestBody Map<String, String> request) {
+            @RequestBody Map<String, String> request) {
         String action = request.get("action");
         if (!"like".equals(action) && !"unlike".equals(action)) {
             return Result.fail(40001, "参数错误，仅支持 action=like 或 unlike");
@@ -201,8 +209,8 @@ public class ForumPostController {
 
     @GetMapping("/forum-posts/{id}/comments")
     public Result<Map<String, Object>> getPostComments(@PathVariable Long id,
-                                                       @RequestParam(defaultValue = "1") Integer page,
-                                                       @RequestParam(defaultValue = "20") Integer pageSize) {
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer pageSize) {
         if (!forumPostRepository.existsById(id)) {
             return Result.fail(40401, "帖子不存在");
         }
@@ -281,7 +289,18 @@ public class ForumPostController {
         }
 
         return currentUserService.getCurrentUser()
-                .map(currentUser -> StringUtils.hasText(post.getAuthor()) && post.getAuthor().equals(currentUser.name()))
+                .map(currentUser -> StringUtils.hasText(post.getAuthor())
+                        && post.getAuthor().equals(currentUser.name()))
                 .orElse(false);
+    }
+
+    private void fillPostAvatarIfMissing(ForumPost post) {
+        if (post == null || StringUtils.hasText(post.getAvatar()) || post.getUserId() == null) {
+            return;
+        }
+        userRepository.findById(post.getUserId())
+                .map(User::getAvatar)
+                .filter(StringUtils::hasText)
+                .ifPresent(post::setAvatar);
     }
 }

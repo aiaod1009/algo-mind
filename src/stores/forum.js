@@ -56,6 +56,11 @@ export const useForumStore = defineStore('forum', () => {
   const posts = ref([])
   const isFromCache = ref(false)
 
+  const normalizePost = (post, fallbackAvatar = '') => ({
+    ...post,
+    avatar: post?.avatar || fallbackAvatar || '',
+  })
+
   const hydratePostsFromLocal = () => {
     const local = readLocalPosts()
     if (Array.isArray(local) && local.length > 0) {
@@ -76,7 +81,7 @@ export const useForumStore = defineStore('forum', () => {
       const res = await api.get('/forum-posts')
       const list = res.data?.data?.list
       if (res.data?.code === 0 && Array.isArray(list)) {
-        posts.value = list
+        posts.value = list.map((item) => normalizePost(item))
         saveLocalPosts(posts.value)
         isFromCache.value = false
         return { fromCache: false }
@@ -110,7 +115,7 @@ export const useForumStore = defineStore('forum', () => {
     try {
       const res = await api.post('/forum-posts', payload)
       if (res.data?.code === 0) {
-        const newPost = res.data.data || {
+        const serverPost = res.data.data || {
           ...payload,
           id: Date.now(),
           likes: 0,
@@ -118,6 +123,7 @@ export const useForumStore = defineStore('forum', () => {
           liked: false,
           createdAt: new Date().toISOString(),
         }
+        const newPost = normalizePost(serverPost, payload.avatar)
         posts.value.unshift(newPost)
         saveLocalPosts(posts.value)
         return { success: true, synced: true }
