@@ -498,9 +498,7 @@ watch(
       </div>
 
       <div class="top-action-group">
-        <el-button plain @click="router.push('/errors')">错题本</el-button>
-        <el-button v-if="isCodeChallenge" plain :loading="loading" @click="runCodeOnly">仅运行</el-button>
-        <el-button type="primary" :loading="loading" @click="handleSubmit">{{ submitButtonText }}</el-button>
+        <el-button plain class="action-pill-btn" @click="router.push('/errors')">错题本</el-button>
       </div>
     </header>
 
@@ -566,7 +564,8 @@ watch(
         <!-- 展开状态：显示完整评估内容 -->
         <template v-else>
           <div class="ai-dock-full-content">
-            <ChallengeEvaluationPanel v-if="hasEvaluationResult" :result="evaluationResult" :pass-score="CODE_PASS_SCORE" />
+            <ChallengeEvaluationPanel v-if="hasEvaluationResult" :result="evaluationResult"
+              :pass-score="CODE_PASS_SCORE" />
           </div>
           <el-button type="primary" plain class="open-eval-btn" @click="openEvaluationDialog">
             收起评估详情
@@ -576,9 +575,11 @@ watch(
     </div>
 
     <div class="action-row">
-      <el-button @click="goBack">返回关卡</el-button>
-      <el-button v-if="isCodeChallenge" plain :loading="loading" @click="runCodeOnly">仅运行</el-button>
-      <el-button type="primary" :loading="loading" @click="handleSubmit">{{ submitButtonText }}</el-button>
+      <el-button class="action-pill-btn" @click="goBack">返回关卡</el-button>
+      <el-button v-if="isCodeChallenge" plain class="action-pill-btn" :loading="loading"
+        @click="runCodeOnly">仅运行</el-button>
+      <el-button type="primary" class="action-pill-btn" :loading="loading" @click="handleSubmit">{{ submitButtonText
+      }}</el-button>
     </div>
   </div>
 </template>
@@ -643,6 +644,12 @@ watch(
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.action-pill-btn {
+  border-radius: 999px;
+  min-height: 40px;
+  padding: 0 20px;
 }
 
 .ai-dock {
