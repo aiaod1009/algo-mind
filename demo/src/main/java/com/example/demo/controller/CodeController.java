@@ -3,155 +3,238 @@ package com.example.demo.controller;
 import com.example.demo.Result;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-/**
- * 代码运行接口，统一使用全局Result类，修复参数/响应规范
- */
 @RestController
 public class CodeController {
 
+    private static final Charset PROCESS_OUTPUT_FALLBACK_CHARSET = Charset.forName("GBK");
+    private static final Pattern JAVA_PUBLIC_CLASS_PATTERN =
+            Pattern.compile("\\bpublic\\s+class\\s+([A-Za-z_$][\\w$]*)");
+    private static final Pattern JAVA_CLASS_PATTERN =
+            Pattern.compile("\\bclass\\s+([A-Za-z_$][\\w$]*)");
+
     @PostMapping("/run-code")
     public Result<RunResult> runCode(@RequestBody CodeRequest req) {
-        // 临时目录
-        File tempDir = new File("temp_code");
-        if (!tempDir.exists()) {
-            boolean mkdirSuccess = tempDir.mkdirs();
-            if (!mkdirSuccess) {
-                return Result.fail(50001, "创建临时目录失败");
-            }
+        if (req == null || req.getLanguage() == null || req.getLanguage().isBlank()) {
+            return Result.fail(40001, "Missing language");
+        }
+        if (req.getCode() == null || req.getCode().isBlank()) {
+            return Result.fail(40001, "Missing code");
         }
 
-        String lang = req.getLanguage();
-        String code = req.getCode();
-        String output = "";
-        String error = "";
-        File tempFile = null;
-
+        File runDir = null;
         try {
-            switch (lang) {
-                case "cpp" -> {
-                    tempFile = new File(tempDir, "temp.cpp");
-                    Files.writeString(tempFile.toPath(), code);
+            runDir = createRunDirectory();
+            String language = req.getLanguage().trim().toLowerCase(Locale.ROOT);
+            RunResult result = switch (language) {
+                case "cpp" -> runCpp(req.getCode(), req.getStdinInput(), runDir);
+                case "python" -> runPython(req.getCode(), req.getStdinInput(), runDir);
+                case "java" -> runJava(req.getCode(), req.getStdinInput(), runDir);
+                case "js" -> runJavaScript(req.getCode(), req.getStdinInput(), runDir);
+                default -> null;
+            };
 
-                    // 编译
-                    Process compile = Runtime.getRuntime().exec("g++ " + tempFile.getPath() + " -o " + tempDir.getPath() + "/temp");
-                    error = readError(compile);
-                    compile.waitFor();
-                    if (!error.isBlank()) {
-                        return Result.fail(40002, "编译失败：\n" + error);
-                    }
-
-                    // 运行
-                    Process run = Runtime.getRuntime().exec(tempDir.getPath() + "/temp");
-                    output = readOutput(run);
-                    error = readError(run);
-                    run.waitFor();
-                }
-
-                case "python" -> {
-                    tempFile = new File(tempDir, UUID.randomUUID() + ".py");
-                    Files.writeString(tempFile.toPath(), code);
-                    Process run = Runtime.getRuntime().exec("python " + tempFile.getPath());
-                    output = readOutput(run);
-                    error = readError(run);
-                }
-
-                case "java" -> {
-                    tempFile = new File(tempDir, "Temp.java");
-                    Files.writeString(tempFile.toPath(), code);
-                    Process compile = Runtime.getRuntime().exec("javac " + tempFile.getPath());
-                    error = readError(compile);
-                    compile.waitFor();
-                    if (!error.isBlank()) {
-                        return Result.fail(40002, "编译失败：\n" + error);
-                    }
-
-                    Process run = Runtime.getRuntime().exec("java -cp " + tempDir.getPath() + " Temp");
-                    output = readOutput(run);
-                    error = readError(run);
-                }
-
-                case "js" -> {
-                    tempFile = new File(tempDir, UUID.randomUUID() + ".js");
-                    Files.writeString(tempFile.toPath(), code);
-                    Process run = Runtime.getRuntime().exec("node " + tempFile.getPath());
-                    output = readOutput(run);
-                    error = readError(run);
-                }
-
-                default -> {
-                    return Result.fail(40001, "不支持的语言：" + lang);
-                }
+            if (result == null) {
+                return Result.fail(40001, "Unsupported language: " + req.getLanguage());
             }
 
-            return Result.success(new RunResult(output, error));
+            return Result.success(result);
+        } catch (CompilationException e) {
+            return Result.fail(40002, "Compilation failed:\n" + e.getMessage());
         } catch (Exception e) {
-            return Result.fail(50001, "运行失败：" + e.getMessage());
+            return Result.fail(50001, "Execution failed: " + e.getMessage());
         } finally {
-            // 清理临时文件
-            if (tempFile != null && tempFile.exists()) {
-                boolean delete = tempFile.delete();
-                if (!delete) {
-                    System.err.println("临时文件清理失败：" + tempFile.getPath());
-                }
+            deleteRecursively(runDir);
+        }
+    }
+
+    private RunResult runCpp(String code, String stdinInput, File runDir)
+            throws IOException, InterruptedException, CompilationException {
+        File sourceFile = new File(runDir, "main.cpp");
+        String executableName = isWindows() ? "main.exe" : "main";
+        File executableFile = new File(runDir, executableName);
+
+        Files.writeString(sourceFile.toPath(), code, StandardCharsets.UTF_8);
+
+        ProcessResult compileResult = execute(
+                List.of("g++", sourceFile.getName(), "-o", executableFile.getName()),
+                runDir,
+                null
+        );
+        ensureCompiled(compileResult);
+
+        ProcessResult runResult = execute(List.of(executableFile.getAbsolutePath()), runDir, stdinInput);
+        return new RunResult(runResult.stdout(), runResult.stderr());
+    }
+
+    private RunResult runPython(String code, String stdinInput, File runDir)
+            throws IOException, InterruptedException {
+        File sourceFile = new File(runDir, "main.py");
+        Files.writeString(sourceFile.toPath(), code, StandardCharsets.UTF_8);
+
+        ProcessResult runResult = execute(List.of("python", sourceFile.getName()), runDir, stdinInput);
+        return new RunResult(runResult.stdout(), runResult.stderr());
+    }
+
+    private RunResult runJava(String code, String stdinInput, File runDir)
+            throws IOException, InterruptedException, CompilationException {
+        String mainClassName = resolveJavaMainClassName(code);
+        File sourceFile = new File(runDir, mainClassName + ".java");
+
+        Files.writeString(sourceFile.toPath(), code, StandardCharsets.UTF_8);
+
+        ProcessResult compileResult = execute(
+                List.of("javac", "-encoding", StandardCharsets.UTF_8.name(), sourceFile.getName()),
+                runDir,
+                null
+        );
+        ensureCompiled(compileResult);
+
+        ProcessResult runResult = execute(List.of("java", "-cp", runDir.getAbsolutePath(), mainClassName), runDir, stdinInput);
+        return new RunResult(runResult.stdout(), runResult.stderr());
+    }
+
+    private RunResult runJavaScript(String code, String stdinInput, File runDir)
+            throws IOException, InterruptedException {
+        File sourceFile = new File(runDir, "main.js");
+        Files.writeString(sourceFile.toPath(), code, StandardCharsets.UTF_8);
+
+        ProcessResult runResult = execute(List.of("node", sourceFile.getName()), runDir, stdinInput);
+        return new RunResult(runResult.stdout(), runResult.stderr());
+    }
+
+    private File createRunDirectory() throws IOException {
+        File tempRoot = new File("temp_code");
+        if (!tempRoot.exists() && !tempRoot.mkdirs()) {
+            throw new IOException("Failed to create temp_code directory");
+        }
+
+        File runDir = new File(tempRoot, UUID.randomUUID().toString());
+        if (!runDir.mkdirs()) {
+            throw new IOException("Failed to create temporary run directory");
+        }
+        return runDir;
+    }
+
+    private ProcessResult execute(List<String> command, File workingDir, String stdinInput)
+            throws IOException, InterruptedException {
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
+        processBuilder.directory(workingDir);
+
+        Process process = processBuilder.start();
+        CompletableFuture<String> stdoutFuture = readStreamAsync(process.getInputStream());
+        CompletableFuture<String> stderrFuture = readStreamAsync(process.getErrorStream());
+
+        writeStdin(process, stdinInput);
+
+        int exitCode = process.waitFor();
+        String stdout = stdoutFuture.join().trim();
+        String stderr = stderrFuture.join().trim();
+        return new ProcessResult(exitCode, stdout, stderr);
+    }
+
+    private CompletableFuture<String> readStreamAsync(InputStream inputStream) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return readStream(inputStream);
+            } catch (IOException e) {
+                throw new CompletionException(new UncheckedIOException(e));
             }
-            // 清理编译产物（cpp/java）
-            if ("cpp".equals(lang)) {
-                File cppOut = new File(tempDir, "temp");
-                if (cppOut.exists()) {
-                    cppOut.delete();
-                }
-            } else if ("java".equals(lang)) {
-                File classFile = new File(tempDir, "Temp.class");
-                if (classFile.exists()) {
-                    classFile.delete();
-                }
+        });
+    }
+
+    private String readStream(InputStream inputStream) throws IOException {
+        byte[] bytes = inputStream.readAllBytes();
+        String utf8Text = new String(bytes, StandardCharsets.UTF_8);
+        String fallbackText = new String(bytes, PROCESS_OUTPUT_FALLBACK_CHARSET);
+        return countReplacementCharacters(utf8Text) <= countReplacementCharacters(fallbackText)
+                ? utf8Text
+                : fallbackText;
+    }
+
+    private void writeStdin(Process process, String stdinInput) throws IOException {
+        try (OutputStream outputStream = process.getOutputStream()) {
+            if (stdinInput != null && !stdinInput.isEmpty()) {
+                outputStream.write(stdinInput.getBytes(StandardCharsets.UTF_8));
+                outputStream.flush();
             }
         }
     }
 
-    /**
-     * 读取进程标准输出
-     */
-    private String readOutput(Process p) throws IOException {
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream(), Charset.defaultCharset()))) {
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = br.readLine()) != null) {
-                sb.append(line).append("\n");
-            }
-            return sb.toString().trim();
+    private void ensureCompiled(ProcessResult compileResult) throws CompilationException {
+        if (compileResult.exitCode() != 0 || !compileResult.stderr().isBlank()) {
+            String message = compileResult.stderr().isBlank() ? compileResult.stdout() : compileResult.stderr();
+            throw new CompilationException(message.isBlank() ? "Unknown compiler error" : message);
         }
     }
 
-    /**
-     * 读取进程错误输出
-     */
-    private String readError(Process p) throws IOException {
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getErrorStream(), Charset.defaultCharset()))) {
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = br.readLine()) != null) {
-                sb.append(line).append("\n");
+    private String resolveJavaMainClassName(String code) {
+        Matcher publicClassMatcher = JAVA_PUBLIC_CLASS_PATTERN.matcher(code);
+        if (publicClassMatcher.find()) {
+            return publicClassMatcher.group(1);
+        }
+
+        Matcher classMatcher = JAVA_CLASS_PATTERN.matcher(code);
+        if (classMatcher.find()) {
+            return classMatcher.group(1);
+        }
+
+        return "Main";
+    }
+
+    private int countReplacementCharacters(String text) {
+        int count = 0;
+        for (int i = 0; i < text.length(); i += 1) {
+            if (text.charAt(i) == '\uFFFD') {
+                count += 1;
             }
-            return sb.toString().trim();
+        }
+        return count;
+    }
+
+    private boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+    }
+
+    private void deleteRecursively(File file) {
+        if (file == null || !file.exists()) {
+            return;
+        }
+
+        File[] children = file.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                deleteRecursively(child);
+            }
+        }
+
+        if (!file.delete()) {
+            file.deleteOnExit();
         }
     }
 
-    // ------------------- 请求/返回结构（独立静态类，规范命名） -------------------
     public static class CodeRequest {
         private String language;
         private String code;
+        private String stdinInput;
 
-        // Getter & Setter
         public String getLanguage() {
             return language;
         }
@@ -167,13 +250,20 @@ public class CodeController {
         public void setCode(String code) {
             this.code = code;
         }
+
+        public String getStdinInput() {
+            return stdinInput;
+        }
+
+        public void setStdinInput(String stdinInput) {
+            this.stdinInput = stdinInput;
+        }
     }
 
     public static class RunResult {
-        private String output;
-        private String error;
+        private final String output;
+        private final String error;
 
-        // 构造器 + Getter
         public RunResult(String output, String error) {
             this.output = output;
             this.error = error;
@@ -185,6 +275,15 @@ public class CodeController {
 
         public String getError() {
             return error;
+        }
+    }
+
+    private record ProcessResult(int exitCode, String stdout, String stderr) {
+    }
+
+    private static class CompilationException extends Exception {
+        private CompilationException(String message) {
+            super(message);
         }
     }
 }
