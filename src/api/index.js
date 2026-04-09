@@ -75,7 +75,6 @@ api.saveLearningPlan = userApi.saveLearningPlan
 api.deleteLearningPlan = userApi.deleteLearningPlan
 
 api.uploadAvatar = userApi.uploadAvatar
-api.uploadAvatarFromUrl = userApi.uploadAvatarFromUrl
 api.getAvatar = userApi.getAvatar
 api.deleteAvatar = userApi.deleteAvatar
 api.aiChat = userApi.aiChat

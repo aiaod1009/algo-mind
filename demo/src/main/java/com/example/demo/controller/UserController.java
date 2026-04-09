@@ -6,6 +6,7 @@ import com.example.demo.entity.User;
 import com.example.demo.repository.UserRepository;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.URI;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -14,6 +15,8 @@ import java.util.*;
 @RequestMapping("/users")
 public class UserController {
 
+    private static final String MANAGED_AVATAR_PREFIX = "/api/uploads/avatars/";
+    private static final String LEGACY_MANAGED_AVATAR_PREFIX = "/uploads/avatars/";
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
     private static final List<String> VALID_TRACKS = List.of("algo", "ds", "contest");
@@ -44,7 +47,19 @@ public class UserController {
             }
         }
         if (userRequest.getAvatar() != null) {
-            user.setAvatar(userRequest.getAvatar());
+            String requestedAvatar = normalizeAvatarInput(userRequest.getAvatar());
+            if (requestedAvatar == null || requestedAvatar.isEmpty()) {
+                user.setAvatar(null);
+            } else {
+                String managedAvatar = normalizeManagedAvatarPath(requestedAvatar);
+                if (managedAvatar != null) {
+                    user.setAvatar(managedAvatar);
+                } else if (requestedAvatar.equals(user.getAvatar())) {
+                    user.setAvatar(user.getAvatar());
+                } else {
+                    return Result.fail(40001, "头像仅支持站内已上传图片，请先上传本地图片文件");
+                }
+            }
         }
         if (userRequest.getTargetTrack() != null && !userRequest.getTargetTrack().isBlank()) {
             if (VALID_TRACKS.contains(userRequest.getTargetTrack())) {
@@ -460,5 +475,38 @@ public class UserController {
         result.put("total", allProblems.size());
 
         return Result.success(result);
+    }
+
+    private String normalizeAvatarInput(String avatar) {
+        if (avatar == null) {
+            return null;
+        }
+        return avatar.trim();
+    }
+
+    private String normalizeManagedAvatarPath(String avatar) {
+        String normalized = normalizeAvatarInput(avatar);
+        if (normalized == null || normalized.isEmpty()) {
+            return normalized;
+        }
+
+        if (normalized.startsWith(MANAGED_AVATAR_PREFIX)) {
+            return normalized;
+        }
+
+        if (normalized.startsWith(LEGACY_MANAGED_AVATAR_PREFIX)) {
+            return MANAGED_AVATAR_PREFIX + normalized.substring(LEGACY_MANAGED_AVATAR_PREFIX.length());
+        }
+
+        if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+            try {
+                URI uri = URI.create(normalized);
+                return normalizeManagedAvatarPath(uri.getPath());
+            } catch (IllegalArgumentException ignored) {
+                return null;
+            }
+        }
+
+        return null;
     }
 }

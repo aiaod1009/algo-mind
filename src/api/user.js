@@ -97,10 +97,6 @@ export const userApi = {
     })
   },
 
-  uploadAvatarFromUrl(data) {
-    return api.post('/users/me/avatar-from-url', data)
-  },
-
   getAvatar() {
     return api.get('/users/me/avatar')
   },

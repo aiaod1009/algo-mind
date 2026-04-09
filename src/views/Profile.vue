@@ -441,10 +441,23 @@ const saveStatusSettings = () => {
   ElMessage.success('状态设置已保存')
 }
 
+const DEFAULT_AVATAR_URL = 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'
+const MANAGED_AVATAR_PREFIX = '/api/uploads/avatars/'
+const LEGACY_MANAGED_AVATAR_PREFIX = '/uploads/avatars/'
+
+const normalizeAvatarValue = (value) => typeof value === 'string' ? value.trim() : ''
+
+const isManagedAvatarPath = (value) => {
+  const avatar = normalizeAvatarValue(value)
+  return avatar.startsWith(MANAGED_AVATAR_PREFIX) || avatar.startsWith(LEGACY_MANAGED_AVATAR_PREFIX)
+}
+
+const getAvatarPreviewUrl = (value) => getFullFileUrl(normalizeAvatarValue(value)) || DEFAULT_AVATAR_URL
+
 const editForm = ref({
   name: userStore.userInfo?.name || '',
   bio: userStore.userInfo?.bio || '先把基础打扎实，再冲更高难度。',
-  avatar: userStore.userInfo?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte',
+  avatar: userStore.userInfo?.avatar || '',
   email: userStore.userInfo?.email || '',
   github: userStore.userInfo?.github || '',
   website: userStore.userInfo?.website || ''
@@ -452,31 +465,12 @@ const editForm = ref({
 
 const handleSave = async () => {
   try {
-    let finalAvatar = editForm.value.avatar
+    const finalAvatar = normalizeAvatarValue(editForm.value.avatar)
+    const currentAvatar = normalizeAvatarValue(userStore.userInfo?.avatar)
 
-    // 检查头像是否是外部 URL（需要下载并上传到后端）
-    if (finalAvatar && finalAvatar.startsWith('http') &&
-      !finalAvatar.includes('localhost') &&
-      !finalAvatar.includes('127.0.0.1')) {
-      try {
-        ElMessage.info('正在处理头像，请稍候...')
-
-        // 调用后端接口，通过 URL 上传头像
-        const uploadResponse = await api.uploadAvatarFromUrl({ url: finalAvatar })
-
-        if (uploadResponse.data && uploadResponse.data.code === 0) {
-          const avatarUrl = getFullFileUrl(uploadResponse.data.data.avatarUrl)
-
-          // 如果是相对路径，拼接成完整URL
-          finalAvatar = avatarUrl
-          ElMessage.success('头像已保存到服务器')
-        } else {
-          ElMessage.warning('头像上传失败，将保留原链接')
-        }
-      } catch (uploadError) {
-        console.error('头像上传失败:', uploadError)
-        ElMessage.warning('头像上传失败，将保留原链接')
-      }
+    if (finalAvatar && !isManagedAvatarPath(finalAvatar) && finalAvatar !== currentAvatar) {
+      ElMessage.warning('头像仅支持本地上传后的站内图片，请先上传图片文件')
+      return
     }
 
     const response = await api.updateUserProfile({
@@ -515,7 +509,7 @@ const handleAvatarClick = () => {
   editForm.value = {
     name: userStore.userInfo?.name || '',
     bio: userStore.userInfo?.bio || '先把基础打扎实，再冲更高难度。',
-    avatar: userStore.userInfo?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte',
+    avatar: userStore.userInfo?.avatar || '',
     email: userStore.userInfo?.email || '',
     github: userStore.userInfo?.github || '',
     website: userStore.userInfo?.website || ''
@@ -528,7 +522,7 @@ const openEditModal = () => {
   editForm.value = {
     name: userStore.userInfo?.name || '',
     bio: userStore.userInfo?.bio || '先把基础打扎实，再冲更高难度。',
-    avatar: userStore.userInfo?.avatar || 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte',
+    avatar: userStore.userInfo?.avatar || '',
     email: userStore.userInfo?.email || '',
     github: userStore.userInfo?.github || '',
     website: userStore.userInfo?.website || ''
@@ -539,12 +533,12 @@ const openEditModal = () => {
 // 头像加载错误处理
 const handleAvatarError = (event) => {
   // 当图片加载失败时，使用默认头像
-  event.target.src = 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Byte'
+  event.target.src = DEFAULT_AVATAR_URL
 }
 
 // 头像上传成功 - 只存原始路径
 const handleAvatarUploadSuccess = (result) => {
-  const avatarPath = getFullFileUrl(result.url)
+  const avatarPath = normalizeAvatarValue(getFullFileUrl(result.url))
   if (!avatarPath) {
     ElMessage.error('头像路径无效')
     return
@@ -605,8 +599,8 @@ onMounted(() => {
         <div class="avatar-section">
           <div class="avatar-wrapper" @click="handleAvatarClick">
             <div class="avatar-container">
-              <img :src="userStore.avatar" :alt="userStore.userInfo?.name" class="profile-avatar"
-                :key="userStore.avatar" @error="handleAvatarError" />
+              <img :src="userStore.avatar || DEFAULT_AVATAR_URL" :alt="userStore.userInfo?.name" class="profile-avatar"
+                :key="userStore.avatar || DEFAULT_AVATAR_URL" @error="handleAvatarError" />
             </div>
             <div class="status-emoji" @click.stop="handleStatusClick" :class="{ busy: userStatus.isBusy }">
               {{ userStatus.emoji }}
@@ -915,7 +909,7 @@ onMounted(() => {
             <!-- 头像预览区 -->
             <div class="avatar-preview-section">
               <div class="avatar-preview-ring">
-                <img :src="getFullFileUrl(editForm.avatar)" alt="头像预览" :key="editForm.avatar"
+                <img :src="getAvatarPreviewUrl(editForm.avatar)" alt="头像预览" :key="editForm.avatar || DEFAULT_AVATAR_URL"
                   @error="handleAvatarError" />
                 <div class="avatar-edit-overlay" @click="handleUploadClick">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -1021,7 +1015,7 @@ onMounted(() => {
                 @upload-error="handleAvatarUploadError" />
               <div class="avatar-actions">
                 <button class="avatar-btn secondary"
-                  @click="editForm.avatar = 'https://api.dicebear.com/9.x/fun-emoji/svg?seed=' + Math.random()">随机头像</button>
+                  @click="editForm.avatar = ''">恢复默认头像</button>
               </div>
             </div>
 

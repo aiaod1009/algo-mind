@@ -8,7 +8,6 @@ import com.example.demo.service.FileStorageService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -95,35 +94,8 @@ public class AvatarController {
     }
 
     @PostMapping("/avatar-from-url")
-    public Result<Map<String, Object>> uploadAvatarFromUrl(@RequestBody Map<String, String> request) {
-        String imageUrl = request.get("url");
-        if (imageUrl == null || imageUrl.isBlank()) {
-            return Result.fail(40001, "请提供图片URL");
-        }
-
-        try {
-            User user = currentUserService.requireCurrentUserEntity();
-            String oldAvatar = user.getAvatar();
-            String avatarUrl = fileStorageService.storeAvatarFromUrl(imageUrl, user.getId());
-
-            if (oldAvatar != null && !oldAvatar.isBlank() && !oldAvatar.equals(avatarUrl)) {
-                safelyDeleteOldAvatar(oldAvatar);
-            }
-
-            user.setAvatar(avatarUrl);
-            userRepository.save(user);
-
-            Map<String, Object> result = new HashMap<>();
-            result.put("avatarUrl", avatarUrl);
-            result.put("message", "头像上传成功");
-            return Result.success(result);
-        } catch (IllegalArgumentException e) {
-            return Result.fail(40001, e.getMessage());
-        } catch (IOException e) {
-            return Result.fail(50001, "文件上传失败: " + e.getMessage());
-        } catch (Exception e) {
-            return Result.fail(50001, "上传失败: " + e.getMessage());
-        }
+    public Result<Map<String, Object>> uploadAvatarFromUrl() {
+        return Result.fail(40001, "头像外链导入已关闭，请上传本地图片文件。");
     }
 
     private void safelyDeleteOldAvatar(String oldAvatar) {

@@ -4,32 +4,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
 @Configuration
-public class WebMvcConfig implements WebMvcConfigurer {
+public class WebMvcConfig {
 
     private static final Logger log = LoggerFactory.getLogger(WebMvcConfig.class);
 
-    @Value("${file.upload-dir:./uploads/avatars}")
-    private String uploadDir;
-
-    @Override
-    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+    public WebMvcConfig(@Value("${file.upload-dir:./uploads/avatars}") String uploadDir) {
         Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
-        Path parentPath = uploadPath.getParent();
-        Path staticRoot = parentPath != null ? parentPath : uploadPath;
 
-        log.info("静态资源映射配置:");
+        log.info("上传文件已切换为受控下载模式");
         log.info("  上传目录: {}", uploadPath);
-        log.info("  静态资源根目录: {}", staticRoot);
-        log.info("  资源映射: /uploads/** -> {}", staticRoot.toUri());
-
-        registry.addResourceHandler("/uploads/**")
-                .addResourceLocations(staticRoot.toUri().toString());
+        log.info("  头像访问路径: /uploads/avatars/{filename}");
     }
 }

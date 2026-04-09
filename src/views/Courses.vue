@@ -227,7 +227,8 @@ defineExpose({
 
 onMounted(async () => {
   await fetchCourses()
-  fetchAIRecommendations()
+  // AI 推荐功能已禁用
+  // fetchAIRecommendations()
 })
 </script>
 
@@ -250,39 +251,12 @@ onMounted(async () => {
       </div>
     </div>
 
+    <!-- AI 推荐功能已禁用 -->
+    <!--
     <section class="ai-recommend-section">
-      <div class="section-header">
-        <div class="section-title-wrap">
-          <h2>智能推荐</h2>
-        </div>
-        <p class="section-desc">基于您的错题分析和学习计划，为您精选以下课程</p>
-      </div>
-      <div v-if="isLoadingRecommendations" class="loading-state">
-        <span class="loading-spinner"></span>
-        <span>正在分析您的学习数据...</span>
-      </div>
-      <div v-else class="recommend-list">
-        <div v-for="rec in aiRecommendations" :key="rec.id" class="recommend-card">
-          <div class="recommend-badge">
-            <span class="match-score">{{ rec.matchScore }}%</span>
-            <span class="match-label">匹配度</span>
-          </div>
-          <div class="recommend-content">
-            <h3 class="recommend-title">{{ rec.title }}</h3>
-            <p class="recommend-reason">{{ rec.reason }}</p>
-            <div class="recommend-meta">
-              <span class="teacher">{{ rec.teacher.name }}</span>
-              <span class="divider">·</span>
-              <span class="duration">{{ rec.duration }}</span>
-            </div>
-            <div class="recommend-tags">
-              <span v-for="tag in rec.tags" :key="tag" class="tag">{{ tag }}</span>
-            </div>
-          </div>
-          <button class="enroll-btn" @click="enrollCourse(rec)">立即报名</button>
-        </div>
-      </div>
+      ...
     </section>
+    -->
 
     <section class="courses-section">
       <div class="section-header">
