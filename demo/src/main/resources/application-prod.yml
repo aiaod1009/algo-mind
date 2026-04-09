@@ -48,10 +48,8 @@ spring:
         format_sql: true
     database-platform: org.hibernate.dialect.MySQL8Dialect
     
-# 日志配置
+# 日志配置 - 只输出到控制台
 logging:
   level:
     root: WARN
     com.example.demo: INFO
-  file:
-    name: /www/wwwroot/your-project/logs/app.log

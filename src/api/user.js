@@ -113,28 +113,6 @@ export const userApi = {
     return api.post('/ai/chat', data, withNonBlockingAuth({ timeout: AI_TIMEOUT }))
   },
 
-  aiChatStream(data) {
-    const headers = { 'Content-Type': 'application/json' }
-    const userRaw = localStorage.getItem('user')
-
-    if (userRaw) {
-      try {
-        const token = JSON.parse(userRaw)?.token
-        if (token) {
-          headers.Authorization = `Bearer ${token}`
-        }
-      } catch (error) {
-        console.warn('Failed to read auth token for AI stream.', error)
-      }
-    }
-
-    return fetch('/api/ai/chat/stream', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(data),
-    })
-  },
-
   evaluateCode(data) {
     return api.post('/ai/evaluate-code', data, { timeout: AI_TIMEOUT })
   },

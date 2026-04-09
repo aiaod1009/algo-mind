@@ -43,7 +43,7 @@ public class SecurityConfig {
                                                 .accessDeniedHandler(accessDeniedHandler))
                                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                                 .authorizeHttpRequests(authorize -> authorize
-                                                .requestMatchers("/login", "/register", "/uploads/**", "/api/uploads/**", "/h2-console/**",
+                                                .requestMatchers("/login", "/register", "/uploads/**", "/api/uploads/**", "/api/ai/**", "/ai/**", "/h2-console/**",
                                                 "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                                                 .permitAll()
                                                 .requestMatchers(HttpMethod.GET, "/levels", "/ranking",

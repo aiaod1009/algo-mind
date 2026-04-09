@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useUserStore } from '../stores/user'
 import api from '../api'
+import { withNonBlockingAuth } from '../api/requestOptions'
 
 const userStore = useUserStore()
 
@@ -29,7 +30,6 @@ const isJumping = ref(false)
 const chatMessages = ref([])
 const inputMessage = ref('')
 const isTyping = ref(false)
-const isStreaming = ref(false)
 const isGenerating = ref(false)
 const isGenerated = ref(false)
 const chatContainerRef = ref(null)
@@ -63,6 +63,25 @@ const quickPrompts = [
   { text: '推荐练习题目', icon: '💡' },
   { text: '解答我的疑问', icon: '❓' },
 ]
+
+const taskTypeColors = {
+  '数组': { bg: 'rgba(37, 99, 235, 0.1)', color: '#2563eb' },
+  '字符串': { bg: 'rgba(22, 163, 74, 0.1)', color: '#16a34a' },
+  '动态规划': { bg: 'rgba(217, 119, 6, 0.1)', color: '#d97706' },
+  '二叉树': { bg: 'rgba(124, 58, 237, 0.1)', color: '#7c3aed' },
+  '图论': { bg: 'rgba(220, 38, 38, 0.1)', color: '#dc2626' },
+  '排序': { bg: 'rgba(8, 145, 178, 0.1)', color: '#0891b2' },
+  '贪心': { bg: 'rgba(219, 39, 119, 0.1)', color: '#db2777' },
+  '复盘': { bg: 'rgba(107, 114, 128, 0.1)', color: '#6b7280' },
+}
+
+const getTaskTypeStyle = (type) => {
+  const style = taskTypeColors[type] || taskTypeColors['复盘']
+  return {
+    backgroundColor: style.bg,
+    color: style.color,
+  }
+}
 
 const normalizeMessageContent = (content) => {
   if (typeof content === 'string') {
@@ -100,13 +119,187 @@ const extractAIResponseContent = (response, fallbackInput) => {
   return normalizeMessageContent(content || fallbackInput)
 }
 
+/*
+const buildFallbackErrorAnalysis = () => ({
+  totalErrors: 23,
+  categories: [
+    { name: '鍔ㄦ€佽鍒?, count: 8 },
+    { name: '鍥捐', count: 6 },
+    { name: '浜屽弶鏍?, count: 5 },
+    { name: '瀛楃涓?, count: 4 },
+  ],
+  recentErrors: [
+    { title: '鑳屽寘闂', reason: '鐘舵€佽浆绉绘柟绋嬮敊璇?, time: '2灏忔椂鍓? },
+    { title: '鏈€鐭矾寰?, reason: '杈圭晫鏉′欢閬楁紡', time: '鏄ㄥぉ' },
+    { title: '浜屽弶鏍戦亶鍘?, reason: '閫掑綊缁堟鏉′欢閿欒', time: '2澶╁墠' },
+  ],
+  improvementTrend: '杩戞湡鍦ㄥ姩鎬佽鍒掓柟闈㈡湁杩涙锛屼絾鍥捐浠嶉渶鍔犲己',
+})
+
+const buildFallbackStudyHabits = () => ({
+  weeklyStudyTime: 12.5,
+  averageTimePerQuestion: 25,
+  preferredTimeSlot: '鏅氫笂',
+  consistencyScore: 78,
+  strongTopics: ['鏁扮粍', '瀛楃涓?, '閾捐〃'],
+  weakTopics: ['鍔ㄦ€佽鍒?, '鍥捐'],
+})
+
+const formatRelativeTime = (value) => {
+  if (!value) return '鍒氬垰'
+
+  const target = new Date(value)
+  if (Number.isNaN(target.getTime())) {
+    return '鍒氬垰'
+  }
+
+  const diffMs = Date.now() - target.getTime()
+  const diffMinutes = Math.max(1, Math.floor(diffMs / 60000))
+  if (diffMinutes < 60) return `${diffMinutes}鍒嗛挓鍓?`
+
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours}灏忔椂鍓?`
+
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays}澶╁墠`
+}
+
+const buildErrorAnalysisFromItems = (items = []) => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return buildFallbackErrorAnalysis()
+  }
+
+  const categoryCounts = new Map()
+  items.forEach((item) => {
+    const category = item?.levelType?.trim() || '鏈垎绫?'
+    categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1)
+  })
+
+  const categories = Array.from(categoryCounts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+
+  const recentErrors = items.slice(0, 3).map((item) => ({
+    title: item?.title || item?.question || '鏈懡鍚嶉敊棰?,
+    reason: item?.description || item?.analysisStatus || '闇€瑕佸洖椤惧師棰?,
+    time: formatRelativeTime(item?.updatedAt || item?.createdAt),
+  }))
+
+  const topCategory = categories[0]?.name || '鍩虹棰樺瀷'
+  return {
+    totalErrors: items.length,
+    categories,
+    recentErrors,
+    improvementTrend: `褰撳墠閿欓涓昏闆嗕腑鍦?${topCategory}锛屽缓璁噸鐐瑰洖椤俱€?`,
+  }
+}
+
+*/
+
+const buildFallbackErrorAnalysis = () => ({
+  totalErrors: 23,
+  categories: [
+    { name: 'Dynamic Programming', count: 8 },
+    { name: 'Graph', count: 6 },
+    { name: 'Binary Tree', count: 5 },
+    { name: 'String', count: 4 },
+  ],
+  recentErrors: [
+    { title: 'Knapsack Problem', reason: 'State transition formula needs review.', time: '2h ago' },
+    { title: 'Shortest Path', reason: 'Boundary handling was missed.', time: 'Yesterday' },
+    { title: 'Tree Traversal', reason: 'Recursive stop condition was incorrect.', time: '2d ago' },
+  ],
+  improvementTrend: 'Dynamic Programming is improving, but Graph topics still need attention.',
+})
+
+const buildFallbackStudyHabits = () => ({
+  weeklyStudyTime: 12.5,
+  averageTimePerQuestion: 25,
+  preferredTimeSlot: 'Evening',
+  consistencyScore: 78,
+  strongTopics: ['Array', 'String', 'Linked List'],
+  weakTopics: ['Dynamic Programming', 'Graph'],
+})
+
+const formatRelativeTime = (value) => {
+  if (!value) return 'Just now'
+
+  const target = new Date(value)
+  if (Number.isNaN(target.getTime())) {
+    return 'Just now'
+  }
+
+  const diffMs = Date.now() - target.getTime()
+  const diffMinutes = Math.max(1, Math.floor(diffMs / 60000))
+  if (diffMinutes < 60) return `${diffMinutes}m ago`
+
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours}h ago`
+
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays}d ago`
+}
+
+const buildErrorAnalysisFromItems = (items = []) => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return buildFallbackErrorAnalysis()
+  }
+
+  const categoryCounts = new Map()
+  items.forEach((item) => {
+    const category = item?.levelType?.trim() || 'Uncategorized'
+    categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1)
+  })
+
+  const categories = Array.from(categoryCounts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+
+  const recentErrors = items.slice(0, 3).map((item) => ({
+    title: item?.title || item?.question || 'Untitled Error',
+    reason: item?.description || item?.analysisStatus || 'Review the original problem statement.',
+    time: formatRelativeTime(item?.updatedAt || item?.createdAt),
+  }))
+
+  const topCategory = categories[0]?.name || 'Core Topics'
+  return {
+    totalErrors: items.length,
+    categories,
+    recentErrors,
+    improvementTrend: `Current mistakes are mostly concentrated in ${topCategory}. Focus there first.`,
+  }
+}
+
+const buildStudyHabitsFromStats = (stats = {}) => {
+  const fallback = buildFallbackStudyHabits()
+  const accuracy = Number(stats?.accuracy || 0)
+  const currentStreak = Number(stats?.currentStreak || 0)
+  const weeklyProgress = Number(stats?.weeklyProgress || 0)
+  const derivedWeakTopics = errorAnalysis.value.categories
+    .slice(0, 2)
+    .map((category) => category.name)
+    .filter(Boolean)
+
+  return {
+    ...fallback,
+    weeklyStudyTime: Math.max(fallback.weeklyStudyTime, Number((weeklyProgress * 1.5).toFixed(1))),
+    consistencyScore: Math.min(100, Math.max(0, Math.round(accuracy * 0.7 + currentStreak * 3))),
+    weakTopics: derivedWeakTopics.length ? derivedWeakTopics : fallback.weakTopics,
+  }
+}
+
 const loadErrorAnalysis = async () => {
+  if (!userStore.isLogin) {
+    errorAnalysis.value = buildFallbackErrorAnalysis()
+    return
+  }
+
   try {
-    const response = await api.get('/api/ai/error-analysis')
-    if (response.data?.data) {
-      errorAnalysis.value = response.data.data
-    }
+    const response = await api.get('/errors', withNonBlockingAuth())
+    errorAnalysis.value = buildErrorAnalysisFromItems(response.data?.data)
   } catch (error) {
+    errorAnalysis.value = buildFallbackErrorAnalysis()
+    return
     errorAnalysis.value = {
       totalErrors: 23,
       categories: [
@@ -126,12 +319,17 @@ const loadErrorAnalysis = async () => {
 }
 
 const loadStudyHabits = async () => {
+  if (!userStore.isLogin) {
+    studyHabits.value = buildFallbackStudyHabits()
+    return
+  }
+
   try {
-    const response = await api.get('/api/ai/study-habits')
-    if (response.data?.data) {
-      studyHabits.value = response.data.data
-    }
+    const response = await api.get('/users/me/stats', withNonBlockingAuth())
+    studyHabits.value = buildStudyHabitsFromStats(response.data?.data)
   } catch (error) {
+    studyHabits.value = buildFallbackStudyHabits()
+    return
     studyHabits.value = {
       weeklyStudyTime: 12.5,
       averageTimePerQuestion: 25,
@@ -150,9 +348,17 @@ const generateLearningPlan = async () => {
   isGenerated.value = false
 
   try {
-    const response = await api.post('/api/ai/learning-plan', {
+    if (!userStore.isLogin) {
+      throw new Error('Login required for remote learning plan generation.')
+    }
+
+    const response = await api.generateLearningPlan({
       track: props.selectedTrack,
+      trackLabel: props.trackOptions.find(t => t.value === props.selectedTrack)?.label || '绠楁硶鎬濈淮璧涢亾',
       weeklyGoal: props.weeklyGoal,
+      weakAreas: studyHabits.value.weakTopics,
+      strongAreas: studyHabits.value.strongTopics,
+      errorTopics: errorAnalysis.value.categories.map((category) => category.name),
     })
 
     if (response.data?.data) {
@@ -168,15 +374,61 @@ const generateLearningPlan = async () => {
         { title: '每日坚持打卡', target: 1, current: 0 },
       ],
       dailyTasks: [
-        { day: '今天', tasks: [{ type: '学习', title: '动态规划思想理解', duration: '30分钟' }] },
-        { day: '明天', tasks: [
-          { type: '复习', title: '基础概念复习', duration: '30分钟' },
-          { type: '练习', title: '简单练习题', duration: '25分钟' },
-        ]},
-        { day: '后天', tasks: [
-          { type: '复习', title: '本周知识点总结', duration: '30分钟' },
-          { type: '练习', title: '综合模拟测试', duration: '40分钟' },
-        ]},
+        { 
+          day: '周一', 
+          tasks: [
+            { type: '数组', title: '数组基础练习', duration: '1h' },
+            { type: '字符串', title: '字符串处理', duration: '1.5h' },
+            { type: '排序', title: '排序算法复习', duration: '1.5h' },
+          ] 
+        },
+        { 
+          day: '周二', 
+          tasks: [
+            { type: '二叉树', title: '二叉树遍历', duration: '1.5h' },
+            { type: '二叉树', title: 'BST与平衡树', duration: '1.5h' },
+          ] 
+        },
+        { 
+          day: '周三', 
+          tasks: [
+            { type: '动态规划', title: 'DP基础入门', duration: '1h' },
+            { type: '动态规划', title: '背包问题专题', duration: '1.5h' },
+            { type: '动态规划', title: '线性DP练习', duration: '1.5h' },
+          ] 
+        },
+        { 
+          day: '周四', 
+          tasks: [
+            { type: '图论', title: '图的表示与遍历', duration: '1.5h' },
+            { type: '图论', title: '最短路径算法', duration: '1.5h' },
+            { type: '贪心', title: '贪心算法入门', duration: '1.5h' },
+          ] 
+        },
+        { 
+          day: '周五', 
+          tasks: [
+            { type: '数组', title: '双指针专题', duration: '1.5h' },
+            { type: '字符串', title: '字符串匹配', duration: '1.5h' },
+            { type: '动态规划', title: '区间DP练习', duration: '1.5h' },
+          ] 
+        },
+        { 
+          day: '周六', 
+          tasks: [
+            { type: '复盘', title: '周赛模拟', duration: '2h' },
+            { type: '二叉树', title: '树形DP专题', duration: '1.5h' },
+            { type: '图论', title: '拓扑排序', duration: '1.5h' },
+          ] 
+        },
+        { 
+          day: '周日', 
+          tasks: [
+            { type: '复盘', title: '本周知识点总结', duration: '2h' },
+            { type: '排序', title: '高级排序算法', duration: '1.5h' },
+            { type: '贪心', title: '贪心经典问题', duration: '1.5h' },
+          ] 
+        },
       ],
       recommendations: [
         '建议每天保持1-2小时的算法练习时间',
@@ -232,12 +484,11 @@ const sendMessage = async () => {
 
   inputMessage.value = ''
   isTyping.value = true
-  isStreaming.value = true
 
   await scrollToBottom()
 
   try {
-    const response = await api.post('/api/ai/chat', {
+    const response = await api.post('/ai/chat', {
       message,
       context: {
         track: props.selectedTrack,
@@ -260,7 +511,6 @@ const sendMessage = async () => {
     })
   } finally {
     isTyping.value = false
-    isStreaming.value = false
     await scrollToBottom()
   }
 }
@@ -270,9 +520,9 @@ const useQuickPrompt = (prompt) => {
   sendMessage()
 }
 
-onMounted(() => {
-  loadErrorAnalysis()
-  loadStudyHabits()
+onMounted(async () => {
+  await loadErrorAnalysis()
+  await loadStudyHabits()
 
   chatMessages.value.push({
     role: 'assistant',
@@ -280,6 +530,17 @@ onMounted(() => {
     time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
   })
 })
+
+watch(() => userStore.isLogin, async (isLoggedIn) => {
+  if (isLoggedIn) {
+    await loadErrorAnalysis()
+    await loadStudyHabits()
+    return
+  }
+
+  errorAnalysis.value = buildFallbackErrorAnalysis()
+  studyHabits.value = buildFallbackStudyHabits()
+}, { immediate: false })
 
 watch(activeSection, async (newSection) => {
   if (newSection === 'chat') {
@@ -290,13 +551,6 @@ watch(activeSection, async (newSection) => {
 
 <template>
   <section class="study-helper" @click="scrollToTop">
-    <!-- 柔和渐变背景 -->
-    <div class="soft-gradient">
-      <div class="gradient-blob blob-1"></div>
-      <div class="gradient-blob blob-2"></div>
-      <div class="gradient-blob blob-3"></div>
-    </div>
-
     <div class="helper-header">
       <div class="header-left">
         <div class="helper-icon">
@@ -498,7 +752,7 @@ watch(activeSection, async (newSection) => {
                 <div class="day-marker">{{ day.day }}</div>
                 <div class="day-tasks">
                   <div v-for="task in day.tasks" :key="task.title" class="task-card">
-                    <span class="task-type">{{ task.type }}</span>
+                    <span class="task-type" :style="getTaskTypeStyle(task.type)">{{ task.type }}</span>
                     <span class="task-title">{{ task.title }}</span>
                     <span class="task-duration">{{ task.duration }}</span>
                   </div>
@@ -603,71 +857,22 @@ watch(activeSection, async (newSection) => {
 .study-helper {
   position: relative;
   font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 50%, #f0f9ff 100%);
+  background: #ffffff;
   border-radius: 24px;
   overflow: hidden;
-  border: 1px solid rgba(14, 165, 233, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   box-shadow:
-    0 4px 24px rgba(14, 165, 233, 0.1),
-    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+    0 4px 24px rgba(0, 0, 0, 0.04),
+    0 1px 3px rgba(0, 0, 0, 0.02);
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .study-helper:hover {
-  border-color: rgba(14, 165, 233, 0.4);
+  border-color: rgba(0, 0, 0, 0.1);
   box-shadow:
-    0 8px 40px rgba(14, 165, 233, 0.15),
-    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
-}
-
-/* 柔和渐变背景 */
-.soft-gradient {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.gradient-blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.4;
-}
-
-.blob-1 {
-  width: 400px;
-  height: 400px;
-  background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%);
-  top: -150px;
-  right: -100px;
-  animation: blobFloat 10s ease-in-out infinite;
-}
-
-.blob-2 {
-  width: 300px;
-  height: 300px;
-  background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
-  bottom: -100px;
-  left: -100px;
-  animation: blobFloat 10s ease-in-out infinite reverse;
-}
-
-.blob-3 {
-  width: 250px;
-  height: 250px;
-  background: linear-gradient(135deg, #fbcfe8 0%, #f9a8d4 100%);
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  opacity: 0.2;
-  animation: blobFloat 15s ease-in-out infinite;
-}
-
-@keyframes blobFloat {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(30px, -30px) scale(1.1); }
+    0 8px 40px rgba(0, 0, 0, 0.08),
+    0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 /* 头部 */
@@ -1071,6 +1276,39 @@ watch(activeSection, async (newSection) => {
   margin-top: 4px;
 }
 
+/* 打字动画 */
+.typing-dots {
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  border-radius: 14px;
+}
+
+.typing-dots span {
+  width: 8px;
+  height: 8px;
+  background: #0ea5e9;
+  border-radius: 50%;
+  animation: typingBounce 1.4s ease-in-out infinite;
+}
+
+.typing-dots span:nth-child(1) { animation-delay: 0s; }
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
 /* 输入区域 */
 .chat-input-area {
   display: flex;
@@ -1165,5 +1403,359 @@ watch(activeSection, async (newSection) => {
     width: 100%;
     overflow-x: auto;
   }
+}
+
+/* 学习计划部分 */
+.plan-section {
+  position: relative;
+}
+
+.section-title {
+  margin-bottom: 20px;
+}
+
+.plan-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.week-goals h4,
+.daily-tasks h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 12px;
+}
+
+.goal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.goal-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  border: 1px solid rgba(14, 165, 233, 0.1);
+}
+
+.goal-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(14, 165, 233, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0ea5e9;
+  flex-shrink: 0;
+}
+
+.goal-content {
+  flex: 1;
+}
+
+.goal-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.goal-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(14, 165, 233, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #0ea5e9;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #64748b;
+  font-family: 'JetBrains Mono', monospace;
+  min-width: 40px;
+}
+
+.task-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.timeline-day {
+  display: flex;
+  gap: 16px;
+}
+
+.day-marker {
+  width: 50px;
+  height: 50px;
+  background: #0ea5e9;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  flex-shrink: 0;
+}
+
+.day-tasks {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.day-tasks .task-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  border: 1px solid rgba(14, 165, 233, 0.1);
+}
+
+.task-type {
+  padding: 4px 10px;
+  background: rgba(14, 165, 233, 0.1);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #0ea5e9;
+}
+
+.day-tasks .task-title {
+  flex: 1;
+  font-size: 14px;
+  color: #334155;
+}
+
+.day-tasks .task-duration {
+  font-size: 12px;
+  color: #64748b;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.plan-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.plan-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.plan-btn.primary {
+  background: #0ea5e9;
+  border: none;
+  color: white;
+}
+
+.plan-btn.primary:hover {
+  background: #0284c7;
+  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.3);
+}
+
+.plan-btn.secondary {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  color: #0ea5e9;
+}
+
+.plan-btn.secondary:hover {
+  background: rgba(14, 165, 233, 0.1);
+  border-color: rgba(14, 165, 233, 0.3);
+}
+
+/* 生成提示 */
+.generate-prompt {
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.generate-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 32px;
+  background: #0ea5e9;
+  border: none;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.generate-btn:hover {
+  background: #0284c7;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(14, 165, 233, 0.4);
+}
+
+.btn-icon {
+  font-size: 18px;
+}
+
+/* 生成中动画 */
+.generating-overlay {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 60px 20px;
+}
+
+.generating-content {
+  text-align: center;
+}
+
+.ai-brain {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
+}
+
+.brain-core {
+  position: absolute;
+  inset: 20px;
+  background: #0ea5e9;
+  border-radius: 50%;
+  animation: brainPulse 2s ease-in-out infinite;
+}
+
+.orbit {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(14, 165, 233, 0.3);
+  border-radius: 50%;
+  animation: orbitSpin 3s linear infinite;
+}
+
+.orbit::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background: #0ea5e9;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+.orbit-1 { animation-duration: 2s; }
+.orbit-2 { animation-duration: 3s; animation-direction: reverse; }
+.orbit-3 { animation-duration: 4s; }
+
+@keyframes brainPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+@keyframes orbitSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.generating-text {
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* 最近错题 */
+.recent-errors {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 16px;
+  border: 1px solid rgba(14, 165, 233, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.recent-errors h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 16px;
+}
+
+.error-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.error-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+}
+
+.error-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.error-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.error-reason {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.error-time {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.empty-hint {
+  font-size: 13px;
+  color: #94a3b8;
+  text-align: center;
+  padding: 12px;
 }
 </style>

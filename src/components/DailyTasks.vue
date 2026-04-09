@@ -82,6 +82,20 @@ const getTaskTypeInfo = (typeKey) => {
   return taskTypes.find(t => t.key === typeKey) || taskTypes[0]
 }
 
+const getTypeColor = (typeKey) => {
+  const colorMap = {
+    array: '#2563eb',
+    string: '#16a34a',
+    dp: '#d97706',
+    tree: '#7c3aed',
+    graph: '#dc2626',
+    sort: '#0891b2',
+    greedy: '#db2777',
+    review: '#6b7280',
+  }
+  return colorMap[typeKey] || '#6b7280'
+}
+
 const goToPrevDay = () => {
   currentDayIndex.value = currentDayIndex.value > 0 ? currentDayIndex.value - 1 : 6
 }
@@ -93,13 +107,6 @@ const goToNextDay = () => {
 
 <template>
   <section class="daily-tasks-section">
-    <!-- 背景装饰 -->
-    <div class="bg-decoration">
-      <div class="gradient-orb orb-1"></div>
-      <div class="gradient-orb orb-2"></div>
-      <div class="gradient-orb orb-3"></div>
-    </div>
-
     <div class="content-wrapper">
       <!-- 头部 -->
       <div class="section-header">
@@ -128,6 +135,25 @@ const goToNextDay = () => {
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
           </button>
+        </div>
+      </div>
+
+      <!-- 题型分类 -->
+      <div class="type-tags-section">
+        <div class="section-title-bar">
+          <h4 class="section-title">题型分类</h4>
+          <span class="section-count">8 种类型</span>
+        </div>
+        <div class="type-tags">
+          <div
+            v-for="type in taskTypes"
+            :key="type.key"
+            class="type-tag"
+            :style="{ '--tag-color': getTypeColor(type.key) }"
+          >
+            <span class="tag-icon">{{ type.icon }}</span>
+            <span class="tag-label">{{ type.label }}</span>
+          </div>
         </div>
       </div>
 
@@ -195,55 +221,13 @@ const goToNextDay = () => {
 .daily-tasks-section {
   position: relative;
   font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: linear-gradient(135deg, #faf8ff 0%, #f0f4ff 50%, #f8f0ff 100%);
+  background: #ffffff;
   border-radius: 28px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   box-shadow:
-    0 4px 24px rgba(139, 92, 246, 0.08),
-    0 1px 3px rgba(0, 0, 0, 0.02),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-
-/* 背景装饰 */
-.bg-decoration {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.gradient-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.4;
-}
-
-.orb-1 {
-  width: 300px;
-  height: 300px;
-  background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
-  top: -100px;
-  right: -50px;
-}
-
-.orb-2 {
-  width: 250px;
-  height: 250px;
-  background: linear-gradient(135deg, #93c5fd 0%, #60a5fa 100%);
-  bottom: -80px;
-  left: -50px;
-}
-
-.orb-3 {
-  width: 200px;
-  height: 200px;
-  background: linear-gradient(135deg, #fbcfe8 0%, #f9a8d4 100%);
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  opacity: 0.2;
+    0 4px 24px rgba(0, 0, 0, 0.04),
+    0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .content-wrapper {
@@ -323,16 +307,84 @@ const goToNextDay = () => {
   box-shadow: 0 8px 20px rgba(139, 92, 246, 0.15);
 }
 
+/* 题型分类 */
+.type-tags-section {
+  margin-bottom: 24px;
+}
+
+.section-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e1b4b;
+  margin: 0;
+}
+
+.section-count {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.type-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 16px;
+  border: 2px solid #e2e8f0;
+}
+
+.type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: white;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tag-color);
+  border: 1px solid color-mix(in srgb, var(--tag-color) 20%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--tag-color) 8%, transparent);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: default;
+}
+
+.type-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--tag-color) 15%, transparent);
+  border-color: color-mix(in srgb, var(--tag-color) 40%, transparent);
+}
+
+.tag-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.tag-label {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
 /* 星期标签 */
 .weekday-tabs {
+  position: relative;
   display: flex;
   gap: 10px;
   margin-bottom: 28px;
-  padding: 6px;
-  background: rgba(255, 255, 255, 0.5);
+  padding: 8px;
+  background: #f8fafc;
   border-radius: 16px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  border: 2px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .weekday-btn {
@@ -531,6 +583,20 @@ const goToNextDay = () => {
 
   .title-text h2 {
     font-size: 20px;
+  }
+
+  .type-tags {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .type-tag {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .tag-icon {
+    font-size: 14px;
   }
 
   .weekday-tabs {
