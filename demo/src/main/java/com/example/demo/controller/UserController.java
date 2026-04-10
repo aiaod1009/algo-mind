@@ -449,12 +449,18 @@ public class UserController {
         if (!Boolean.TRUE.equals(record.getIsCorrect())) {
             return 0;
         }
+        if (record.getLevelId() == null) {
+            return 0;
+        }
         return rewardCache.computeIfAbsent(record.getLevelId(), levelId -> levelRepository.findById(levelId)
                 .map(level -> Math.max(0, level.getRewardPoints() == null ? 0 : level.getRewardPoints()))
                 .orElse(0));
     }
 
     private String resolveTrackByLevelId(Long levelId) {
+        if (levelId == null) {
+            return "algo";
+        }
         return levelRepository.findById(levelId)
                 .map(Level::getTrack)
                 .orElse("algo");

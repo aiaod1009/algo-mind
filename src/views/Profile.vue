@@ -22,7 +22,7 @@ const TRACK_COLOR_MAP = {
   contest: '#b45309'
 }
 
-// 我的题目（用户自己创建的题目）
+// 我的题目（用户已做过的题目）
 const myProblems = ref([])
 const myProblemsTotal = ref(0)
 const isLoadingMyProblems = ref(false)
@@ -407,15 +407,15 @@ const canLoadMoreActivities = computed(() => {
   return recentActivities.value.length > 0 && recentActivities.value.length < activityTotal.value
 })
 
-const normalizeCreatedProblems = (list) => {
+const normalizeSolvedProblems = (list) => {
   return list.map(problem => ({
     id: problem.id,
     name: problem.name || `题目 ${problem.id}`,
-    isPublic: problem.isPublic !== false,
-    description: problem.description || '暂无题目描述',
+    description: problem.description || '已完成题目',
     difficulty: TRACK_LABEL_MAP[problem.track] || problem.track || '未分类',
     difficultyColor: TRACK_COLOR_MAP[problem.track] || '#6b7280',
-    solvedCount: Number(problem.solvedCount || 0)
+    attempts: Number(problem.attempts || 0),
+    stars: Number(problem.stars || 0)
   }))
 }
 
@@ -431,14 +431,14 @@ const fetchMyProblems = async () => {
     let total = 0
 
     for (let page = 1; page <= maxPages; page++) {
-      const response = await api.getUserCreatedProblems({ page, pageSize })
+      const response = await api.getUserSolvedProblems({ page, pageSize })
       if (response.data?.code !== 0) {
-        myProblemsError.value = response.data?.message || '获取我的题目失败'
+        myProblemsError.value = response.data?.message || '获取已做题目失败'
         break
       }
 
       const data = response.data.data || {}
-      const list = normalizeCreatedProblems(data.list || [])
+      const list = normalizeSolvedProblems(data.list || [])
       total = Number(data.total || total)
 
       list.forEach((item) => {
@@ -456,11 +456,11 @@ const fetchMyProblems = async () => {
     myProblemsTotal.value = total || collected.length
 
     if (myProblemsTotal.value > collected.length) {
-      myProblemsError.value = '题目总数与分页数据不一致，已展示可获取到的真实题目'
+      myProblemsError.value = '做题总数与分页数据不一致，已展示可获取到的真实记录'
     }
   } catch (error) {
-    console.error('获取我的题目失败:', error)
-    myProblemsError.value = '网络错误，无法获取我的题目'
+    console.error('获取已做题目失败:', error)
+    myProblemsError.value = '网络错误，无法获取已做题目'
     myProblems.value = []
   } finally {
     isLoadingMyProblems.value = false
@@ -822,12 +822,12 @@ onMounted(async () => {
 
       <!-- 右侧内容区 -->
       <main class="profile-main">
-        <!-- 我的题目 -->
+        <!-- 我做过的题目 -->
         <section class="repositories-section">
           <div class="section-header">
             <div class="repo-tabs">
               <button class="repo-tab active">
-                我的题目
+                我做过的题目
                 <span class="tab-count">{{ myProblems.length }}</span>
               </button>
             </div>
@@ -835,13 +835,13 @@ onMounted(async () => {
           </div>
 
           <div class="repo-grid">
-            <div v-if="isLoadingMyProblems" class="repo-empty-state">我的题目加载中...</div>
+            <div v-if="isLoadingMyProblems" class="repo-empty-state">做题记录加载中...</div>
             <div v-else-if="myProblemsError" class="repo-empty-state">{{ myProblemsError }}</div>
-            <div v-else-if="myProblems.length === 0" class="repo-empty-state">你还没有创建题目。</div>
+            <div v-else-if="myProblems.length === 0" class="repo-empty-state">你还没有做题记录。</div>
             <div v-for="problem in visibleMyProblems" :key="problem.id" class="repo-card">
               <div class="repo-header">
                 <a href="#" class="repo-name">{{ problem.name }}</a>
-                <span class="repo-badge">{{ problem.isPublic ? '公开' : '私有' }}</span>
+                <span class="repo-badge">已完成</span>
               </div>
               <p class="repo-description">{{ problem.description }}</p>
               <div class="repo-footer">
@@ -854,12 +854,12 @@ onMounted(async () => {
                     <path
                       d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                   </svg>
-                  {{ problem.solvedCount }} 人完成
+                  尝试 {{ problem.attempts }} 次 · 星级 {{ problem.stars }}
                 </span>
               </div>
             </div>
             <button v-if="hasMoreMyProblems" class="show-more-btn" @click="showAllMyProblems = !showAllMyProblems">
-              {{ showAllMyProblems ? '收起题目' : `展开其余 ${myProblems.length - 4} 题` }}
+              {{ showAllMyProblems ? '收起记录' : `展开其余 ${myProblems.length - 4} 条` }}
             </button>
           </div>
         </section>
