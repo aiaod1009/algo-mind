@@ -2,13 +2,22 @@ package com.example.demo.controller;
 
 import com.example.demo.Result;
 import com.example.demo.auth.CurrentUserService;
+import com.example.demo.entity.Level;
+import com.example.demo.entity.QuestionAttempt;
 import com.example.demo.entity.User;
+import com.example.demo.entity.UserProblemRecord;
+import com.example.demo.repository.LevelRepository;
+import com.example.demo.repository.QuestionAttemptRepository;
+import com.example.demo.repository.UserProblemRecordRepository;
 import com.example.demo.repository.UserRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 
 @RestController
@@ -17,12 +26,23 @@ public class UserController {
 
     private static final String MANAGED_AVATAR_PREFIX = "/api/uploads/avatars/";
     private static final String LEGACY_MANAGED_AVATAR_PREFIX = "/uploads/avatars/";
+    private static final String STATUS_CORRECT = "CORRECT";
     private final UserRepository userRepository;
+    private final LevelRepository levelRepository;
+    private final QuestionAttemptRepository questionAttemptRepository;
+    private final UserProblemRecordRepository userProblemRecordRepository;
     private final CurrentUserService currentUserService;
     private static final List<String> VALID_TRACKS = List.of("algo", "ds", "contest");
 
-    public UserController(UserRepository userRepository, CurrentUserService currentUserService) {
+    public UserController(UserRepository userRepository,
+            LevelRepository levelRepository,
+            QuestionAttemptRepository questionAttemptRepository,
+            UserProblemRecordRepository userProblemRecordRepository,
+            CurrentUserService currentUserService) {
         this.userRepository = userRepository;
+        this.levelRepository = levelRepository;
+        this.questionAttemptRepository = questionAttemptRepository;
+        this.userProblemRecordRepository = userProblemRecordRepository;
         this.currentUserService = currentUserService;
     }
 
@@ -93,84 +113,46 @@ public class UserController {
         int targetYear = (year != null) ? year : LocalDate.now().getYear();
         Long currentUserId = currentUserService.requireCurrentUserId();
 
-        List<Map<String, Object>> records = new ArrayList<>();
-        Random random = new Random(targetYear + currentUserId);
-
         LocalDate startOfYear = LocalDate.of(targetYear, 1, 1);
-        LocalDate endOfYear = LocalDate.of(targetYear, 12, 31);
+        LocalDate endExclusive = startOfYear.plusYears(1);
+        OffsetDateTime from = startOfYear.atStartOfDay().atOffset(ZoneOffset.ofHours(8));
+        OffsetDateTime to = endExclusive.atStartOfDay().atOffset(ZoneOffset.ofHours(8));
 
+        List<Object[]> rows = userProblemRecordRepository.countDailyAttempts(currentUserId, from, to);
+        Map<LocalDate, Integer> dailyCountMap = new HashMap<>();
+        List<Map<String, Object>> records = new ArrayList<>();
         int totalCount = 0;
-        int activeDays = 0;
-        int currentStreak = 0;
-        int longestStreak = 0;
-        int tempStreak = 0;
-        LocalDate today = LocalDate.now();
 
-        for (LocalDate date = startOfYear; !date.isAfter(endOfYear); date = date.plusDays(1)) {
-            int count = 0;
-            java.time.DayOfWeek dayOfWeek = date.getDayOfWeek();
-            int month = date.getMonthValue();
-
-            if (random.nextDouble() < 0.28) {
-                count = 0;
-            } else {
-                if (dayOfWeek == java.time.DayOfWeek.SATURDAY || dayOfWeek == java.time.DayOfWeek.SUNDAY) {
-                    count = 2 + random.nextInt(7);
-                } else {
-                    count = random.nextInt(4);
-                }
-
-                if (month == 3 || month == 4 || month == 10 || month == 11) {
-                    count += random.nextInt(3);
-                }
-
-                if (month == 1 && date.getDayOfMonth() <= 7) {
-                    count += 2;
-                }
-
-                if (month == 6 && random.nextDouble() < 0.3) {
-                    count = 0;
-                }
-            }
-
-            int level;
-            if (count == 0) level = 0;
-            else if (count <= 2) level = 1;
-            else if (count <= 4) level = 2;
-            else if (count <= 7) level = 3;
-            else level = 4;
+        for (Object[] row : rows) {
+            LocalDate date = LocalDate.parse(String.valueOf(row[0]));
+            int count = ((Number) row[1]).intValue();
+            dailyCountMap.put(date, count);
+            totalCount += count;
 
             Map<String, Object> entry = new HashMap<>();
             entry.put("date", date.toString());
             entry.put("count", count);
-            entry.put("level", level);
+            entry.put("level", toHeatLevel(count));
             records.add(entry);
-
-            if (count > 0) {
-                totalCount += count;
-                activeDays++;
-                tempStreak++;
-                longestStreak = Math.max(longestStreak, tempStreak);
-            } else {
-                tempStreak = 0;
-            }
-
-            if (date.equals(today.minusDays(currentStreak))) {
-                currentStreak++;
-            }
         }
+
+        int activeDays = dailyCountMap.size();
+        int longestStreak = calculateLongestStreak(dailyCountMap.keySet(), startOfYear, endExclusive.minusDays(1));
+
+        LocalDate today = LocalDate.now();
+        int currentStreak = targetYear == today.getYear()
+                ? calculateCurrentStreak(dailyCountMap.keySet(), today)
+                : 0;
 
         int monthlyActiveDays = 0;
         int monthlyTotalCount = 0;
-        LocalDate firstDayOfMonth = today.withDayOfMonth(1);
-        for (LocalDate date = firstDayOfMonth; !date.isAfter(today); date = date.plusDays(1)) {
-            int idx = (int) java.time.temporal.ChronoUnit.DAYS.between(startOfYear, date);
-            if (idx >= 0 && idx < records.size()) {
-                Map<String, Object> rec = records.get(idx);
-                int c = (int) rec.get("count");
-                if (c > 0) {
+        if (targetYear == today.getYear()) {
+            LocalDate firstDayOfMonth = today.withDayOfMonth(1);
+            for (LocalDate date = firstDayOfMonth; !date.isAfter(today); date = date.plusDays(1)) {
+                Integer cnt = dailyCountMap.get(date);
+                if (cnt != null && cnt > 0) {
                     monthlyActiveDays++;
-                    monthlyTotalCount += c;
+                    monthlyTotalCount += cnt;
                 }
             }
         }
@@ -193,22 +175,42 @@ public class UserController {
         Long currentUserId = currentUserService.requireCurrentUserId();
 
         User user = userRepository.findById(currentUserId).orElse(null);
+        LocalDate today = LocalDate.now();
+        OffsetDateTime todayStart = today.atStartOfDay().atOffset(ZoneOffset.ofHours(8));
+        OffsetDateTime tomorrowStart = today.plusDays(1).atStartOfDay().atOffset(ZoneOffset.ofHours(8));
+
+        LocalDate weekStartDate = today.minusDays(today.getDayOfWeek().getValue() - 1L);
+        OffsetDateTime weekStart = weekStartDate.atStartOfDay().atOffset(ZoneOffset.ofHours(8));
+
+        LocalDate monthStartDate = today.withDayOfMonth(1);
+        OffsetDateTime monthStart = monthStartDate.atStartOfDay().atOffset(ZoneOffset.ofHours(8));
+
+        long totalSolved = questionAttemptRepository.countByUserIdAndLatestStatus(currentUserId, STATUS_CORRECT);
+        long totalCreated = levelRepository.countByCreatorId(currentUserId);
+        long todaySolved = userProblemRecordRepository.countByUserIdAndSolvedAtBetween(currentUserId, todayStart,
+                tomorrowStart);
+        long weeklySolved = userProblemRecordRepository.countByUserIdAndSolvedAtBetween(currentUserId, weekStart,
+                tomorrowStart);
+        long monthlySolved = userProblemRecordRepository.countByUserIdAndSolvedAtBetween(currentUserId, monthStart,
+                tomorrowStart);
+
+        int weeklyGoal = user != null && user.getWeeklyGoal() != null ? user.getWeeklyGoal() : 10;
+
         Map<String, Object> stats = new HashMap<>();
 
-        stats.put("totalProblems", 156);
-        stats.put("solvedProblems", 89);
-        stats.put("createdProblems", 12);
+        stats.put("totalProblems", totalSolved);
+        stats.put("solvedProblems", totalSolved);
+        stats.put("createdProblems", totalCreated);
         stats.put("totalPoints", user != null ? user.getPoints() : 0);
-        stats.put("currentStreak", 7);
-        stats.put("longestStreak", 23);
-        stats.put("accuracy", 78.5);
-        stats.put("weeklyGoal", user != null ? user.getWeeklyGoal() : 10);
-        stats.put("weeklyProgress", 5);
-        stats.put("trackStats", Map.of(
-                "algo", Map.of("solved", 45, "total", 60, "accuracy", 82.3),
-                "ds", Map.of("solved", 28, "total", 50, "accuracy", 75.0),
-                "contest", Map.of("solved", 16, "total", 46, "accuracy", 71.2)
-        ));
+        stats.put("accuracy", 0.0);
+        stats.put("weeklyGoal", weeklyGoal);
+        stats.put("weeklyProgress", Math.min(weeklyGoal, (int) weeklySolved));
+
+        stats.put("totalSolved", totalSolved);
+        stats.put("totalCreated", totalCreated);
+        stats.put("todaySolved", todaySolved);
+        stats.put("weeklySolved", weeklySolved);
+        stats.put("monthlySolved", monthlySolved);
 
         return Result.success(stats);
     }
@@ -220,41 +222,26 @@ public class UserController {
 
         Long currentUserId = currentUserService.requireCurrentUserId();
 
-        List<Map<String, Object>> allActivities = new ArrayList<>();
-        String[] types = {"solve", "create", "achievement", "comment", "like"};
-        String[] descriptions = {
-                "完成了题目「二分查找」",
-                "创建了新题目「滑动窗口进阶」",
-                "获得成就「连续打卡7天」",
-                "评论了帖子「算法学习心得」",
-                "点赞了帖子「动态规划详解」",
-                "完成了题目「链表反转」",
-                "创建了新题目「并查集应用」",
-                "获得成就「刷题100道」"
-        };
+        Page<UserProblemRecord> activityPage = userProblemRecordRepository.findByUserIdOrderBySolvedAtDesc(
+                currentUserId,
+                PageRequest.of(Math.max(page - 1, 0), Math.max(pageSize, 1)));
 
-        Random random = new Random();
-        for (int i = 0; i < 50; i++) {
+        List<Map<String, Object>> pageActivities = new ArrayList<>();
+        for (UserProblemRecord record : activityPage.getContent()) {
             Map<String, Object> activity = new HashMap<>();
-            activity.put("id", (long) (i + 1));
-            activity.put("type", types[random.nextInt(types.length)]);
-            activity.put("description", descriptions[random.nextInt(descriptions.length)]);
-            activity.put("points", random.nextInt(20) + 5);
-            activity.put("createdAt", OffsetDateTime.now().minusDays(random.nextInt(30)).toString());
-            allActivities.add(activity);
+            activity.put("id", record.getId());
+            activity.put("type", Boolean.TRUE.equals(record.getIsCorrect()) ? "solve" : "retry");
+            activity.put("description", buildActivityDescription(record));
+            activity.put("points", Boolean.TRUE.equals(record.getIsCorrect()) ? 1 : 0);
+            activity.put("createdAt", record.getSolvedAt() != null ? record.getSolvedAt().toString() : null);
+            pageActivities.add(activity);
         }
-
-        int start = (page - 1) * pageSize;
-        int end = Math.min(start + pageSize, allActivities.size());
-        List<Map<String, Object>> pageActivities = start < allActivities.size() 
-                ? allActivities.subList(start, end) 
-                : new ArrayList<>();
 
         Map<String, Object> result = new HashMap<>();
         result.put("list", pageActivities);
         result.put("page", page);
         result.put("pageSize", pageSize);
-        result.put("total", allActivities.size());
+        result.put("total", activityPage.getTotalElements());
 
         return Result.success(result);
     }
@@ -361,30 +348,27 @@ public class UserController {
 
         Long currentUserId = currentUserService.requireCurrentUserId();
 
-        List<Map<String, Object>> allHistory = new ArrayList<>();
-        String[] sources = {"题目奖励", "连续打卡", "成就奖励", "活动奖励", "每日签到"};
-        Random random = new Random();
+        Page<UserProblemRecord> historyPage = userProblemRecordRepository.findByUserIdOrderBySolvedAtDesc(
+                currentUserId,
+                PageRequest.of(Math.max(page - 1, 0), Math.max(pageSize, 1)));
 
-        for (int i = 0; i < 100; i++) {
+        Map<Long, Integer> rewardCache = new HashMap<>();
+        List<Map<String, Object>> pageHistory = new ArrayList<>();
+        for (UserProblemRecord record : historyPage.getContent()) {
             Map<String, Object> entry = new HashMap<>();
-            entry.put("id", (long) (i + 1));
-            entry.put("points", random.nextInt(30) + 5);
-            entry.put("source", sources[random.nextInt(sources.length)]);
-            entry.put("createdAt", OffsetDateTime.now().minusDays(random.nextInt(60)).toString());
-            allHistory.add(entry);
+            entry.put("id", record.getId());
+            int points = resolveRewardPoints(record, rewardCache);
+            entry.put("points", points);
+            entry.put("source", Boolean.TRUE.equals(record.getIsCorrect()) ? "题目奖励" : "提交记录");
+            entry.put("createdAt", record.getSolvedAt() != null ? record.getSolvedAt().toString() : null);
+            pageHistory.add(entry);
         }
-
-        int start = (page - 1) * pageSize;
-        int end = Math.min(start + pageSize, allHistory.size());
-        List<Map<String, Object>> pageHistory = start < allHistory.size()
-                ? allHistory.subList(start, end)
-                : new ArrayList<>();
 
         Map<String, Object> result = new HashMap<>();
         result.put("list", pageHistory);
         result.put("page", page);
         result.put("pageSize", pageSize);
-        result.put("total", allHistory.size());
+        result.put("total", historyPage.getTotalElements());
 
         return Result.success(result);
     }
@@ -393,42 +377,33 @@ public class UserController {
     public Result<Map<String, Object>> getUserCreatedProblems(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer pageSize) {
-
         Long currentUserId = currentUserService.requireCurrentUserId();
 
-        List<Map<String, Object>> allProblems = new ArrayList<>();
-        String[] types = {"single", "multi", "code", "fill"};
-        String[] tracks = {"algo", "ds", "contest"};
-        String[] names = {
-                "二分查找变体", "滑动窗口进阶", "动态规划优化",
-                "图论基础", "并查集应用", "最短路径模板",
-                "贪心策略", "回溯剪枝", "数位DP入门"
-        };
-        Random random = new Random();
+        Page<Level> createdPage = levelRepository.findByCreatorIdOrderByIdDesc(
+                currentUserId,
+                PageRequest.of(Math.max(page - 1, 0), Math.max(pageSize, 1)));
 
-        for (int i = 0; i < 30; i++) {
+        List<Map<String, Object>> pageProblems = new ArrayList<>();
+        for (Level level : createdPage.getContent()) {
             Map<String, Object> problem = new HashMap<>();
-            problem.put("id", (long) (i + 1));
-            problem.put("name", names[random.nextInt(names.length)] + " #" + (i + 1));
-            problem.put("type", types[random.nextInt(types.length)]);
-            problem.put("track", tracks[random.nextInt(tracks.length)]);
-            problem.put("rewardPoints", random.nextInt(30) + 10);
-            problem.put("solvedCount", random.nextInt(100));
-            problem.put("createdAt", OffsetDateTime.now().minusDays(random.nextInt(90)).toString());
-            allProblems.add(problem);
+            problem.put("id", level.getId());
+            problem.put("name", level.getName());
+            problem.put("description", level.getDescription() == null ? level.getQuestion() : level.getDescription());
+            problem.put("type", level.getType());
+            problem.put("track", level.getTrack());
+            problem.put("rewardPoints", level.getRewardPoints() == null ? 0 : level.getRewardPoints());
+            problem.put("isPublic", true);
+            problem.put("createdAt", null);
+            problem.put("solvedCount",
+                    questionAttemptRepository.countByLevelIdAndLatestStatus(level.getId(), STATUS_CORRECT));
+            pageProblems.add(problem);
         }
-
-        int start = (page - 1) * pageSize;
-        int end = Math.min(start + pageSize, allProblems.size());
-        List<Map<String, Object>> pageProblems = start < allProblems.size()
-                ? allProblems.subList(start, end)
-                : new ArrayList<>();
 
         Map<String, Object> result = new HashMap<>();
         result.put("list", pageProblems);
         result.put("page", page);
         result.put("pageSize", pageSize);
-        result.put("total", allProblems.size());
+        result.put("total", createdPage.getTotalElements());
 
         return Result.success(result);
     }
@@ -440,41 +415,95 @@ public class UserController {
 
         Long currentUserId = currentUserService.requireCurrentUserId();
 
-        List<Map<String, Object>> allProblems = new ArrayList<>();
-        String[] types = {"single", "multi", "code", "fill"};
-        String[] tracks = {"algo", "ds", "contest"};
-        String[] names = {
-                "时间复杂度基础", "双指针技巧", "二分模板",
-                "栈与括号匹配", "哈希冲突策略", "链表反转",
-                "贪心选择判断", "区间调度", "差分数组应用"
-        };
-        Random random = new Random();
+        Page<QuestionAttempt> solvedPage = questionAttemptRepository
+                .findByUserIdAndLatestStatusOrderByLastSubmittedAtDesc(
+                        currentUserId,
+                        STATUS_CORRECT,
+                        PageRequest.of(Math.max(page - 1, 0), Math.max(pageSize, 1)));
 
-        for (int i = 0; i < 80; i++) {
+        List<Map<String, Object>> pageProblems = new ArrayList<>();
+        for (QuestionAttempt attempt : solvedPage.getContent()) {
             Map<String, Object> problem = new HashMap<>();
-            problem.put("id", (long) (i + 1));
-            problem.put("name", names[random.nextInt(names.length)]);
-            problem.put("type", types[random.nextInt(types.length)]);
-            problem.put("track", tracks[random.nextInt(tracks.length)]);
-            problem.put("stars", random.nextInt(4));
-            problem.put("timeMs", random.nextInt(60000) + 5000);
-            problem.put("solvedAt", OffsetDateTime.now().minusDays(random.nextInt(60)).toString());
-            allProblems.add(problem);
+            problem.put("id", attempt.getLevelId());
+            problem.put("name", attempt.getQuestionTitle());
+            problem.put("type", attempt.getLevelType());
+            problem.put("track", resolveTrackByLevelId(attempt.getLevelId()));
+            problem.put("stars", 1);
+            problem.put("timeMs", null);
+            problem.put("solvedAt", attempt.getLastSubmittedAt() == null ? null
+                    : attempt.getLastSubmittedAt().atOffset(ZoneOffset.ofHours(8)).toString());
+            problem.put("attempts", attempt.getSubmitCount() == null ? 0 : attempt.getSubmitCount());
+            pageProblems.add(problem);
         }
-
-        int start = (page - 1) * pageSize;
-        int end = Math.min(start + pageSize, allProblems.size());
-        List<Map<String, Object>> pageProblems = start < allProblems.size()
-                ? allProblems.subList(start, end)
-                : new ArrayList<>();
 
         Map<String, Object> result = new HashMap<>();
         result.put("list", pageProblems);
         result.put("page", page);
         result.put("pageSize", pageSize);
-        result.put("total", allProblems.size());
+        result.put("total", solvedPage.getTotalElements());
 
         return Result.success(result);
+    }
+
+    private Integer resolveRewardPoints(UserProblemRecord record, Map<Long, Integer> rewardCache) {
+        if (!Boolean.TRUE.equals(record.getIsCorrect())) {
+            return 0;
+        }
+        return rewardCache.computeIfAbsent(record.getLevelId(), levelId -> levelRepository.findById(levelId)
+                .map(level -> Math.max(0, level.getRewardPoints() == null ? 0 : level.getRewardPoints()))
+                .orElse(0));
+    }
+
+    private String resolveTrackByLevelId(Long levelId) {
+        return levelRepository.findById(levelId)
+                .map(Level::getTrack)
+                .orElse("algo");
+    }
+
+    private String buildActivityDescription(UserProblemRecord record) {
+        String levelName = record.getLevelName() == null || record.getLevelName().isBlank()
+                ? "未命名题目"
+                : record.getLevelName();
+        if (Boolean.TRUE.equals(record.getIsCorrect())) {
+            return "完成了题目「" + levelName + "」";
+        }
+        return "尝试了题目「" + levelName + "」";
+    }
+
+    private int toHeatLevel(int count) {
+        if (count <= 0)
+            return 0;
+        if (count <= 2)
+            return 1;
+        if (count <= 4)
+            return 2;
+        if (count <= 7)
+            return 3;
+        return 4;
+    }
+
+    private int calculateCurrentStreak(Set<LocalDate> activeDates, LocalDate fromDate) {
+        int streak = 0;
+        LocalDate cursor = fromDate;
+        while (activeDates.contains(cursor)) {
+            streak++;
+            cursor = cursor.minusDays(1);
+        }
+        return streak;
+    }
+
+    private int calculateLongestStreak(Set<LocalDate> activeDates, LocalDate start, LocalDate end) {
+        int best = 0;
+        int current = 0;
+        for (LocalDate cursor = start; !cursor.isAfter(end); cursor = cursor.plusDays(1)) {
+            if (activeDates.contains(cursor)) {
+                current++;
+                best = Math.max(best, current);
+            } else {
+                current = 0;
+            }
+        }
+        return best;
     }
 
     private String normalizeAvatarInput(String avatar) {

@@ -71,4 +71,10 @@ public class Level {
      */
     @Column(length = 500)
     private String description;
+
+    /**
+     * 创建者用户ID（用于“我的题目”）
+     */
+    @Column(name = "creator_id")
+    private Long creatorId;
 }

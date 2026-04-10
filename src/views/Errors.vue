@@ -17,7 +17,24 @@ const analysisData = ref(null)
 const sortBy = ref('urgent')
 const subjectFilter = ref('all')
 const statusFilter = ref('all')
-const masteredIds = ref([])
+const MASTERED_STORAGE_KEY = 'errors-mastered-ids'
+
+const readMasteredIds = () => {
+  const raw = localStorage.getItem(MASTERED_STORAGE_KEY)
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.map(Number).filter((id) => Number.isFinite(id)) : []
+  } catch (error) {
+    return []
+  }
+}
+
+const saveMasteredIds = (ids) => {
+  localStorage.setItem(MASTERED_STORAGE_KEY, JSON.stringify(ids))
+}
+
+const masteredIds = ref(readMasteredIds())
 const masteredIdSet = computed(() => new Set(masteredIds.value))
 const currentPage = ref(1)
 const pageSize = 5
@@ -71,7 +88,7 @@ const formatAnswer = (value) => {
     if (Array.isArray(parsed)) {
       return parsed.map(v => String(v).trim()).filter(Boolean).join('、') || '（空）'
     }
-  } catch (e) {}
+  } catch (e) { }
   return String(value)
 }
 
@@ -151,11 +168,17 @@ const masteryRate = computed(() => {
 })
 
 const toggleMastered = (id) => {
-  if (masteredIds.value.includes(id)) {
-    masteredIds.value = masteredIds.value.filter((item) => item !== id)
+  const numericId = Number(id)
+  if (masteredIds.value.includes(numericId)) {
+    masteredIds.value = masteredIds.value.filter((item) => item !== numericId)
     return
   }
-  masteredIds.value = [...masteredIds.value, id]
+  masteredIds.value = [...masteredIds.value, numericId]
+}
+
+const syncMasteredIdsWithCurrentErrors = () => {
+  const currentIds = new Set(errorItems.value.map((item) => Number(item.id)))
+  masteredIds.value = masteredIds.value.filter((id) => currentIds.has(Number(id)))
 }
 
 const handleReview = (item) => {
@@ -250,6 +273,14 @@ const handleAdd = async () => {
 }
 
 onMounted(loadData)
+
+watch(masteredIds, (ids) => {
+  saveMasteredIds(ids)
+}, { deep: true })
+
+watch(errorItems, () => {
+  syncMasteredIdsWithCurrentErrors()
+}, { deep: true, immediate: true })
 </script>
 
 <template>
@@ -258,10 +289,10 @@ onMounted(loadData)
       <div class="stat-card total">
         <div class="stat-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-            <line x1="12" y1="6" x2="12" y2="12"/>
-            <line x1="9" y1="9" x2="15" y2="9"/>
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            <line x1="12" y1="6" x2="12" y2="12" />
+            <line x1="9" y1="9" x2="15" y2="9" />
           </svg>
         </div>
         <div class="stat-content">
@@ -272,12 +303,12 @@ onMounted(loadData)
           <span></span><span></span><span></span>
         </div>
       </div>
-      
+
       <div class="stat-card pending">
         <div class="stat-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12 6 12 12 16 14"/>
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
           </svg>
         </div>
         <div class="stat-content">
@@ -285,15 +316,16 @@ onMounted(loadData)
           <span class="stat-label">待复习</span>
         </div>
         <div class="stat-progress">
-          <div class="progress-bar" :style="{ width: totalCount > 0 ? (pendingCount / totalCount * 100) + '%' : '0%' }"></div>
+          <div class="progress-bar" :style="{ width: totalCount > 0 ? (pendingCount / totalCount * 100) + '%' : '0%' }">
+          </div>
         </div>
       </div>
-      
+
       <div class="stat-card mastery">
         <div class="stat-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-            <polyline points="22 4 12 14.01 9 11.01"/>
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
           </svg>
         </div>
         <div class="stat-content">
@@ -302,11 +334,9 @@ onMounted(loadData)
         </div>
         <div class="mastery-ring">
           <svg viewBox="0 0 36 36">
-            <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="3"/>
-            <circle cx="18" cy="18" r="16" fill="none" stroke="currentColor" stroke-width="3" 
-              stroke-dasharray="100 100" 
-              :stroke-dashoffset="100 - masteryRate"
-              transform="rotate(-90 18 18)"/>
+            <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="3" />
+            <circle cx="18" cy="18" r="16" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="100 100"
+              :stroke-dashoffset="100 - masteryRate" transform="rotate(-90 18 18)" />
           </svg>
         </div>
       </div>
@@ -417,12 +447,8 @@ onMounted(loadData)
       </div>
     </div>
 
-    <FlowerPagination 
-      v-if="totalPages > 1" 
-      :total="totalPages" 
-      :default-page="currentPage"
-      @change="currentPage = $event"
-    />
+    <FlowerPagination v-if="totalPages > 1" :total="totalPages" :default-page="currentPage"
+      @change="currentPage = $event" />
 
     <el-dialog v-model="addDialogVisible" title="添加错题" width="560px">
       <el-form label-width="82px">
@@ -442,12 +468,8 @@ onMounted(loadData)
       </template>
     </el-dialog>
 
-    <ErrorAnalysisDialog 
-      v-model="analysisDialogVisible" 
-      :loading="analysisLoading" 
-      :content="analysisText"
-      :analysis-data="analysisData"
-    />
+    <ErrorAnalysisDialog v-model="analysisDialogVisible" :loading="analysisLoading" :content="analysisText"
+      :analysis-data="analysisData" />
   </div>
 </template>
 

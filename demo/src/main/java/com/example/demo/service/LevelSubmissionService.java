@@ -8,15 +8,18 @@ import com.example.demo.entity.ErrorItemOptionSnapshot;
 import com.example.demo.entity.Level;
 import com.example.demo.entity.QuestionAttempt;
 import com.example.demo.entity.User;
+import com.example.demo.entity.UserProblemRecord;
 import com.example.demo.repository.ErrorItemRepository;
 import com.example.demo.repository.LevelRepository;
 import com.example.demo.repository.QuestionAttemptRepository;
+import com.example.demo.repository.UserProblemRecordRepository;
 import com.example.demo.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.*;
 
 @Service
@@ -28,17 +31,20 @@ public class LevelSubmissionService {
     private final LevelRepository levelRepository;
     private final ErrorItemRepository errorItemRepository;
     private final QuestionAttemptRepository questionAttemptRepository;
+    private final UserProblemRecordRepository userProblemRecordRepository;
     private final CurrentUserService currentUserService;
     private final UserRepository userRepository;
 
     public LevelSubmissionService(LevelRepository levelRepository,
-                                  ErrorItemRepository errorItemRepository,
-                                  QuestionAttemptRepository questionAttemptRepository,
-                                  CurrentUserService currentUserService,
-                                  UserRepository userRepository) {
+            ErrorItemRepository errorItemRepository,
+            QuestionAttemptRepository questionAttemptRepository,
+            UserProblemRecordRepository userProblemRecordRepository,
+            CurrentUserService currentUserService,
+            UserRepository userRepository) {
         this.levelRepository = levelRepository;
         this.errorItemRepository = errorItemRepository;
         this.questionAttemptRepository = questionAttemptRepository;
+        this.userProblemRecordRepository = userProblemRecordRepository;
         this.currentUserService = currentUserService;
         this.userRepository = userRepository;
     }
@@ -67,6 +73,7 @@ public class LevelSubmissionService {
         boolean alreadySolved = STATUS_CORRECT.equalsIgnoreCase(attempt.getLatestStatus());
         updateAttempt(attempt, userId, level, rawUserAnswer, correct);
         questionAttemptRepository.save(attempt);
+        saveProblemRecord(userId, level, correct, request, attempt.getSubmitCount());
 
         boolean nextLevelUnlocked = unlockNextLevel(level);
         int pointsEarned = 0;
@@ -78,7 +85,8 @@ public class LevelSubmissionService {
             }
             errorItemRepository.deleteByUserIdAndLevelId(userId, level.getId());
         } else {
-            ErrorItem errorItem = upsertErrorItem(userId, level, rawUserAnswer, normalizedUserAnswer, normalizedCorrectAnswer, levelOptions);
+            ErrorItem errorItem = upsertErrorItem(userId, level, rawUserAnswer, normalizedUserAnswer,
+                    normalizedCorrectAnswer, levelOptions);
             errorItemId = errorItem.getId();
         }
 
@@ -93,7 +101,27 @@ public class LevelSubmissionService {
                 .build();
     }
 
-    private void updateAttempt(QuestionAttempt attempt, Long userId, Level level, String rawUserAnswer, boolean correct) {
+    private void saveProblemRecord(Long userId,
+            Level level,
+            boolean correct,
+            SubmitAnswerRequest request,
+            Integer attemptNo) {
+        UserProblemRecord record = new UserProblemRecord();
+        record.setUserId(userId);
+        record.setLevelId(level.getId());
+        record.setLevelName(level.getName());
+        record.setTrack(defaultTrack(level.getTrack()));
+        record.setIsCorrect(correct);
+        record.setStatus(correct ? STATUS_CORRECT : STATUS_WRONG);
+        record.setStars(correct ? 1 : 0);
+        record.setAttemptNo(Math.max(1, attemptNo == null ? 1 : attemptNo));
+        record.setSolveTimeMs(toSolveTimeMs(request));
+        record.setSolvedAt(OffsetDateTime.now());
+        userProblemRecordRepository.save(record);
+    }
+
+    private void updateAttempt(QuestionAttempt attempt, Long userId, Level level, String rawUserAnswer,
+            boolean correct) {
         LocalDateTime now = LocalDateTime.now();
         if (attempt.getId() == null) {
             attempt.setUserId(userId);
@@ -111,11 +139,11 @@ public class LevelSubmissionService {
     }
 
     private ErrorItem upsertErrorItem(Long userId,
-                                      Level level,
-                                      String rawUserAnswer,
-                                      String normalizedUserAnswer,
-                                      String normalizedCorrectAnswer,
-                                      List<String> options) {
+            Level level,
+            String rawUserAnswer,
+            String normalizedUserAnswer,
+            String normalizedCorrectAnswer,
+            List<String> options) {
         LocalDateTime now = LocalDateTime.now();
         ErrorItem errorItem = errorItemRepository.findByUserIdAndLevelId(userId, level.getId())
                 .orElseGet(ErrorItem::new);
@@ -135,15 +163,16 @@ public class LevelSubmissionService {
         errorItem.setUpdatedAt(now);
         errorItem.setAnalysisStatus("未分析");
         errorItem.setAnalysis(null);
-        errorItem.replaceOptionSnapshots(buildOptionSnapshots(errorItem, options, normalizedCorrectAnswer, normalizedUserAnswer));
+        errorItem.replaceOptionSnapshots(
+                buildOptionSnapshots(errorItem, options, normalizedCorrectAnswer, normalizedUserAnswer));
 
         return errorItemRepository.save(errorItem);
     }
 
     private List<ErrorItemOptionSnapshot> buildOptionSnapshots(ErrorItem errorItem,
-                                                               List<String> options,
-                                                               String normalizedCorrectAnswer,
-                                                               String normalizedUserAnswer) {
+            List<String> options,
+            String normalizedCorrectAnswer,
+            String normalizedUserAnswer) {
         if (options.isEmpty()) {
             return List.of();
         }
@@ -193,6 +222,24 @@ public class LevelSubmissionService {
         user.setPoints(currentPoints + delta);
         userRepository.save(user);
         return delta;
+    }
+
+    private Integer toSolveTimeMs(SubmitAnswerRequest request) {
+        if (request == null || request.getMeta() == null || request.getMeta().getTimeMs() == null) {
+            return null;
+        }
+        long timeMs = request.getMeta().getTimeMs();
+        if (timeMs <= 0) {
+            return null;
+        }
+        if (timeMs > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) timeMs;
+    }
+
+    private String defaultTrack(String track) {
+        return StringUtils.hasText(track) ? track : "algo";
     }
 
     private List<String> safeOptions(List<String> options) {

@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS `t_user` (
 CREATE TABLE IF NOT EXISTS `t_level` (
   `id` bigint PRIMARY KEY AUTO_INCREMENT,
   `track` varchar(20) NOT NULL COMMENT '赛道：algo|ds|contest',
+  `creator_id` bigint DEFAULT NULL COMMENT '创建者用户ID',
   `sort_order` int DEFAULT 0 COMMENT '排序',
   `name` varchar(100) NOT NULL COMMENT '关卡名称',
   `is_unlocked` tinyint DEFAULT 0 COMMENT '是否解锁',
@@ -40,6 +41,9 @@ CREATE TABLE IF NOT EXISTS `t_level` (
   `answer` varchar(500) NOT NULL COMMENT '正确答案',
   `description` varchar(500) DEFAULT NULL COMMENT '关卡描述'
 ) COMMENT='关卡表';
+
+ALTER TABLE `t_level`
+  ADD COLUMN IF NOT EXISTS `creator_id` bigint DEFAULT NULL COMMENT '创建者用户ID';
 
 -- 2.1 关卡选项表（用于单选/多选题）
 CREATE TABLE IF NOT EXISTS `t_level_options` (
@@ -60,6 +64,42 @@ CREATE TABLE IF NOT EXISTS `t_error_item` (
   `analysis_status` varchar(20) DEFAULT '未分析' COMMENT '分析状态',
   `analysis` varchar(2000) DEFAULT NULL COMMENT 'AI分析结果'
 ) COMMENT='错题本表';
+
+-- 3.1 题目尝试聚合表（每个用户每道题一条）
+CREATE TABLE IF NOT EXISTS `t_question_attempt` (
+  `id` bigint PRIMARY KEY AUTO_INCREMENT,
+  `user_id` bigint NOT NULL COMMENT '用户ID',
+  `level_id` bigint NOT NULL COMMENT '关卡ID',
+  `question_title` varchar(200) DEFAULT NULL COMMENT '题目标题',
+  `question_content` varchar(1000) DEFAULT NULL COMMENT '题目内容快照',
+  `level_type` varchar(50) DEFAULT NULL COMMENT '题目类型',
+  `latest_status` varchar(20) NOT NULL COMMENT '最新状态 CORRECT/WRONG',
+  `latest_user_answer` varchar(1000) DEFAULT NULL COMMENT '最新提交答案',
+  `submit_count` int DEFAULT 0 COMMENT '累计提交次数',
+  `first_submitted_at` datetime DEFAULT NULL COMMENT '首次提交时间',
+  `last_submitted_at` datetime DEFAULT NULL COMMENT '最后提交时间',
+  UNIQUE KEY `uk_question_attempt_user_level` (`user_id`, `level_id`),
+  INDEX `idx_question_attempt_user` (`user_id`),
+  INDEX `idx_question_attempt_level` (`level_id`)
+) COMMENT='题目尝试聚合表';
+
+-- 3.2 用户做题明细记录表（热力图/活动流）
+CREATE TABLE IF NOT EXISTS `t_user_problem_record` (
+  `id` bigint PRIMARY KEY AUTO_INCREMENT,
+  `user_id` bigint NOT NULL COMMENT '用户ID',
+  `level_id` bigint NOT NULL COMMENT '关卡ID',
+  `level_name` varchar(200) DEFAULT NULL COMMENT '题目名称快照',
+  `track` varchar(20) DEFAULT 'algo' COMMENT '赛道',
+  `is_correct` tinyint NOT NULL DEFAULT 0 COMMENT '本次是否正确',
+  `status` varchar(20) DEFAULT NULL COMMENT 'CORRECT/WRONG',
+  `stars` int NOT NULL DEFAULT 0 COMMENT '本次星级奖励',
+  `attempt_no` int NOT NULL DEFAULT 1 COMMENT '该题第几次提交',
+  `solve_time_ms` int DEFAULT NULL COMMENT '本次耗时(毫秒)',
+  `solved_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提交时间',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  INDEX `idx_user_solved_at` (`user_id`, `solved_at`),
+  INDEX `idx_user_level` (`user_id`, `level_id`)
+) COMMENT='用户做题明细记录表';
 
 -- 4. 学习计划表
 CREATE TABLE IF NOT EXISTS `t_learning_plan` (

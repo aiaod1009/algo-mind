@@ -10,32 +10,66 @@ import { getFullFileUrl } from '../utils/file'
 const userStore = useUserStore()
 const levelStore = useLevelStore()
 
-// 当前选中的题库标签
-const activeRepoTab = ref('created') // 'created' | 'solved'
+const TRACK_LABEL_MAP = {
+  algo: '算法思维赛道',
+  ds: '数据结构赛道',
+  contest: '竞赛冲刺赛道'
+}
+
+const TRACK_COLOR_MAP = {
+  algo: '#2563eb',
+  ds: '#0f766e',
+  contest: '#b45309'
+}
 
 // 我的题目（用户自己创建的题目）
 const myProblems = ref([])
+const myProblemsTotal = ref(0)
+const isLoadingMyProblems = ref(false)
+const myProblemsError = ref('')
+const showAllMyProblems = ref(false)
 
 // 做过的题目（用户完成的别人的题目）
-const solvedProblems = ref([])
+const solvedProblems = computed(() => {
+  if (!levelStore.levels.length) return []
 
-// 做题统计数据（从后端获取）
-const problemStats = ref({
-  totalSolved: 0,
-  totalCreated: 0,
-  streakDays: 0,
-  todaySolved: 0,
-  weeklySolved: 0,
-  monthlySolved: 0
+  return levelStore.levels
+    .filter((item) => item.isCompleted)
+    .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+    .map((item) => ({
+      id: item.id,
+      name: item.name || `关卡 ${item.id}`,
+      description: item.description || item.question || '暂无题目描述',
+      difficulty: TRACK_LABEL_MAP[item.track] || item.track || '未分类',
+      difficultyColor: TRACK_COLOR_MAP[item.track] || '#6b7280',
+      attempts: Number(item.attemptCount || 0),
+      stars: Number(item.bestStars || 0)
+    }))
 })
 
-// 数据加载状态
-const isLoadingHeatmap = ref(false)
-const isLoadingStats = ref(false)
-const isLoadingActivities = ref(false)
+const problemStats = computed(() => ({
+  totalSolved: solvedProblems.value.length,
+  totalCreated: myProblemsTotal.value || myProblems.value.length,
+  weeklyGoal: Number(userStore.userInfo?.weeklyGoal || 0)
+}))
+
+const visibleMyProblems = computed(() => {
+  if (showAllMyProblems.value) {
+    return myProblems.value
+  }
+  return myProblems.value.slice(0, 4)
+})
+
+const hasMoreMyProblems = computed(() => myProblems.value.length > 4)
+
 const heatmapError = ref('')
-const statsError = ref('')
+const isLoadingHeatmap = ref(false)
+const isLoadingActivities = ref(false)
 const activitiesError = ref('')
+const backendStats = ref({
+  totalSolved: 0,
+  weeklyGoal: Number(userStore.userInfo?.weeklyGoal || 0)
+})
 
 // ==================== 热力图相关：修复版开始 ====================
 
@@ -45,50 +79,25 @@ const contributionYear = ref(new Date().getFullYear())
 // 后端原始数据
 const contributionData = ref([])
 
-// 热力图统计
-const heatmapStats = ref({
-  year: new Date().getFullYear(),
-  totalCount: 0,
-  activeDays: 0,
-  longestStreak: 0,
-  currentStreak: 0,
-  monthlyActiveDays: 0,
-  monthlyTotalCount: 0
-})
-
-// 获取热力图数据
 const fetchProblemHeatmap = async (year) => {
   isLoadingHeatmap.value = true
   heatmapError.value = ''
-
   try {
     const response = await api.getUserProblemHeatmap(year)
-
     if (response.data?.code === 0) {
       const data = response.data.data || {}
-
-      heatmapStats.value = {
-        year: data.year || year,
-        totalCount: data.totalCount || 0,
-        activeDays: data.activeDays || 0,
-        longestStreak: data.longestStreak || 0,
-        currentStreak: data.currentStreak || 0,
-        monthlyActiveDays: data.monthlyActiveDays || 0,
-        monthlyTotalCount: data.monthlyTotalCount || 0
-      }
-
       contributionData.value = (data.records || []).map(item => ({
         date: item.date,
         count: Number(item.count || 0),
         level: Number(item.level || 0)
       }))
     } else {
-      heatmapError.value = response.data?.message || '获取做题数据失败'
+      heatmapError.value = response.data?.message || '获取做题热力图失败'
       contributionData.value = []
     }
   } catch (error) {
-    console.error('获取做题数据失败:', error)
-    heatmapError.value = '网络错误，无法获取做题数据'
+    console.error('获取做题热力图失败:', error)
+    heatmapError.value = '网络错误，无法获取做题热力图'
     contributionData.value = []
   } finally {
     isLoadingHeatmap.value = false
@@ -97,9 +106,41 @@ const fetchProblemHeatmap = async (year) => {
 
 // 总做题数
 const totalContributions = computed(() => {
-  if (heatmapStats.value.totalCount) return heatmapStats.value.totalCount
-  return contributionData.value.reduce((sum, day) => sum + (day.count || 0), 0)
+  const totalFromHeatmap = contributionData.value.reduce((sum, day) => sum + (day.count || 0), 0)
+  return totalFromHeatmap || solvedProblems.value.length
 })
+
+const solvedProblemCount = computed(() => {
+  const fromStats = Number(backendStats.value.totalSolved || 0)
+  if (fromStats > 0) return fromStats
+  return solvedProblems.value.length
+})
+
+const displayedClearedLevels = computed(() => {
+  if (!totalLevels.value) return solvedLevels.value
+  return Math.min(solvedProblemCount.value, totalLevels.value)
+})
+
+const effectiveWeeklyGoal = computed(() => {
+  const fromStats = Number(backendStats.value.weeklyGoal || 0)
+  if (fromStats > 0) return fromStats
+  return Number(problemStats.value.weeklyGoal || 0)
+})
+
+const fetchProblemStats = async () => {
+  try {
+    const response = await api.getUserProblemStats()
+    if (response.data?.code === 0) {
+      const data = response.data.data || {}
+      backendStats.value = {
+        totalSolved: Number(data.totalSolved || data.solvedProblems || 0),
+        weeklyGoal: Number(data.weeklyGoal || userStore.userInfo?.weeklyGoal || 0)
+      }
+    }
+  } catch (error) {
+    console.error('获取做题统计失败:', error)
+  }
+}
 
 // tooltip
 const tooltipData = ref({
@@ -247,31 +288,42 @@ const changeYear = (year) => {
 
 // ==================== 热力图相关：修复版结束 ====================
 
-// 从后端获取统计数据
-const fetchProblemStats = async () => {
-  isLoadingStats.value = true
-  statsError.value = ''
-  try {
-    const response = await api.getUserProblemStats()
-    if (response.data?.code === 0) {
-      problemStats.value = response.data.data
-    } else {
-      statsError.value = '获取统计数据失败'
-    }
-  } catch (error) {
-    console.error('获取统计数据失败:', error)
-    statsError.value = '网络错误，无法获取统计数据'
-  } finally {
-    isLoadingStats.value = false
-  }
-}
-
 const solvedLevels = computed(() => {
   if (!levelStore.levels.length) return 0
-  return levelStore.levels.filter((item) => item.isUnlocked).length
+  return levelStore.levels.filter((item) => item.isCompleted).length
 })
 
 const totalLevels = computed(() => levelStore.levels.length)
+
+const profileTrackLabel = computed(() => {
+  const track = userStore.userInfo?.targetTrack || 'algo'
+  return TRACK_LABEL_MAP[track] || '未设置赛道'
+})
+
+const profileGenderLabel = computed(() => {
+  const gender = userStore.userInfo?.gender || 'unknown'
+  const map = {
+    male: '男',
+    female: '女',
+    unknown: '未设置'
+  }
+  return map[gender] || '未设置'
+})
+
+const profileWebsiteUrl = computed(() => {
+  const website = (userStore.userInfo?.website || '').trim()
+  if (!website) return ''
+  if (/^https?:\/\//i.test(website)) return website
+  return `https://${website}`
+})
+
+const joinedYearText = computed(() => {
+  const createdAt = userStore.userInfo?.createdAt
+  if (!createdAt) return '未知时间'
+  const year = new Date(createdAt).getFullYear()
+  if (Number.isNaN(year)) return '未知时间'
+  return `${year}年`
+})
 
 const levelTitle = computed(() => {
   const score = Number(userStore.points || 0)
@@ -283,34 +335,9 @@ const levelTitle = computed(() => {
 
 // 活动数据（从后端获取）
 const recentActivities = ref([])
+const activityPage = ref(1)
+const activityTotal = ref(0)
 
-// 从后端获取活动数据
-const fetchActivities = async () => {
-  isLoadingActivities.value = true
-  activitiesError.value = ''
-  try {
-    const response = await api.getUserActivities()
-    if (response.data?.code === 0) {
-      const list = response.data.data?.list || []
-      recentActivities.value = list.map(activity => ({
-        type: activity.type,
-        title: activity.description,
-        time: formatTime(activity.createdAt),
-        icon: getActivityIcon(activity.type)
-      }))
-    } else {
-      activitiesError.value = '获取活动数据失败'
-    }
-  } catch (error) {
-    console.error('获取活动数据失败:', error)
-    activitiesError.value = '网络错误，无法获取活动数据'
-    recentActivities.value = []
-  } finally {
-    isLoadingActivities.value = false
-  }
-}
-
-// 格式化时间
 const formatTime = (timestamp) => {
   const date = new Date(timestamp)
   const now = new Date()
@@ -324,17 +351,120 @@ const formatTime = (timestamp) => {
   return date.toLocaleDateString('zh-CN')
 }
 
-// 获取活动图标
 const getActivityIcon = (type) => {
   const icons = {
     solve: '✅',
+    retry: '🧪',
     create: '📝',
-    star: '⭐',
-    fork: '📦',
-    comment: '💬',
-    share: '📤'
+    comment: '💬'
   }
   return icons[type] || '📌'
+}
+
+const normalizeActivities = (list) => {
+  return list.map(activity => ({
+    type: activity.type,
+    title: activity.description,
+    time: formatTime(activity.createdAt),
+    icon: getActivityIcon(activity.type)
+  }))
+}
+
+const fetchActivities = async (page = 1, append = false) => {
+  isLoadingActivities.value = true
+  activitiesError.value = ''
+  try {
+    const response = await api.getUserActivities({ page, pageSize: 10 })
+    if (response.data?.code === 0) {
+      const data = response.data.data || {}
+      const list = normalizeActivities(data.list || [])
+      activityPage.value = Number(data.page || page)
+      activityTotal.value = Number(data.total || 0)
+      recentActivities.value = append ? [...recentActivities.value, ...list] : list
+      return
+    }
+    activitiesError.value = response.data?.message || '获取活动数据失败'
+  } catch (error) {
+    console.error('获取活动数据失败:', error)
+    activitiesError.value = '网络错误，无法获取活动数据'
+    if (!append) {
+      recentActivities.value = []
+    }
+  } finally {
+    isLoadingActivities.value = false
+  }
+}
+
+const loadMoreActivities = async () => {
+  if (recentActivities.value.length >= activityTotal.value) {
+    ElMessage.info('没有更多活动了')
+    return
+  }
+  await fetchActivities(activityPage.value + 1, true)
+}
+
+const canLoadMoreActivities = computed(() => {
+  return recentActivities.value.length > 0 && recentActivities.value.length < activityTotal.value
+})
+
+const normalizeCreatedProblems = (list) => {
+  return list.map(problem => ({
+    id: problem.id,
+    name: problem.name || `题目 ${problem.id}`,
+    isPublic: problem.isPublic !== false,
+    description: problem.description || '暂无题目描述',
+    difficulty: TRACK_LABEL_MAP[problem.track] || problem.track || '未分类',
+    difficultyColor: TRACK_COLOR_MAP[problem.track] || '#6b7280',
+    solvedCount: Number(problem.solvedCount || 0)
+  }))
+}
+
+const fetchMyProblems = async () => {
+  isLoadingMyProblems.value = true
+  myProblemsError.value = ''
+  try {
+    // 逐页拉取真实数据，避免只拿到第一页；并设置安全页数上限防止异常分页死循环。
+    const pageSize = 50
+    const maxPages = 20
+    const collected = []
+    const seen = new Set()
+    let total = 0
+
+    for (let page = 1; page <= maxPages; page++) {
+      const response = await api.getUserCreatedProblems({ page, pageSize })
+      if (response.data?.code !== 0) {
+        myProblemsError.value = response.data?.message || '获取我的题目失败'
+        break
+      }
+
+      const data = response.data.data || {}
+      const list = normalizeCreatedProblems(data.list || [])
+      total = Number(data.total || total)
+
+      list.forEach((item) => {
+        if (seen.has(item.id)) return
+        seen.add(item.id)
+        collected.push(item)
+      })
+
+      if (!list.length || (total > 0 && collected.length >= total)) {
+        break
+      }
+    }
+
+    myProblems.value = collected
+    myProblemsTotal.value = total || collected.length
+
+    if (myProblemsTotal.value > collected.length) {
+      myProblemsError.value = '题目总数与分页数据不一致，已展示可获取到的真实题目'
+    }
+  } catch (error) {
+    console.error('获取我的题目失败:', error)
+    myProblemsError.value = '网络错误，无法获取我的题目'
+    myProblems.value = []
+  } finally {
+    isLoadingMyProblems.value = false
+  }
 }
 
 // 显示编辑弹窗
@@ -459,6 +589,9 @@ const editForm = ref({
   bio: userStore.userInfo?.bio || '先把基础打扎实，再冲更高难度。',
   avatar: userStore.userInfo?.avatar || '',
   email: userStore.userInfo?.email || '',
+  gender: userStore.userInfo?.gender || 'unknown',
+  targetTrack: userStore.userInfo?.targetTrack || 'algo',
+  weeklyGoal: Number(userStore.userInfo?.weeklyGoal || 10),
   github: userStore.userInfo?.github || '',
   website: userStore.userInfo?.website || ''
 })
@@ -467,6 +600,7 @@ const handleSave = async () => {
   try {
     const finalAvatar = normalizeAvatarValue(editForm.value.avatar)
     const currentAvatar = normalizeAvatarValue(userStore.userInfo?.avatar)
+    const weeklyGoal = Math.max(1, Number(editForm.value.weeklyGoal || 1))
 
     if (finalAvatar && !isManagedAvatarPath(finalAvatar) && finalAvatar !== currentAvatar) {
       ElMessage.warning('头像仅支持本地上传后的站内图片，请先上传图片文件')
@@ -478,6 +612,9 @@ const handleSave = async () => {
       bio: editForm.value.bio,
       avatar: finalAvatar,
       email: editForm.value.email,
+      gender: editForm.value.gender || 'unknown',
+      targetTrack: editForm.value.targetTrack || 'algo',
+      weeklyGoal,
       github: editForm.value.github,
       website: editForm.value.website
     })
@@ -489,6 +626,9 @@ const handleSave = async () => {
         bio: editForm.value.bio,
         avatar: finalAvatar,
         email: editForm.value.email,
+        gender: editForm.value.gender || 'unknown',
+        targetTrack: editForm.value.targetTrack || 'algo',
+        weeklyGoal,
         github: editForm.value.github,
         website: editForm.value.website
       })
@@ -511,6 +651,9 @@ const handleAvatarClick = () => {
     bio: userStore.userInfo?.bio || '先把基础打扎实，再冲更高难度。',
     avatar: userStore.userInfo?.avatar || '',
     email: userStore.userInfo?.email || '',
+    gender: userStore.userInfo?.gender || 'unknown',
+    targetTrack: userStore.userInfo?.targetTrack || 'algo',
+    weeklyGoal: Number(userStore.userInfo?.weeklyGoal || 10),
     github: userStore.userInfo?.github || '',
     website: userStore.userInfo?.website || ''
   }
@@ -524,6 +667,9 @@ const openEditModal = () => {
     bio: userStore.userInfo?.bio || '先把基础打扎实，再冲更高难度。',
     avatar: userStore.userInfo?.avatar || '',
     email: userStore.userInfo?.email || '',
+    gender: userStore.userInfo?.gender || 'unknown',
+    targetTrack: userStore.userInfo?.targetTrack || 'algo',
+    weeklyGoal: Number(userStore.userInfo?.weeklyGoal || 10),
     github: userStore.userInfo?.github || '',
     website: userStore.userInfo?.website || ''
   }
@@ -558,35 +704,18 @@ const handleUploadClick = () => {
   showDetailEdit.value = true
 }
 
-// 加载更多活动
-const loadMoreActivities = async () => {
-  try {
-    const response = await api.getUserActivities({ page: 2, limit: 10 })
-    if (response.data?.code === 0) {
-      const list = response.data.data?.list || []
-      const newActivities = list.map(activity => ({
-        type: activity.type,
-        title: activity.description,
-        time: formatTime(activity.createdAt),
-        icon: getActivityIcon(activity.type)
-      }))
-      recentActivities.value.push(...newActivities)
-    } else {
-      ElMessage.info('没有更多活动了')
-    }
-  } catch (error) {
-    console.error('加载更多活动失败:', error)
-    ElMessage.info('没有更多活动了')
-  }
-}
-
-onMounted(() => {
+onMounted(async () => {
   if (!levelStore.levels.length) {
-    levelStore.fetchLevels()
+    try {
+      await levelStore.fetchLevels()
+    } catch (error) {
+      console.error('加载关卡失败:', error)
+    }
   }
-  fetchProblemHeatmap(contributionYear.value)
-  fetchProblemStats()
-  fetchActivities()
+  await fetchMyProblems()
+  await fetchProblemStats()
+  await fetchProblemHeatmap(contributionYear.value)
+  await fetchActivities(1)
   checkBusyStatus()
 })
 </script>
@@ -633,7 +762,7 @@ onMounted(() => {
               <path
                 d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
             </svg>
-            <span>{{ solvedLevels }}</span>
+            <span>{{ displayedClearedLevels }}</span>
             <span class="stat-label">已通关</span>
           </div>
           <div class="stat-item">
@@ -641,8 +770,8 @@ onMounted(() => {
               <path
                 d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
             </svg>
-            <span>{{ problemStats.totalSolved }}</span>
-            <span class="stat-label">题目</span>
+            <span>{{ solvedProblemCount }}</span>
+            <span class="stat-label">已完成题</span>
           </div>
         </div>
 
@@ -659,7 +788,15 @@ onMounted(() => {
               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
               <circle cx="12" cy="10" r="3" />
             </svg>
-            <span>中国</span>
+            <span>{{ profileTrackLabel }}</span>
+          </div>
+          <div class="detail-item">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 20h6" />
+              <path d="M12 3v17" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            <span>性别 {{ profileGenderLabel }}</span>
           </div>
           <div class="detail-item">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -668,34 +805,40 @@ onMounted(() => {
               <line x1="8" y1="2" x2="8" y2="6" />
               <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
-            <span>加入于 {{ new Date().getFullYear() }}年</span>
+            <span>加入于 {{ joinedYearText }}</span>
+          </div>
+          <div class="detail-item">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+            <a v-if="profileWebsiteUrl" :href="profileWebsiteUrl" target="_blank" rel="noopener" class="profile-link">{{
+              userStore.userInfo?.website }}</a>
+            <span v-else>个人网站 未设置</span>
           </div>
         </div>
       </aside>
 
       <!-- 右侧内容区 -->
       <main class="profile-main">
-        <!-- 热门题库 - 分为我的题目和做过的题 -->
+        <!-- 我的题目 -->
         <section class="repositories-section">
           <div class="section-header">
             <div class="repo-tabs">
-              <button class="repo-tab" :class="{ active: activeRepoTab === 'created' }"
-                @click="activeRepoTab = 'created'">
+              <button class="repo-tab active">
                 我的题目
                 <span class="tab-count">{{ myProblems.length }}</span>
               </button>
-              <button class="repo-tab" :class="{ active: activeRepoTab === 'solved' }"
-                @click="activeRepoTab = 'solved'">
-                做过的题
-                <span class="tab-count">{{ solvedProblems.length }}</span>
-              </button>
             </div>
-            <a href="#" class="customize-link">自定义您的徽章。</a>
+            <span class="customize-link">仅展示已落库数据</span>
           </div>
 
-          <!-- 我的题目 -->
-          <div v-if="activeRepoTab === 'created'" class="repo-grid">
-            <div v-for="problem in myProblems" :key="problem.id" class="repo-card">
+          <div class="repo-grid">
+            <div v-if="isLoadingMyProblems" class="repo-empty-state">我的题目加载中...</div>
+            <div v-else-if="myProblemsError" class="repo-empty-state">{{ myProblemsError }}</div>
+            <div v-else-if="myProblems.length === 0" class="repo-empty-state">你还没有创建题目。</div>
+            <div v-for="problem in visibleMyProblems" :key="problem.id" class="repo-card">
               <div class="repo-header">
                 <a href="#" class="repo-name">{{ problem.name }}</a>
                 <span class="repo-badge">{{ problem.isPublic ? '公开' : '私有' }}</span>
@@ -715,40 +858,21 @@ onMounted(() => {
                 </span>
               </div>
             </div>
-          </div>
-
-          <!-- 做过的题 -->
-          <div v-else class="repo-grid">
-            <div v-for="problem in solvedProblems" :key="problem.id" class="repo-card">
-              <div class="repo-header">
-                <a href="#" class="repo-name">{{ problem.name }}</a>
-              </div>
-              <p class="repo-description">{{ problem.description }}</p>
-              <div class="repo-footer">
-                <span class="repo-difficulty">
-                  <span class="difficulty-dot" :style="{ backgroundColor: problem.difficultyColor }"></span>
-                  {{ problem.difficulty }}
-                </span>
-                <span class="repo-meta">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                    <path
-                      d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-                  </svg>
-                  尝试 {{ problem.attempts }} 次
-                </span>
-              </div>
-            </div>
+            <button v-if="hasMoreMyProblems" class="show-more-btn" @click="showAllMyProblems = !showAllMyProblems">
+              {{ showAllMyProblems ? '收起题目' : `展开其余 ${myProblems.length - 4} 题` }}
+            </button>
           </div>
         </section>
 
         <!-- 做题统计热力图 -->
         <section class="contributions-section">
           <div class="contributions-header">
-            <h3>{{ contributionYear }}年 已做 {{ totalContributions }} 题</h3>
+            <h3>{{ contributionYear }}年 做题热力图</h3>
             <div class="stats-summary">
-              <span class="stat-badge">今日 {{ problemStats.todaySolved }} 题</span>
-              <span class="stat-badge">本周 {{ problemStats.weeklySolved }} 题</span>
-              <span class="stat-badge">本月 {{ problemStats.monthlySolved }} 题</span>
+              <span class="stat-badge">累计提交 {{ totalContributions }} 次</span>
+              <span class="stat-badge">已完成 {{ solvedProblemCount }} 题</span>
+              <span class="stat-badge">总关卡 {{ totalLevels }} 关</span>
+              <span class="stat-badge">周目标 {{ effectiveWeeklyGoal }} 题</span>
             </div>
           </div>
 
@@ -756,36 +880,36 @@ onMounted(() => {
             <div class="streak-card">
               <div class="streak-icon">🔥</div>
               <div class="streak-info">
-                <span class="streak-value">{{ heatmapStats.currentStreak }}</span>
-                <span class="streak-label">连续打卡天</span>
+                <span class="streak-value">{{ solvedProblemCount }}</span>
+                <span class="streak-label">累计完成题</span>
               </div>
             </div>
             <div class="streak-card">
               <div class="streak-icon">🏆</div>
               <div class="streak-info">
-                <span class="streak-value">{{ heatmapStats.longestStreak }}</span>
-                <span class="streak-label">最长连胜天</span>
+                <span class="streak-value">{{ totalLevels }}</span>
+                <span class="streak-label">关卡总数</span>
               </div>
             </div>
             <div class="streak-card">
               <div class="streak-icon">📅</div>
               <div class="streak-info">
-                <span class="streak-value">{{ heatmapStats.activeDays }}</span>
-                <span class="streak-label">年度活跃天</span>
+                <span class="streak-value">{{ displayedClearedLevels }}</span>
+                <span class="streak-label">已通关关卡</span>
               </div>
             </div>
             <div class="streak-card">
               <div class="streak-icon">📝</div>
               <div class="streak-info">
-                <span class="streak-value">{{ heatmapStats.totalCount }}</span>
-                <span class="streak-label">累计做题道</span>
+                <span class="streak-value">{{ userStore.points }}</span>
+                <span class="streak-label">当前积分</span>
               </div>
             </div>
           </div>
 
           <div v-if="isLoadingHeatmap" class="loading-state">
             <span class="loading-spinner"></span>
-            <span>加载中...</span>
+            <span>热力图加载中...</span>
           </div>
 
           <div v-else-if="heatmapError" class="error-state">
@@ -855,7 +979,7 @@ onMounted(() => {
           <h3>活动</h3>
           <div v-if="isLoadingActivities" class="loading-state">
             <span class="loading-spinner"></span>
-            <span>加载中...</span>
+            <span>活动加载中...</span>
           </div>
           <div v-else-if="activitiesError" class="error-state">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -871,7 +995,7 @@ onMounted(() => {
             </div>
             <div class="activity-list">
               <div v-if="recentActivities.length === 0" class="empty-activity">
-                <p>{{ userStore.userInfo?.name || '用户' }} 在此期间尚无任何活动。</p>
+                <p>{{ userStore.userInfo?.name || '用户' }} 暂无活动记录。</p>
               </div>
               <div v-else v-for="(activity, index) in recentActivities" :key="index" class="activity-item">
                 <span class="activity-icon">{{ activity.icon }}</span>
@@ -880,7 +1004,7 @@ onMounted(() => {
               </div>
             </div>
           </div>
-          <button class="show-more-btn" @click="loadMoreActivities">显示更多活动</button>
+          <button v-if="canLoadMoreActivities" class="show-more-btn" @click="loadMoreActivities">显示更多活动</button>
         </section>
       </main>
     </div>
@@ -970,6 +1094,31 @@ onMounted(() => {
                 <input v-model="editForm.website" type="text" class="form-input glass-input"
                   placeholder="yourwebsite.com" />
               </div>
+
+              <div class="form-inline">
+                <div class="form-group glass-form-group half">
+                  <label class="floating-label">性别</label>
+                  <select v-model="editForm.gender" class="form-input glass-input form-select">
+                    <option value="unknown">未设置</option>
+                    <option value="male">男</option>
+                    <option value="female">女</option>
+                  </select>
+                </div>
+                <div class="form-group glass-form-group half">
+                  <label class="floating-label">赛道</label>
+                  <select v-model="editForm.targetTrack" class="form-input glass-input form-select">
+                    <option value="algo">算法思维赛道</option>
+                    <option value="ds">数据结构赛道</option>
+                    <option value="contest">竞赛冲刺赛道</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group glass-form-group">
+                <label class="floating-label">周目标（题/周）</label>
+                <input v-model.number="editForm.weeklyGoal" type="number" min="1" class="form-input glass-input"
+                  placeholder="例如 10" />
+              </div>
             </div>
           </div>
 
@@ -1014,8 +1163,7 @@ onMounted(() => {
                 :formats="['jpg', 'png', 'gif', 'webp']" @upload-success="handleAvatarUploadSuccess"
                 @upload-error="handleAvatarUploadError" />
               <div class="avatar-actions">
-                <button class="avatar-btn secondary"
-                  @click="editForm.avatar = ''">恢复默认头像</button>
+                <button class="avatar-btn secondary" @click="editForm.avatar = ''">恢复默认头像</button>
               </div>
             </div>
 
@@ -1046,6 +1194,31 @@ onMounted(() => {
                   <label>个人网站</label>
                   <input v-model="editForm.website" type="text" class="form-input" placeholder="yourwebsite.com" />
                 </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group half">
+                  <label>性别</label>
+                  <select v-model="editForm.gender" class="form-input">
+                    <option value="unknown">未设置</option>
+                    <option value="male">男</option>
+                    <option value="female">女</option>
+                  </select>
+                </div>
+                <div class="form-group half">
+                  <label>目标赛道</label>
+                  <select v-model="editForm.targetTrack" class="form-input">
+                    <option value="algo">算法思维赛道</option>
+                    <option value="ds">数据结构赛道</option>
+                    <option value="contest">竞赛冲刺赛道</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>周目标（题/周）</label>
+                <input v-model.number="editForm.weeklyGoal" type="number" min="1" class="form-input"
+                  placeholder="例如 10" />
               </div>
             </div>
           </div>
@@ -1140,7 +1313,7 @@ onMounted(() => {
           <div class="tooltip-content">
             <span class="tooltip-count">做题 {{ tooltipData.count }} 道</span>
             <span class="tooltip-level" :class="'level-' + tooltipData.level">{{ getLevelText(tooltipData.level)
-              }}</span>
+            }}</span>
           </div>
         </div>
       </Transition>
@@ -1497,6 +1670,15 @@ onMounted(() => {
   color: #656d76;
 }
 
+.profile-link {
+  color: #0969da;
+  text-decoration: none;
+}
+
+.profile-link:hover {
+  text-decoration: underline;
+}
+
 /* 右侧主内容 */
 .profile-main {
   flex: 1;
@@ -1570,6 +1752,16 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
+}
+
+.repo-empty-state {
+  grid-column: 1 / -1;
+  padding: 20px;
+  border: 1px dashed #d0d7de;
+  border-radius: 8px;
+  color: #656d76;
+  background: #fafbfc;
+  font-size: 14px;
 }
 
 .repo-card {
@@ -2459,6 +2651,19 @@ onMounted(() => {
   gap: 20px;
 }
 
+.form-inline {
+  display: flex;
+  gap: 12px;
+}
+
+.form-inline .half {
+  flex: 1;
+}
+
+.form-select {
+  cursor: pointer;
+}
+
 .glass-form-group {
   position: relative;
 }
@@ -2916,6 +3121,10 @@ onMounted(() => {
   }
 
   .form-row {
+    flex-direction: column;
+  }
+
+  .form-inline {
     flex-direction: column;
   }
 }

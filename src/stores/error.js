@@ -18,6 +18,34 @@ const saveLocalErrors = (errors) => {
   localStorage.setItem(LOCAL_ERROR_KEY, JSON.stringify(errors))
 }
 
+const toStringList = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (!text) return []
+
+    try {
+      const parsed = JSON.parse(text)
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item).trim()).filter(Boolean)
+      }
+    } catch (error) {
+      // Ignore JSON parse error and fallback to delimiter split.
+    }
+
+    return text
+      .split(/[,，;；\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+
+  if (value == null) return []
+  return [String(value).trim()].filter(Boolean)
+}
+
 export const useErrorStore = defineStore('error', () => {
   const errors = ref(readLocalErrors())
 
@@ -90,17 +118,17 @@ export const useErrorStore = defineStore('error', () => {
       const payload = {
         errorId: errorItem.id,
         question: errorItem.question || '',
-        userAnswer: errorItem.userAnswer || '',
+        userAnswer: toStringList(errorItem.userAnswer),
         description: errorItem.description || '',
         difficulty: errorItem.difficulty || 'medium',
         track: errorItem.track || 'algo',
         solveRate: errorItem.solveRate || null,
         avgTimeSeconds: errorItem.avgTimeSeconds || null,
         userAttempts: errorItem.userAttempts || null,
-        relatedTopics: errorItem.relatedTopics || [],
+        relatedTopics: toStringList(errorItem.relatedTopics),
         userLevel: errorItem.userLevel || 'beginner'
       }
-      
+
       const res = await api.post('/error-analysis', payload, {
         timeout: 60000
       })
