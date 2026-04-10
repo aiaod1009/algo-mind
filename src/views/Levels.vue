@@ -151,6 +151,14 @@ const teardownMotionPreference = () => {
   motionListener = null
 }
 
+const handleWheelScroll = (event) => {
+  const viewport = event.currentTarget
+  if (viewport.scrollWidth > viewport.clientWidth) {
+    event.preventDefault()
+    viewport.scrollLeft += event.deltaY
+  }
+}
+
 watch(activeTrack, () => {
   dialogVisible.value = false
   selectedLevel.value = null
@@ -178,7 +186,7 @@ onUnmounted(() => {
 
     <el-skeleton :loading="loading" animated :rows="6">
       <section class="surface-card pixel-stage">
-        <div v-if="trackLevels.length" class="stage-viewport">
+        <div v-if="trackLevels.length" class="stage-viewport" @wheel.prevent="handleWheelScroll">
           <div class="map-world" :style="mapWorldStyle" :class="{ 'reduced-motion': prefersReducedMotion }">
             <div class="sky-pixels" aria-hidden="true"></div>
 

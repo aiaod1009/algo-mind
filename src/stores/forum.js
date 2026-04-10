@@ -136,17 +136,41 @@ export const useForumStore = defineStore('forum', () => {
     }
   }
 
-  const toggleLike = (postId) => {
+  const toggleLike = async (postId) => {
     const item = posts.value.find((post) => Number(post.id) === Number(postId))
-    if (!item) return
-    if (item.liked) {
-      item.likes = Math.max(0, Number(item.likes || 0) - 1)
-      item.liked = false
-    } else {
-      item.likes = Number(item.likes || 0) + 1
-      item.liked = true
+    if (!item) {
+      return { success: false, error: '帖子不存在' }
     }
-    saveLocalPosts(posts.value)
+
+    const action = item.liked ? 'unlike' : 'like'
+
+    try {
+      const res = await api.post(`/forum-posts/${postId}/like`, { action })
+      if (res.data?.code !== 0 || !res.data?.data) {
+        return {
+          success: false,
+          error: res.data?.message || '点赞失败',
+          notified: false,
+        }
+      }
+
+      item.likes = Number(res.data.data.likes || 0)
+      item.liked = Boolean(res.data.data.liked)
+      saveLocalPosts(posts.value)
+
+      return {
+        success: true,
+        liked: item.liked,
+        likes: item.likes,
+      }
+    } catch (error) {
+      console.error('点赞失败:', error)
+      return {
+        success: false,
+        error: error?.response?.data?.message || error?.message || '点赞失败',
+        notified: true,
+      }
+    }
   }
 
   const addCommentCount = (postId) => {

@@ -6,6 +6,7 @@ import { useForumStore } from '../stores/forum'
 import { useUserStore } from '../stores/user'
 import api from '../api'
 import { getFullFileUrl } from '../utils/file'
+import likeIcon from '../assets/icons/like.svg'
 
 const route = useRoute()
 const router = useRouter()
@@ -122,6 +123,12 @@ const handleLike = async () => {
     if (res.data?.code === 0) {
       post.value.likes = res.data.data.likes
       post.value.liked = res.data.data.liked
+
+      const cachedPost = forumStore.posts.find((item) => Number(item.id) === Number(postId.value))
+      if (cachedPost) {
+        cachedPost.likes = res.data.data.likes
+        cachedPost.liked = res.data.data.liked
+      }
     }
   } catch (e) {
     console.error('点赞失败:', e)
@@ -298,9 +305,7 @@ watch(
           <span class="btn-count">{{ post.comments || 0 }}</span>
         </button>
         <button class="action-btn" :class="{ 'is-liked': post.liked }" @click="handleLike">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-          </svg>
+          <img class="like-icon" :src="likeIcon" alt="点赞" />
           <span class="btn-count">{{ post.likes || 0 }}</span>
         </button>
         <button class="action-btn">
@@ -624,6 +629,22 @@ watch(
 
 .action-btn.is-liked {
   color: #ff4757;
+}
+
+.like-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+  flex-shrink: 0;
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+.action-btn:hover .like-icon {
+  transform: scale(1.06);
+}
+
+.action-btn.is-liked .like-icon {
+  filter: brightness(0) saturate(100%) invert(24%) sepia(73%) saturate(5592%) hue-rotate(338deg) brightness(101%) contrast(102%);
 }
 
 .btn-count {

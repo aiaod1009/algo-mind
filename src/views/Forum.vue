@@ -8,6 +8,7 @@ import FlowerPagination from '../components/FlowerPagination.vue'
 import SearchBar from '../components/SearchBar.vue'
 import api from '../api'
 import { getFullFileUrl } from '../utils/file'
+import likeIcon from '../assets/icons/like.svg'
 
 const router = useRouter()
 const forumStore = useForumStore()
@@ -316,7 +317,7 @@ const startHotCommentTimer = (postId) => {
       const currentIndex = hotCommentIndex.value[postId] || 0
       hotCommentIndex.value[postId] = (currentIndex + 1) % comments.length
     }
-  }, 30000)
+  }, 10000)
 }
 
 const stopHotCommentTimer = (postId) => {
@@ -330,13 +331,22 @@ const likeEmojis = ['👍', '❤️', '😊', '🎉', '🔥', '👏', '😍', '�
 const showEmojiBurst = ref(null)
 const burstPosition = ref({ x: 0, y: 0 })
 
-const handleLike = (post, event) => {
+const handleLike = async (post, event) => {
   const wasLiked = post.liked
-  forumStore.toggleLike(post.id)
-  if (!wasLiked) {
+  const rect = event?.currentTarget?.getBoundingClientRect?.()
+  const result = await forumStore.toggleLike(post.id)
+  if (!result?.success) {
+    if (!result?.notified) {
+      ElMessage.error(result?.error || '点赞失败，请稍后再试')
+    }
+    return
+  }
+
+  if (!wasLiked && result.liked) {
     showEmojiBurst.value = post.id
-    const rect = event.target.getBoundingClientRect()
-    burstPosition.value = { x: rect.left + rect.width / 2, y: rect.top }
+    if (rect) {
+      burstPosition.value = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }
     setTimeout(() => {
       showEmojiBurst.value = null
     }, 1000)
@@ -743,7 +753,8 @@ onUnmounted(() => {
               </div>
               <div v-if="postHotComments[item.id].length > 1" class="hot-comment-dots">
                 <span v-for="(_, idx) in postHotComments[item.id]" :key="idx" class="dot"
-                  :class="{ active: idx === (hotCommentIndex[item.id] || 0) }"></span>
+                  :class="{ active: idx === (hotCommentIndex[item.id] || 0) }"
+                  @click.stop="hotCommentIndex[item.id] = idx"></span>
               </div>
             </div>
           </div>
@@ -751,7 +762,7 @@ onUnmounted(() => {
           <div class="action-row">
             <button class="action-btn like-btn" :class="{ 'is-liked': item.liked }"
               @click.stop="handleLike(item, $event)">
-              <span class="btn-icon">👍</span>
+              <img class="btn-icon like-icon" :src="likeIcon" alt="点赞" />
               <span class="btn-count">{{ item.likes }}</span>
             </button>
             <button class="action-btn comment-btn" @click.stop="goToPostComments(item.id)">
@@ -1797,6 +1808,22 @@ onUnmounted(() => {
 
 .btn-icon {
   font-size: 16px;
+}
+
+.like-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  flex-shrink: 0;
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+.like-btn:hover .like-icon {
+  transform: scale(1.06);
+}
+
+.like-btn.is-liked .like-icon {
+  filter: brightness(0) invert(1);
 }
 
 .quick-comment-panel {
