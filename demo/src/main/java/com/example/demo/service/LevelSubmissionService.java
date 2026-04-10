@@ -27,6 +27,8 @@ public class LevelSubmissionService {
 
     private static final String STATUS_CORRECT = "CORRECT";
     private static final String STATUS_WRONG = "WRONG";
+    private static final int CORRECT_STARS = 3;
+    private static final int CORRECT_POINTS = 10;
 
     private final LevelRepository levelRepository;
     private final ErrorItemRepository errorItemRepository;
@@ -81,7 +83,7 @@ public class LevelSubmissionService {
 
         if (correct) {
             if (!alreadySolved) {
-                pointsEarned = increaseUserPoints(userId, level.getRewardPoints());
+                pointsEarned = increaseUserPoints(userId);
             }
             errorItemRepository.deleteByUserIdAndLevelId(userId, level.getId());
         } else {
@@ -94,8 +96,8 @@ public class LevelSubmissionService {
                 .correct(correct)
                 .pointsEarned(pointsEarned)
                 .nextLevelUnlocked(nextLevelUnlocked)
-                .starsEarned(correct ? 1 : 0)
-                .bestStars(correct ? 1 : 0)
+                .starsEarned(correct ? CORRECT_STARS : 0)
+                .bestStars(correct ? CORRECT_STARS : 0)
                 .latestStatus(correct ? STATUS_CORRECT : STATUS_WRONG)
                 .errorItemId(errorItemId)
                 .build();
@@ -113,7 +115,7 @@ public class LevelSubmissionService {
         record.setTrack(defaultTrack(level.getTrack()));
         record.setIsCorrect(correct);
         record.setStatus(correct ? STATUS_CORRECT : STATUS_WRONG);
-        record.setStars(correct ? 1 : 0);
+        record.setStars(correct ? CORRECT_STARS : 0);
         record.setAttemptNo(Math.max(1, attemptNo == null ? 1 : attemptNo));
         record.setSolveTimeMs(toSolveTimeMs(request));
         record.setSolvedAt(OffsetDateTime.now());
@@ -211,17 +213,13 @@ public class LevelSubmissionService {
                 .orElse(false);
     }
 
-    private int increaseUserPoints(Long userId, Integer rewardPoints) {
-        int delta = rewardPoints == null ? 0 : Math.max(rewardPoints, 0);
-        if (delta == 0) {
-            return 0;
-        }
+    private int increaseUserPoints(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NoSuchElementException("用户不存在: " + userId));
         int currentPoints = user.getPoints() == null ? 0 : user.getPoints();
-        user.setPoints(currentPoints + delta);
+        user.setPoints(currentPoints + CORRECT_POINTS);
         userRepository.save(user);
-        return delta;
+        return CORRECT_POINTS;
     }
 
     private Integer toSolveTimeMs(SubmitAnswerRequest request) {

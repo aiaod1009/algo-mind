@@ -2,22 +2,6 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '../api'
 
-const LOCAL_ERROR_KEY = 'errors'
-
-const readLocalErrors = () => {
-  const raw = localStorage.getItem(LOCAL_ERROR_KEY)
-  if (!raw) return []
-  try {
-    return JSON.parse(raw)
-  } catch (error) {
-    return []
-  }
-}
-
-const saveLocalErrors = (errors) => {
-  localStorage.setItem(LOCAL_ERROR_KEY, JSON.stringify(errors))
-}
-
 const toStringList = (value) => {
   if (Array.isArray(value)) {
     return value.map((item) => String(item).trim()).filter(Boolean)
@@ -47,14 +31,9 @@ const toStringList = (value) => {
 }
 
 export const useErrorStore = defineStore('error', () => {
-  const errors = ref(readLocalErrors())
+  const errors = ref([])
 
   const hydrateErrorsFromLocal = () => {
-    const local = readLocalErrors()
-    if (Array.isArray(local) && local.length > 0) {
-      errors.value = local
-      return true
-    }
     errors.value = []
     return false
   }
@@ -64,24 +43,12 @@ export const useErrorStore = defineStore('error', () => {
       return { fromCache: true }
     }
 
-    hydrateErrorsFromLocal()
-
-    try {
-      const res = await api.get('/errors')
-      if (res.data?.code === 0 && Array.isArray(res.data.data)) {
-        errors.value = res.data.data
-        saveLocalErrors(errors.value)
-        return { fromCache: false }
-      }
-      throw new Error(res.data?.message || '获取错题数据失败')
-    } catch (error) {
-      const localData = readLocalErrors()
-      if (Array.isArray(localData) && localData.length > 0) {
-        errors.value = localData
-        return { fromCache: true, isOffline: true }
-      }
-      throw error
+    const res = await api.get('/errors')
+    if (res.data?.code === 0 && Array.isArray(res.data.data)) {
+      errors.value = res.data.data
+      return { fromCache: false }
     }
+    throw new Error(res.data?.message || '获取错题数据失败')
   }
 
   const addError = async (errorItem) => {
@@ -89,28 +56,22 @@ export const useErrorStore = defineStore('error', () => {
       ? errorItem.userAnswer.join(', ')
       : String(errorItem.userAnswer || '')
 
-    const nextItem = {
-      id: errorItem.id || Date.now(),
+    const payload = {
       levelId: errorItem.levelId || null,
       question: errorItem.question || '未命名题目',
       userAnswer: userAnswerStr,
       description: errorItem.description || '暂无描述',
-      createdAt: errorItem.createdAt || Date.now(),
       analysisStatus: '未分析',
       analysis: '',
     }
 
-    errors.value.unshift(nextItem)
-    saveLocalErrors(errors.value)
-
-    try {
-      const { id, levelId, question, userAnswer, description, analysisStatus, analysis } = nextItem
-      await api.post('/errors', { levelId, question, userAnswer, description, analysisStatus, analysis })
-    } catch (error) {
-      const syncError = new Error('错题已保存到本地，但同步服务器失败')
-      syncError.originalError = error
-      throw syncError
+    const res = await api.post('/errors', payload)
+    if (res.data?.code === 0 && res.data?.data) {
+      errors.value.unshift(res.data.data)
+      return res.data.data
     }
+
+    throw new Error(res.data?.message || '保存错题失败')
   }
 
   const getAnalysis = async (errorItem) => {
@@ -150,7 +111,6 @@ export const useErrorStore = defineStore('error', () => {
     if (!item) return
     item.analysisStatus = '已分析'
     item.analysis = analysis
-    saveLocalErrors(errors.value)
   }
 
   return { errors, hydrateErrorsFromLocal, fetchErrors, addError, getAnalysis, markAnalysis }

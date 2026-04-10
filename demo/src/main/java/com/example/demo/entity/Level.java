@@ -77,4 +77,19 @@ public class Level {
      */
     @Column(name = "creator_id")
     private Long creatorId;
+
+    /**
+     * 以下字段为当前用户维度的运行时数据，不落库。
+     */
+    @Transient
+    private Integer bestStars;
+
+    @Transient
+    private Integer stars;
+
+    @Transient
+    private Integer attemptCount;
+
+    @Transient
+    private Boolean isCompleted;
 }

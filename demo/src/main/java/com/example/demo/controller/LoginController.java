@@ -57,10 +57,18 @@ public class LoginController {
         userInfo.put("points", user.getPoints());
         userInfo.put("avatar", user.getAvatar());
         userInfo.put("bio", user.getBio());
+        userInfo.put("gender", user.getGender());
         userInfo.put("github", user.getGithub());
         userInfo.put("website", user.getWebsite());
         userInfo.put("targetTrack", user.getTargetTrack());
         userInfo.put("weeklyGoal", user.getWeeklyGoal());
+        userInfo.put("createdAt", user.getCreatedAt());
+        userInfo.put("updatedAt", user.getUpdatedAt());
+        userInfo.put("statusEmoji", user.getStatusEmoji());
+        userInfo.put("statusMood", user.getStatusMood());
+        userInfo.put("isBusy", user.getIsBusy());
+        userInfo.put("busyAutoReply", user.getBusyAutoReply());
+        userInfo.put("busyEndTime", user.getBusyEndTime());
 
         result.put("token", jwtService.generateToken(user));
         result.put("user", userInfo);

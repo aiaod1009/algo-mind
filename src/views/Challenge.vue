@@ -305,6 +305,18 @@ const submitCodeChallenge = async () => {
   isAiDockExpanded.value = true
 
   if ((evaluationResult.value.score || 0) < CODE_PASS_SCORE) {
+    try {
+      const timeMs = Date.now() - startTimestamp.value
+      await levelStore.submitAnswer(currentLevelId.value, String(answer.value || ''), {
+        attempts: attemptsInRun.value,
+        timeMs,
+        language: language.value,
+        stdinInput: stdinInput.value,
+      })
+      await errorStore.fetchErrors({ skipIfLoaded: false })
+    } catch (syncError) {
+      console.warn('编程题错题落库失败。', syncError)
+    }
     ElMessage.warning(`评测已完成，达到 ${CODE_PASS_SCORE} 分即可通关`)
     return
   }

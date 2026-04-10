@@ -64,7 +64,7 @@ doubao:
 spring:
   config:
     activate:
-      on-profile: prod
+      on-profile: prod-env
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:algo_challenge}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: ${DB_USERNAME:root}
