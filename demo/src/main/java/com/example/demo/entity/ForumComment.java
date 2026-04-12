@@ -1,7 +1,16 @@
 package com.example.demo.entity;
 
-import jakarta.persistence.*;
+import com.example.demo.author.AuthorLevelProfile;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.Data;
+
 import java.time.OffsetDateTime;
 
 @Data
@@ -35,12 +44,12 @@ public class ForumComment {
     @Column(name = "parent_id")
     private Long parentId;
 
-    /**
-     * 用户公司/学校信息（如：阿里巴巴集团 服务端研发）
-     */
     private String company;
 
     private OffsetDateTime createdAt;
+
+    @Transient
+    private AuthorLevelProfile authorLevelProfile;
 
     @PrePersist
     public void prePersist() {

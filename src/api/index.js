@@ -55,6 +55,7 @@ api.interceptors.response.use(
 
 api.getUserProblemHeatmap = userApi.getUserProblemHeatmap
 api.getUserProblemStats = userApi.getUserProblemStats
+api.getUserAuthorLevel = userApi.getUserAuthorLevel
 api.getUserActivities = userApi.getUserActivities
 api.updateUserProfile = userApi.updateUserProfile
 api.getUserStatus = userApi.getUserStatus
@@ -78,7 +79,9 @@ api.uploadAvatar = userApi.uploadAvatar
 api.getAvatar = userApi.getAvatar
 api.deleteAvatar = userApi.deleteAvatar
 api.aiChat = userApi.aiChat
+api.aiChatStream = userApi.aiChatStream
 api.evaluateCode = userApi.evaluateCode
+api.evaluateCodeStream = userApi.evaluateCodeStream
 api.runCode = userApi.runCode
 api.getCourseRecommendations = userApi.getCourseRecommendations
 

@@ -6,15 +6,23 @@ import { useForumStore } from '../stores/forum'
 import { useUserStore } from '../stores/user'
 import FlowerPagination from '../components/FlowerPagination.vue'
 import SearchBar from '../components/SearchBar.vue'
+import AuthorLevelBadge from '../components/AuthorLevelBadge.vue'
 import api from '../api'
 import { getFullFileUrl } from '../utils/file'
 import likeIcon from '../assets/icons/like.svg'
+import { normalizeAuthorLevelProfile } from '../constants/authorLevelThemes'
 
 const router = useRouter()
 const forumStore = useForumStore()
 const userStore = useUserStore()
 
 const posts = computed(() => forumStore.posts)
+const currentAuthorLevelProfile = computed(() =>
+  normalizeAuthorLevelProfile(
+    userStore.userInfo?.authorLevelProfile,
+    userStore.userInfo?.authorLevelCode || userStore.userInfo?.authorLevel || 'Lv.1',
+  ),
+)
 const resolveAvatar = (avatar) => getFullFileUrl(avatar || '')
 
 const isCurrentUsersPost = (post) => {
@@ -183,7 +191,7 @@ const handlePublish = async () => {
   try {
     const result = await forumStore.addPost({
       author: userStore.userInfo?.name || '同学',
-      authorLevel: resolveUserLevel(),
+      authorLevel: currentAuthorLevelProfile.value.shortLabel,
       avatar: userStore.userInfo?.avatar || '',
       topic: postForm.topic.trim(),
       content: postForm.content.trim(),
@@ -516,7 +524,7 @@ onUnmounted(() => {
               <div class="composer-user-info">
                 <span class="composer-name">{{ userStore.userInfo?.name || '同学' }}</span>
                 <div class="composer-badges">
-                  <span class="composer-level">{{ resolveUserLevel() }}</span>
+                  <AuthorLevelBadge :profile="currentAuthorLevelProfile" size="sm" />
                   <span class="composer-role">社区成员</span>
                 </div>
               </div>
@@ -710,7 +718,7 @@ onUnmounted(() => {
               <div>
                 <div class="name-row">
                   <span class="name">{{ resolvePostAuthor(item) }}</span>
-                  <el-tag type="info" effect="light" size="small">{{ item.authorLevel || 'LV.1' }}</el-tag>
+                  <AuthorLevelBadge :profile="item.authorLevelProfile" :raw-label="item.authorLevel || 'Lv.1'" size="sm" />
                 </div>
                 <div class="meta">算法社区 · {{ formatTime(item.createdAt) }}</div>
               </div>

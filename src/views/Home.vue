@@ -14,6 +14,19 @@ const levelStore = useLevelStore()
 const selectedTrack = ref(userStore.userInfo?.targetTrack || userStore.selectedTrack)
 const weeklyGoal = ref(Number(userStore.userInfo?.weeklyGoal || 10))
 
+// 存储生成的学习计划
+const currentLearningPlan = ref(null)
+
+// 处理学习计划生成完成事件
+const handlePlanGenerated = (plan) => {
+  currentLearningPlan.value = plan
+  ElMessage.success({
+    message: '学习计划已生成并同步到每日任务',
+    duration: 3000,
+    offset: 80,
+  })
+}
+
 const trackOptions = [
   { label: '算法思维赛道', value: 'algo' },
   { label: '数据结构赛道', value: 'ds' },
@@ -60,12 +73,13 @@ if (!levelStore.levels.length) {
       <el-button type="primary" size="large" @click="goTo('/levels')">开始闯关</el-button>
     </section>
 
-    <DailyTasks />
+    <DailyTasks :learning-plan="currentLearningPlan" />
 
     <AIAssistant
       :selected-track="selectedTrack"
       :weekly-goal="weeklyGoal"
       :track-options="trackOptions"
+      @plan-generated="handlePlanGenerated"
     />
   </div>
 </template>

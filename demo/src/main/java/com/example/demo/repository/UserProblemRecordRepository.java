@@ -14,7 +14,7 @@ import java.util.List;
 @Repository
 public interface UserProblemRecordRepository extends JpaRepository<UserProblemRecord, Long> {
 
-  @Query(value = """
+    @Query(value = """
       SELECT DATE_FORMAT(solved_at, '%Y-%m-%d') AS day, COUNT(*) AS cnt
       FROM t_user_problem_record
       WHERE user_id = :userId
@@ -23,11 +23,15 @@ public interface UserProblemRecordRepository extends JpaRepository<UserProblemRe
       GROUP BY DATE(solved_at)
       ORDER BY day
       """, nativeQuery = true)
-  List<Object[]> countDailyAttempts(@Param("userId") Long userId,
-      @Param("start") OffsetDateTime start,
-      @Param("end") OffsetDateTime end);
+    List<Object[]> countDailyAttempts(@Param("userId") Long userId,
+            @Param("start") OffsetDateTime start,
+            @Param("end") OffsetDateTime end);
 
-  long countByUserIdAndSolvedAtBetween(Long userId, OffsetDateTime start, OffsetDateTime end);
+    long countByUserIdAndSolvedAtBetween(Long userId, OffsetDateTime start, OffsetDateTime end);
 
-  Page<UserProblemRecord> findByUserIdOrderBySolvedAtDesc(Long userId, Pageable pageable);
+    Page<UserProblemRecord> findByUserIdOrderBySolvedAtDesc(Long userId, Pageable pageable);
+
+    long countByUserId(Long userId);
+
+    long countByUserIdAndIsCorrect(Long userId, Boolean isCorrect);
 }

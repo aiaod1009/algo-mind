@@ -36,19 +36,25 @@ public class LevelSubmissionService {
     private final UserProblemRecordRepository userProblemRecordRepository;
     private final CurrentUserService currentUserService;
     private final UserRepository userRepository;
+    private final ErrorBookService errorBookService;
+    private final AuthorLevelService authorLevelService;
 
     public LevelSubmissionService(LevelRepository levelRepository,
             ErrorItemRepository errorItemRepository,
             QuestionAttemptRepository questionAttemptRepository,
             UserProblemRecordRepository userProblemRecordRepository,
             CurrentUserService currentUserService,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            ErrorBookService errorBookService,
+            AuthorLevelService authorLevelService) {
         this.levelRepository = levelRepository;
         this.errorItemRepository = errorItemRepository;
         this.questionAttemptRepository = questionAttemptRepository;
         this.userProblemRecordRepository = userProblemRecordRepository;
         this.currentUserService = currentUserService;
         this.userRepository = userRepository;
+        this.errorBookService = errorBookService;
+        this.authorLevelService = authorLevelService;
     }
 
     @Transactional
@@ -84,11 +90,19 @@ public class LevelSubmissionService {
         if (correct) {
             if (!alreadySolved) {
                 pointsEarned = increaseUserPoints(userId);
+                authorLevelService.refreshAuthorLevel(userId, "LEVEL_SOLVED", level.getId(), "完成题目并获得成长值");
+                if (level.getCreatorId() != null && !level.getCreatorId().equals(userId)) {
+                    authorLevelService.refreshAuthorLevel(level.getCreatorId(),
+                            "QUESTION_BANK_SOLVED",
+                            level.getId(),
+                            "题库被用户完成");
+                }
             }
-            errorItemRepository.deleteByUserIdAndLevelId(userId, level.getId());
+            errorBookService.archiveResolvedLevelError(userId, level.getId());
         } else {
             ErrorItem errorItem = upsertErrorItem(userId, level, rawUserAnswer, normalizedUserAnswer,
                     normalizedCorrectAnswer, levelOptions);
+            errorBookService.clearCompletedByLevel(userId, level.getId());
             errorItemId = errorItem.getId();
         }
 

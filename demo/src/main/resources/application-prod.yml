@@ -41,7 +41,7 @@ spring:
   # JPA 真实连接 MySQL
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:

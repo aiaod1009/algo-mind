@@ -21,7 +21,7 @@ const toStringList = (value) => {
     }
 
     return text
-      .split(/[,，;；\n]/)
+      .split(/[,，、\n]/)
       .map((item) => item.trim())
       .filter(Boolean)
   }
@@ -30,11 +30,31 @@ const toStringList = (value) => {
   return [String(value).trim()].filter(Boolean)
 }
 
+const normalizeList = (items) => (Array.isArray(items) ? items : [])
+
+const dedupeByLevel = (items, nextItem) => {
+  if (!nextItem?.levelId) {
+    return [nextItem, ...items.filter((item) => Number(item.id) !== Number(nextItem?.id))]
+  }
+
+  return [
+    nextItem,
+    ...items.filter((item) => {
+      if (Number(item.id) === Number(nextItem.id)) {
+        return false
+      }
+      return Number(item.levelId) !== Number(nextItem.levelId)
+    }),
+  ]
+}
+
 export const useErrorStore = defineStore('error', () => {
   const errors = ref([])
+  const completedErrors = ref([])
 
   const hydrateErrorsFromLocal = () => {
     errors.value = []
+    completedErrors.value = []
     return false
   }
 
@@ -44,11 +64,31 @@ export const useErrorStore = defineStore('error', () => {
     }
 
     const res = await api.get('/errors')
-    if (res.data?.code === 0 && Array.isArray(res.data.data)) {
-      errors.value = res.data.data
+    if (res.data?.code === 0) {
+      errors.value = normalizeList(res.data.data)
       return { fromCache: false }
     }
     throw new Error(res.data?.message || '获取错题数据失败')
+  }
+
+  const fetchCompletedErrors = async ({ skipIfLoaded = true } = {}) => {
+    if (skipIfLoaded && Array.isArray(completedErrors.value) && completedErrors.value.length > 0) {
+      return { fromCache: true }
+    }
+
+    const res = await api.get('/errors/completed')
+    if (res.data?.code === 0) {
+      completedErrors.value = normalizeList(res.data.data)
+      return { fromCache: false }
+    }
+    throw new Error(res.data?.message || '获取已完成错题失败')
+  }
+
+  const refreshAll = async () => {
+    await Promise.all([
+      fetchErrors({ skipIfLoaded: false }),
+      fetchCompletedErrors({ skipIfLoaded: false }),
+    ])
   }
 
   const addError = async (errorItem) => {
@@ -67,43 +107,56 @@ export const useErrorStore = defineStore('error', () => {
 
     const res = await api.post('/errors', payload)
     if (res.data?.code === 0 && res.data?.data) {
-      errors.value.unshift(res.data.data)
+      errors.value = [res.data.data, ...errors.value.filter((item) => Number(item.id) !== Number(res.data.data.id))]
+      if (res.data.data.levelId != null) {
+        completedErrors.value = completedErrors.value.filter(
+          (item) => Number(item.levelId) !== Number(res.data.data.levelId),
+        )
+      }
       return res.data.data
     }
 
     throw new Error(res.data?.message || '保存错题失败')
   }
 
-  const getAnalysis = async (errorItem) => {
-    try {
-      const payload = {
-        errorId: errorItem.id,
-        question: errorItem.question || '',
-        userAnswer: toStringList(errorItem.userAnswer),
-        description: errorItem.description || '',
-        difficulty: errorItem.difficulty || 'medium',
-        track: errorItem.track || 'algo',
-        solveRate: errorItem.solveRate || null,
-        avgTimeSeconds: errorItem.avgTimeSeconds || null,
-        userAttempts: errorItem.userAttempts || null,
-        relatedTopics: toStringList(errorItem.relatedTopics),
-        userLevel: errorItem.userLevel || 'beginner'
-      }
-
-      const res = await api.post('/error-analysis', payload, {
-        timeout: 60000
-      })
-      if (res.data?.code === 0) {
-        return {
-          analysis: res.data.data.analysis,
-          analysisData: res.data.data.analysisData
-        }
-      }
-      throw new Error(res.data?.message || 'AI 分析失败')
-    } catch (error) {
-      console.error('AI 分析接口调用失败:', error)
-      throw error
+  const completeError = async (errorId) => {
+    const numericId = Number(errorId)
+    const res = await api.post(`/errors/${numericId}/complete`)
+    if (res.data?.code === 0 && res.data?.data) {
+      const completedItem = res.data.data
+      errors.value = errors.value.filter((item) => Number(item.id) !== numericId)
+      completedErrors.value = dedupeByLevel(completedErrors.value, completedItem)
+      return completedItem
     }
+
+    throw new Error(res.data?.message || '归档已完成错题失败')
+  }
+
+  const getAnalysis = async (errorItem) => {
+    const payload = {
+      errorId: errorItem.id,
+      question: errorItem.question || '',
+      userAnswer: toStringList(errorItem.userAnswer),
+      description: errorItem.description || '',
+      difficulty: errorItem.difficulty || 'medium',
+      track: errorItem.track || 'algo',
+      solveRate: errorItem.solveRate || null,
+      avgTimeSeconds: errorItem.avgTimeSeconds || null,
+      userAttempts: errorItem.userAttempts || null,
+      relatedTopics: toStringList(errorItem.relatedTopics),
+      userLevel: errorItem.userLevel || 'beginner',
+    }
+
+    const res = await api.post('/error-analysis', payload, {
+      timeout: 60000,
+    })
+    if (res.data?.code === 0) {
+      return {
+        analysis: res.data.data.analysis,
+        analysisData: res.data.data.analysisData,
+      }
+    }
+    throw new Error(res.data?.message || 'AI 分析失败')
   }
 
   const markAnalysis = (errorId, analysis) => {
@@ -113,5 +166,16 @@ export const useErrorStore = defineStore('error', () => {
     item.analysis = analysis
   }
 
-  return { errors, hydrateErrorsFromLocal, fetchErrors, addError, getAnalysis, markAnalysis }
+  return {
+    errors,
+    completedErrors,
+    hydrateErrorsFromLocal,
+    fetchErrors,
+    fetchCompletedErrors,
+    refreshAll,
+    addError,
+    completeError,
+    getAnalysis,
+    markAnalysis,
+  }
 })

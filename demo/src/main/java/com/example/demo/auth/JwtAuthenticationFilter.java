@@ -59,6 +59,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } catch (JwtException | IllegalArgumentException ex) {
             SecurityContextHolder.clearContext();
+            // 记录详细错误到日志
+            System.err.println("[JWT Error] " + ex.getClass().getSimpleName() + ": " + ex.getMessage());
+            ex.printStackTrace();
             writeUnauthorized(response, "登录凭证无效或已过期");
         }
     }

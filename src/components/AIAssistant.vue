@@ -1,10 +1,13 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useUserStore } from '../stores/user'
+import { ElMessage } from 'element-plus'
 import api from '../api'
 import { withNonBlockingAuth } from '../api/requestOptions'
 
 const userStore = useUserStore()
+
+const emit = defineEmits(['planGenerated', 'planLoaded'])
 
 const props = defineProps({
   selectedTrack: {
@@ -33,6 +36,7 @@ const isTyping = ref(false)
 const isGenerating = ref(false)
 const isGenerated = ref(false)
 const chatContainerRef = ref(null)
+const textareaRef = ref(null)
 
 const errorAnalysis = ref({
   totalErrors: 0,
@@ -56,6 +60,10 @@ const learningPlan = ref({
   recommendations: [],
   generatedAt: null,
 })
+
+const currentTrackLabel = computed(
+  () => props.trackOptions.find((item) => item.value === props.selectedTrack)?.label || '算法思维赛道',
+)
 
 const quickPrompts = [
   { text: '分析我最近的错题', icon: '🔍' },
@@ -85,7 +93,7 @@ const getTaskTypeStyle = (type) => {
 
 const normalizeMessageContent = (content) => {
   if (typeof content === 'string') {
-    return content.length ? content : 'AI did not return any content. Please try again later.'
+    return content
   }
 
   if (content === null || content === undefined) {
@@ -199,26 +207,26 @@ const buildErrorAnalysisFromItems = (items = []) => {
 const buildFallbackErrorAnalysis = () => ({
   totalErrors: 23,
   categories: [
-    { name: 'Dynamic Programming', count: 8 },
-    { name: 'Graph', count: 6 },
-    { name: 'Binary Tree', count: 5 },
-    { name: 'String', count: 4 },
+    { name: '动态规划', count: 8 },
+    { name: '图论', count: 6 },
+    { name: '二叉树', count: 5 },
+    { name: '字符串', count: 4 },
   ],
   recentErrors: [
-    { title: 'Knapsack Problem', reason: 'State transition formula needs review.', time: '2h ago' },
-    { title: 'Shortest Path', reason: 'Boundary handling was missed.', time: 'Yesterday' },
-    { title: 'Tree Traversal', reason: 'Recursive stop condition was incorrect.', time: '2d ago' },
+    { title: '背包问题', reason: '状态转移方程需要复习', time: '2小时前' },
+    { title: '最短路径', reason: '边界条件处理遗漏', time: '昨天' },
+    { title: '树的遍历', reason: '递归终止条件错误', time: '2天前' },
   ],
-  improvementTrend: 'Dynamic Programming is improving, but Graph topics still need attention.',
+  improvementTrend: '动态规划正在进步，但图论部分仍需加强',
 })
 
 const buildFallbackStudyHabits = () => ({
   weeklyStudyTime: 12.5,
   averageTimePerQuestion: 25,
-  preferredTimeSlot: 'Evening',
+  preferredTimeSlot: '晚上',
   consistencyScore: 78,
-  strongTopics: ['Array', 'String', 'Linked List'],
-  weakTopics: ['Dynamic Programming', 'Graph'],
+  strongTopics: ['数组', '字符串', '链表'],
+  weakTopics: ['动态规划', '图论'],
 })
 
 const formatRelativeTime = (value) => {
@@ -298,6 +306,8 @@ const loadErrorAnalysis = async () => {
     const response = await api.get('/errors', withNonBlockingAuth())
     errorAnalysis.value = buildErrorAnalysisFromItems(response.data?.data)
   } catch (error) {
+    await finalizeStreamingMessage(assistantMessageIndex, '抱歉，服务暂时不可用，请稍后再试。')
+    return
     errorAnalysis.value = buildFallbackErrorAnalysis()
     return
     errorAnalysis.value = {
@@ -341,8 +351,47 @@ const loadStudyHabits = async () => {
   }
 }
 
-const generateLearningPlan = async () => {
+// 检查是否已有当前赛道的学习计划
+const checkExistingPlan = async () => {
+  if (!userStore.isLogin) return false
+  
+  try {
+    const response = await api.getCurrentLearningPlan(props.selectedTrack)
+    if (response.data?.code === 0 && response.data?.data) {
+      const planData = response.data.data
+      // 检查是否有有效的每日任务数据
+      if (planData.dailyTasks && planData.dailyTasks.length > 0) {
+        learningPlan.value = {
+          weekGoals: planData.weekGoals || [],
+          dailyTasks: planData.dailyTasks || [],
+          recommendations: planData.recommendations || [],
+          generatedAt: planData.generatedAt,
+        }
+        isGenerated.value = true
+        return true
+      }
+    }
+  } catch (error) {
+    console.warn('获取已有学习计划失败:', error)
+  }
+  return false
+}
+
+const generateLearningPlan = async (forceRegenerate = false) => {
   if (isGenerating.value) return
+
+  // 如果不是强制重新生成，先检查是否已有计划
+  if (!forceRegenerate) {
+    const hasExistingPlan = await checkExistingPlan()
+    if (hasExistingPlan) {
+      ElMessage.info({
+        message: '已加载保存的学习计划',
+        duration: 2000,
+        offset: 80,
+      })
+      return
+    }
+  }
 
   isGenerating.value = true
   isGenerated.value = false
@@ -354,16 +403,26 @@ const generateLearningPlan = async () => {
 
     const response = await api.generateLearningPlan({
       track: props.selectedTrack,
-      trackLabel: props.trackOptions.find(t => t.value === props.selectedTrack)?.label || '绠楁硶鎬濈淮璧涢亾',
+      trackLabel: props.trackOptions.find(t => t.value === props.selectedTrack)?.label || '算法思维赛道',
       weeklyGoal: props.weeklyGoal,
       weakAreas: studyHabits.value.weakTopics,
       strongAreas: studyHabits.value.strongTopics,
       errorTopics: errorAnalysis.value.categories.map((category) => category.name),
     })
 
+    return
+
     if (response.data?.data) {
       learningPlan.value = response.data.data
       isGenerated.value = true
+      ElMessage.success({
+        message: '学习计划已生成',
+        duration: 3000,
+        offset: 80,
+      })
+      
+      // 触发自定义事件，通知父组件学习计划已更新
+      emit('planGenerated', learningPlan.value)
     }
   } catch (error) {
     learningPlan.value = {
@@ -451,9 +510,64 @@ const switchSection = (section) => {
   activeSection.value = section
   if (section === 'errors' && errorAnalysis.value.totalErrors === 0) {
     loadErrorAnalysis()
-  } else if (section === 'plan' && !learningPlan.value.generatedAt && !isGenerating.value) {
+  } else if (section === 'plan' && !isGenerated.value && !isGenerating.value) {
+    // 切换到计划页面时，如果没有已生成的计划，则检查/加载已有计划或生成新计划
     generateLearningPlan()
   }
+}
+
+const getCurrentTimeLabel = () => new Date().toLocaleTimeString('zh-CN', {
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+const autoResizeTextarea = async () => {
+  await nextTick()
+  if (!textareaRef.value) {
+    return
+  }
+
+  textareaRef.value.style.height = 'auto'
+  textareaRef.value.style.height = `${Math.min(textareaRef.value.scrollHeight, 120)}px`
+}
+
+const buildChatHistory = () => chatMessages.value
+  .filter((item) => item?.role === 'user' || item?.role === 'assistant')
+  .slice(-8)
+  .map((item) => ({
+    role: item.role,
+    content: normalizeMessageContent(item.content),
+  }))
+
+const buildChatContext = () => ({
+  track: props.selectedTrack,
+  trackLabel: currentTrackLabel.value,
+  weeklyGoal: props.weeklyGoal,
+  weakTopics: studyHabits.value.weakTopics,
+  strongTopics: studyHabits.value.strongTopics,
+  totalErrors: errorAnalysis.value.totalErrors,
+  consistencyScore: studyHabits.value.consistencyScore,
+})
+
+const finalizeStreamingMessage = async (index, content) => {
+  if (!chatMessages.value[index]) {
+    return
+  }
+
+  chatMessages.value[index].content = normalizeMessageContent(content || '抱歉，我现在无法回答，请稍后再试。')
+  chatMessages.value[index].streaming = false
+  isTyping.value = false
+  await scrollToBottom()
+}
+
+const handleInputKeyDown = async (event) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault()
+    await sendMessage()
+    return
+  }
+
+  autoResizeTextarea()
 }
 
 const scrollToTop = () => {
@@ -472,44 +586,103 @@ const scrollToBottom = async () => {
   }
 }
 
+let scrollToBottomScheduled = false
+const scheduleScrollToBottom = () => {
+  if (scrollToBottomScheduled) {
+    return
+  }
+
+  scrollToBottomScheduled = true
+  requestAnimationFrame(async () => {
+    scrollToBottomScheduled = false
+    await scrollToBottom()
+  })
+}
+
 const sendMessage = async () => {
   const message = inputMessage.value.trim()
   if (!message || isTyping.value) return
 
+  const historyMessages = buildChatHistory()
+
   chatMessages.value.push({
     role: 'user',
     content: message,
-    time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    time: getCurrentTimeLabel(),
   })
 
   inputMessage.value = ''
   isTyping.value = true
+  await autoResizeTextarea()
+
+  chatMessages.value.push({
+    role: 'assistant',
+    content: '',
+    time: getCurrentTimeLabel(),
+    streaming: true,
+  })
+
+  const assistantMessageIndex = chatMessages.value.length - 1
+  let streamedContent = ''
 
   await scrollToBottom()
 
   try {
-    const response = await api.post('/ai/chat', {
+    await api.aiChatStream({
       message,
-      context: {
-        track: props.selectedTrack,
-        weeklyGoal: props.weeklyGoal,
-      },
+      messages: historyMessages,
+      context: buildChatContext(),
+    }, (chunk) => {
+      streamedContent += chunk
+      if (chatMessages.value[assistantMessageIndex]) {
+        chatMessages.value[assistantMessageIndex].content = streamedContent
+      }
+      scheduleScrollToBottom()
+    }, async () => {
+      await finalizeStreamingMessage(assistantMessageIndex, streamedContent)
+    }, async () => {
+      if (streamedContent) {
+        await finalizeStreamingMessage(assistantMessageIndex, streamedContent)
+        return
+      }
+
+      try {
+        const response = await api.aiChat({
+          message,
+          messages: historyMessages,
+          context: buildChatContext(),
+        })
+
+        const fallbackContent = extractAIResponseContent(
+          response,
+          '抱歉，我现在无法回答，请稍后再试。',
+        )
+        await finalizeStreamingMessage(assistantMessageIndex, fallbackContent)
+      } catch (error) {
+        await finalizeStreamingMessage(
+          assistantMessageIndex,
+          streamedContent || '抱歉，服务暂时不可用，请稍后再试。',
+        )
+      }
     })
+
+    return
 
     const aiContent = extractAIResponseContent(response, '抱歉，我现在无法回答，请稍后再试。')
 
-    chatMessages.value.push({
-      role: 'assistant',
-      content: aiContent,
-      time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-    })
+
   } catch (error) {
+    await finalizeStreamingMessage(assistantMessageIndex, '抱歉，服务暂时不可用，请稍后再试。')
+    return
     chatMessages.value.push({
       role: 'assistant',
       content: '抱歉，服务暂时不可用，请稍后再试。',
       time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
     })
   } finally {
+    if (chatMessages.value[assistantMessageIndex]) {
+      chatMessages.value[assistantMessageIndex].streaming = false
+    }
     isTyping.value = false
     await scrollToBottom()
   }
@@ -544,8 +717,13 @@ watch(() => userStore.isLogin, async (isLoggedIn) => {
 
 watch(activeSection, async (newSection) => {
   if (newSection === 'chat') {
+    await autoResizeTextarea()
     await scrollToBottom()
   }
+})
+
+watch(inputMessage, () => {
+  autoResizeTextarea()
 })
 </script>
 
@@ -768,7 +946,7 @@ watch(activeSection, async (newSection) => {
               </svg>
               保存计划
             </button>
-            <button class="plan-btn secondary" @click.stop="generateLearningPlan">
+            <button class="plan-btn secondary" @click.stop="generateLearningPlan(true)">
               重新生成
             </button>
           </div>
@@ -789,26 +967,26 @@ watch(activeSection, async (newSection) => {
             v-for="(msg, index) in chatMessages"
             :key="index"
             class="chat-message"
-            :class="msg.role"
+            :class="[msg.role, { streaming: msg.streaming }]"
           >
             <div class="message-avatar">
               <span>{{ msg.role === 'assistant' ? 'AI' : '我' }}</span>
             </div>
             <div class="message-body">
-              <div class="message-text" v-html="renderMessageContent(msg.content)"></div>
-              <div class="message-time">{{ msg.time }}</div>
-            </div>
-          </div>
-          <div v-if="isTyping" class="chat-message assistant typing">
-            <div class="message-avatar">
-              <span>AI</span>
-            </div>
-            <div class="message-body">
-              <div class="typing-dots">
+              <div
+                v-if="msg.streaming && !msg.content"
+                class="typing-indicator"
+              >
                 <span></span>
                 <span></span>
                 <span></span>
               </div>
+              <div
+                v-else
+                class="message-text"
+                v-html="msg.content ? renderMessageContent(msg.content) : ''"
+              ></div>
+              <div class="message-time">{{ msg.time }}</div>
             </div>
           </div>
         </div>
@@ -826,14 +1004,15 @@ watch(activeSection, async (newSection) => {
         </div>
 
         <div class="chat-input-area">
-          <input
+          <textarea
+            ref="textareaRef"
             v-model="inputMessage"
-            type="text"
+            rows="1"
             class="chat-input"
             placeholder="输入你的问题..."
-            @keyup.enter="sendMessage"
+            @keydown="handleInputKeyDown"
             @click.stop
-          />
+          ></textarea>
           <button
             class="send-btn"
             :disabled="!inputMessage.trim() || isTyping"
@@ -1277,16 +1456,17 @@ watch(activeSection, async (newSection) => {
 }
 
 /* 打字动画 */
-.typing-dots {
+.typing-indicator {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   padding: 12px 16px;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(14, 165, 233, 0.2);
   border-radius: 14px;
+  align-items: center;
 }
 
-.typing-dots span {
+.typing-indicator span {
   width: 8px;
   height: 8px;
   background: #0ea5e9;
@@ -1294,9 +1474,9 @@ watch(activeSection, async (newSection) => {
   animation: typingBounce 1.4s ease-in-out infinite;
 }
 
-.typing-dots span:nth-child(1) { animation-delay: 0s; }
-.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+.typing-indicator span:nth-child(1) { animation-delay: 0s; }
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
 
 @keyframes typingBounce {
   0%, 60%, 100% {
@@ -1322,8 +1502,14 @@ watch(activeSection, async (newSection) => {
   border: 1px solid rgba(14, 165, 233, 0.2);
   border-radius: 14px;
   font-size: 14px;
+  font-family: inherit;
+  line-height: 1.6;
   color: #334155;
   outline: none;
+  resize: none;
+  min-height: 48px;
+  max-height: 120px;
+  overflow-y: auto;
   transition: all 0.3s ease;
 }
 

@@ -10,6 +10,7 @@ import com.example.demo.repository.LevelRepository;
 import com.example.demo.repository.QuestionAttemptRepository;
 import com.example.demo.repository.UserProblemRecordRepository;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.service.AuthorLevelService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
@@ -32,18 +33,21 @@ public class UserController {
     private final QuestionAttemptRepository questionAttemptRepository;
     private final UserProblemRecordRepository userProblemRecordRepository;
     private final CurrentUserService currentUserService;
+    private final AuthorLevelService authorLevelService;
     private static final List<String> VALID_TRACKS = List.of("algo", "ds", "contest");
 
     public UserController(UserRepository userRepository,
             LevelRepository levelRepository,
             QuestionAttemptRepository questionAttemptRepository,
             UserProblemRecordRepository userProblemRecordRepository,
-            CurrentUserService currentUserService) {
+            CurrentUserService currentUserService,
+            AuthorLevelService authorLevelService) {
         this.userRepository = userRepository;
         this.levelRepository = levelRepository;
         this.questionAttemptRepository = questionAttemptRepository;
         this.userProblemRecordRepository = userProblemRecordRepository;
         this.currentUserService = currentUserService;
+        this.authorLevelService = authorLevelService;
     }
 
     @PutMapping("/me")
@@ -104,6 +108,7 @@ public class UserController {
 
         user.setUpdatedAt(OffsetDateTime.now());
         User updatedUser = userRepository.save(user);
+        updatedUser.setAuthorLevelProfile(authorLevelService.attachProfile(updatedUser));
         return Result.success(updatedUser);
     }
 
@@ -175,6 +180,9 @@ public class UserController {
         Long currentUserId = currentUserService.requireCurrentUserId();
 
         User user = userRepository.findById(currentUserId).orElse(null);
+        if (user != null) {
+            user.setAuthorLevelProfile(authorLevelService.attachProfile(user));
+        }
         LocalDate today = LocalDate.now();
         OffsetDateTime todayStart = today.atStartOfDay().atOffset(ZoneOffset.ofHours(8));
         OffsetDateTime tomorrowStart = today.plusDays(1).atStartOfDay().atOffset(ZoneOffset.ofHours(8));
@@ -211,8 +219,17 @@ public class UserController {
         stats.put("todaySolved", todaySolved);
         stats.put("weeklySolved", weeklySolved);
         stats.put("monthlySolved", monthlySolved);
+        stats.put("authorScore", user != null ? user.getAuthorScore() : 0);
+        stats.put("authorLevelCode", user != null ? user.getAuthorLevelCode() : "seed");
+        stats.put("authorLevelProfile", user != null ? user.getAuthorLevelProfile() : authorLevelService.buildFallbackProfile(null));
 
         return Result.success(stats);
+    }
+
+    @GetMapping("/me/author-level")
+    public Result<Map<String, Object>> getUserAuthorLevel() {
+        Long currentUserId = currentUserService.requireCurrentUserId();
+        return Result.success(authorLevelService.getAuthorLevelView(currentUserId));
     }
 
     @GetMapping("/me/activities")

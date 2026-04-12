@@ -4,8 +4,10 @@ import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/user'
 import { useLevelStore } from '../stores/level'
 import AvatarUpload from '../components/AvatarUpload.vue'
+import AuthorLevelBadge from '../components/AuthorLevelBadge.vue'
 import api from '../api'
 import { getFullFileUrl } from '../utils/file'
+import { normalizeAuthorLevelProfile } from '../constants/authorLevelThemes'
 
 const userStore = useUserStore()
 const levelStore = useLevelStore()
@@ -334,6 +336,53 @@ const levelTitle = computed(() => {
 })
 
 // 活动数据（从后端获取）
+const authorLevelData = ref({
+  profile: userStore.userInfo?.authorLevelProfile || null,
+  history: [],
+})
+
+const authorLevelProfile = computed(() =>
+  normalizeAuthorLevelProfile(
+    authorLevelData.value?.profile || userStore.userInfo?.authorLevelProfile,
+    userStore.userInfo?.authorLevelCode || userStore.userInfo?.authorLevel || 'Lv.1',
+  ),
+)
+
+const authorLevelHistory = computed(() => authorLevelData.value?.history || [])
+
+const authorLevelBreakdownItems = computed(() => {
+  const breakdown = authorLevelProfile.value?.breakdown || {}
+  return ['solving', 'posting', 'questionBank']
+    .map((key) => breakdown[key])
+    .filter(Boolean)
+})
+
+const authorLevelProgressWidth = computed(
+  () => `${Math.min(100, Math.max(0, Number(authorLevelProfile.value.progressPercent || 0)))}%`,
+)
+
+const fetchAuthorLevel = async () => {
+  try {
+    const response = await api.getUserAuthorLevel()
+    if (response.data?.code === 0) {
+      const data = response.data.data || {}
+      authorLevelData.value = {
+        profile: data.profile || null,
+        history: data.history || [],
+      }
+      if (data.profile) {
+        userStore.updateProfile({
+          authorLevelProfile: data.profile,
+          authorScore: Number(data.profile.score || 0),
+          authorLevelCode: data.profile.code || 'seed',
+        })
+      }
+    }
+  } catch (error) {
+    console.error('获取作者等级失败:', error)
+  }
+}
+
 const recentActivities = ref([])
 const activityPage = ref(1)
 const activityTotal = ref(0)
@@ -621,16 +670,18 @@ const handleSave = async () => {
 
     // 后端返回格式: { data: { code: 0, data: user } }
     if (response.data && response.data.code === 0) {
+      const updatedUser = response.data.data || {}
       userStore.updateProfile({
-        name: editForm.value.name,
-        bio: editForm.value.bio,
-        avatar: finalAvatar,
-        email: editForm.value.email,
-        gender: editForm.value.gender || 'unknown',
-        targetTrack: editForm.value.targetTrack || 'algo',
-        weeklyGoal,
-        github: editForm.value.github,
-        website: editForm.value.website
+        ...updatedUser,
+        name: updatedUser.name || editForm.value.name,
+        bio: updatedUser.bio ?? editForm.value.bio,
+        avatar: updatedUser.avatar ?? finalAvatar,
+        email: updatedUser.email ?? editForm.value.email,
+        gender: updatedUser.gender || editForm.value.gender || 'unknown',
+        targetTrack: updatedUser.targetTrack || editForm.value.targetTrack || 'algo',
+        weeklyGoal: Number(updatedUser.weeklyGoal || weeklyGoal),
+        github: updatedUser.github ?? editForm.value.github,
+        website: updatedUser.website ?? editForm.value.website
       })
       showEditModal.value = false
       showDetailEdit.value = false
@@ -712,6 +763,7 @@ onMounted(async () => {
       console.error('加载关卡失败:', error)
     }
   }
+  await fetchAuthorLevel()
   await fetchMyProblems()
   await fetchProblemStats()
   await fetchProblemHeatmap(contributionYear.value)
@@ -781,7 +833,7 @@ onMounted(async () => {
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
               <circle cx="12" cy="7" r="4" />
             </svg>
-            <span>{{ levelTitle }}</span>
+            <span>{{ authorLevelProfile.shortLabel }}</span>
           </div>
           <div class="detail-item">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -816,6 +868,43 @@ onMounted(async () => {
             <a v-if="profileWebsiteUrl" :href="profileWebsiteUrl" target="_blank" rel="noopener" class="profile-link">{{
               userStore.userInfo?.website }}</a>
             <span v-else>个人网站 未设置</span>
+          </div>
+        </div>
+
+        <div class="author-level-panel">
+          <div class="author-level-panel__head">
+            <span class="author-level-panel__eyebrow">Author Level</span>
+            <AuthorLevelBadge :profile="authorLevelProfile" size="lg" :show-score="true" />
+          </div>
+          <p class="author-level-panel__title">{{ authorLevelProfile.title }}</p>
+          <p class="author-level-panel__desc">{{ authorLevelProfile.description }}</p>
+
+          <div class="author-progress">
+            <div class="author-progress__meta">
+              <span>成长值 {{ authorLevelProfile.score }}</span>
+              <span v-if="authorLevelProfile.nextLevelMinScore">下一档 {{ authorLevelProfile.nextLevelMinScore }}</span>
+              <span v-else>已达最高档</span>
+            </div>
+            <div class="author-progress__track">
+              <span class="author-progress__fill" :style="{ width: authorLevelProgressWidth }"></span>
+            </div>
+          </div>
+
+          <div class="author-breakdown">
+            <div v-for="item in authorLevelBreakdownItems" :key="item.label" class="author-breakdown__item">
+              <span class="author-breakdown__name">{{ item.label }}</span>
+              <strong class="author-breakdown__score">{{ item.score }}</strong>
+            </div>
+          </div>
+
+          <div v-if="authorLevelHistory.length" class="author-history">
+            <div class="author-history__label">最近升级记录</div>
+            <div class="author-history__list">
+              <div v-for="item in authorLevelHistory.slice(0, 3)" :key="item.id" class="author-history__item">
+                <span>{{ item.note || item.triggerType }}</span>
+                <span>+{{ item.deltaScore }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </aside>
@@ -1634,6 +1723,131 @@ onMounted(async () => {
   gap: 8px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+}
+
+.author-level-panel {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(124, 58, 237, 0.1);
+  background:
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.18), transparent 38%),
+    linear-gradient(160deg, #ffffff 0%, #f8fafc 55%, #eef2ff 100%);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.06);
+}
+
+.author-level-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.author-level-panel__eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.author-level-panel__title {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.author-level-panel__desc {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #475569;
+}
+
+.author-progress {
+  margin-bottom: 14px;
+}
+
+.author-progress__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.author-progress__track {
+  width: 100%;
+  height: 10px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.author-progress__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7c3aed 0%, #06b6d4 100%);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.2);
+}
+
+.author-breakdown {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.author-breakdown__item {
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.author-breakdown__name {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.author-breakdown__score {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.author-history {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.4);
+}
+
+.author-history__label {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.author-history__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.author-history__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #334155;
 }
 
 .stat-item {
@@ -3117,6 +3331,10 @@ onMounted(async () => {
   }
 
   .repo-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .author-breakdown {
     grid-template-columns: 1fr;
   }
 

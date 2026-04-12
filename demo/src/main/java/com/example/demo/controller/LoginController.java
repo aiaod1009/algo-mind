@@ -4,6 +4,7 @@ import com.example.demo.Result;
 import com.example.demo.auth.JwtService;
 import com.example.demo.entity.User;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.service.AuthorLevelService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,13 +22,16 @@ public class LoginController {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final AuthorLevelService authorLevelService;
 
     public LoginController(UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            JwtService jwtService) {
+            JwtService jwtService,
+            AuthorLevelService authorLevelService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.authorLevelService = authorLevelService;
     }
 
     @PostMapping("/login")
@@ -49,6 +53,8 @@ public class LoginController {
             return Result.fail(40001, "账号或密码错误");
         }
 
+        user.setAuthorLevelProfile(authorLevelService.refreshAuthorLevel(user.getId(), "LOGIN", null, "登录刷新作者等级"));
+
         Map<String, Object> result = new HashMap<>();
         Map<String, Object> userInfo = new HashMap<>();
         userInfo.put("id", user.getId());
@@ -69,10 +75,16 @@ public class LoginController {
         userInfo.put("isBusy", user.getIsBusy());
         userInfo.put("busyAutoReply", user.getBusyAutoReply());
         userInfo.put("busyEndTime", user.getBusyEndTime());
+        userInfo.put("authorScore", user.getAuthorScore());
+        userInfo.put("authorLevelCode", user.getAuthorLevelCode());
+        userInfo.put("authorLevelProfile", user.getAuthorLevelProfile());
 
         result.put("token", jwtService.generateToken(user));
         result.put("user", userInfo);
         result.put("points", user.getPoints() != null ? user.getPoints() : 0);
+        result.put("authorScore", user.getAuthorScore() != null ? user.getAuthorScore() : 0);
+        result.put("authorLevelCode", user.getAuthorLevelCode());
+        result.put("authorLevelProfile", user.getAuthorLevelProfile());
 
         return Result.success(result);
     }
@@ -117,12 +129,15 @@ public class LoginController {
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(rawPassword));
         user.setPoints(0);
+        user.setAuthorScore(0);
+        user.setAuthorLevelCode("seed");
         user.setBio("Keep a steady pace.");
         user.setGender("unknown");
         user.setTargetTrack("algo");
         user.setWeeklyGoal(10);
         user.setCreatedAt(OffsetDateTime.now());
         user.setUpdatedAt(OffsetDateTime.now());
+        user.setAuthorLevelUpdatedAt(OffsetDateTime.now());
 
         userRepository.save(user);
 
@@ -130,6 +145,7 @@ public class LoginController {
         result.put("id", user.getId());
         result.put("name", user.getName());
         result.put("email", user.getEmail());
+        result.put("authorLevelCode", user.getAuthorLevelCode());
         return Result.success(result);
     }
 

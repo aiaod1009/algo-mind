@@ -4,6 +4,8 @@ import com.example.demo.entity.Level;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -23,4 +25,9 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     Page<Level> findByCreatorIdOrderByIdDesc(Long creatorId, Pageable pageable);
 
     long countByCreatorId(Long creatorId);
+
+    List<Level> findByCreatorId(Long creatorId);
+
+    @Query("select coalesce(sum(l.rewardPoints), 0) from Level l where l.creatorId = :creatorId")
+    Integer sumRewardPointsByCreatorId(@Param("creatorId") Long creatorId);
 }

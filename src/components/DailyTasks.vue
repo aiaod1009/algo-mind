@@ -1,5 +1,12 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+
+const props = defineProps({
+  learningPlan: {
+    type: Object,
+    default: null
+  }
+})
 
 const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 const today = new Date().getDay()
@@ -32,7 +39,8 @@ const getRandomColorScheme = () => {
   return colorSchemes[Math.floor(Math.random() * colorSchemes.length)]
 }
 
-const dailyTasks = {
+// 默认任务数据
+const defaultDailyTasks = {
   0: [ // 周一 - 基础算法
     { type: 'array', title: '数组基础练习', time: '08:30-09:30', duration: '1h' },
     { type: 'string', title: '字符串处理', time: '09:30-11:00', duration: '1.5h' },
@@ -72,7 +80,44 @@ const dailyTasks = {
   ],
 }
 
-const currentTasks = computed(() => dailyTasks[currentDayIndex.value] || [])
+// 类型映射：将中文类型转换为组件使用的key
+const typeMapping = {
+  '数组': 'array',
+  '字符串': 'string',
+  '动态规划': 'dp',
+  '二叉树': 'tree',
+  '图论': 'graph',
+  '排序': 'sort',
+  '贪心': 'greedy',
+  '复盘': 'review',
+}
+
+// 转换学习计划中的任务数据
+const convertLearningPlanTasks = (dailyTasks) => {
+  const converted = {}
+  dailyTasks.forEach((dayTask, index) => {
+    if (index < 7) {
+      converted[index] = dayTask.tasks.map(task => ({
+        type: typeMapping[task.type] || 'review',
+        title: task.title,
+        time: '09:00-10:30', // 默认时间，可以根据需要调整
+        duration: task.duration || '1.5h'
+      }))
+    }
+  })
+  return converted
+}
+
+// 计算当前显示的任务
+const currentTasks = computed(() => {
+  // 如果有传入的学习计划，使用学习计划的数据
+  if (props.learningPlan?.dailyTasks && props.learningPlan.dailyTasks.length > 0) {
+    const planTasks = convertLearningPlanTasks(props.learningPlan.dailyTasks)
+    return planTasks[currentDayIndex.value] || []
+  }
+  // 否则使用默认任务
+  return defaultDailyTasks[currentDayIndex.value] || []
+})
 
 const selectDay = (index) => {
   currentDayIndex.value = index

@@ -178,11 +178,26 @@ onUnmounted(() => {
   <div class="page-container levels-page">
     <h2 class="section-title">选关地图</h2>
 
-    <el-tabs v-model="activeTrack" class="track-tabs">
-      <el-tab-pane v-for="item in trackList" :key="item.code" :label="item.name" :name="item.code">
-        <div class="track-goal">目标：{{ item.goal }}</div>
-      </el-tab-pane>
-    </el-tabs>
+    <!-- 自定义标签导航 -->
+    <div class="custom-tabs">
+      <div class="tabs-nav">
+        <button
+          v-for="item in trackList"
+          :key="item.code"
+          class="tab-item"
+          :class="{ active: activeTrack === item.code }"
+          @click="activeTrack = item.code"
+        >
+          {{ item.name }}
+          <span v-if="activeTrack === item.code" class="tab-indicator"></span>
+        </button>
+      </div>
+      <div class="tab-content">
+        <div v-for="item in trackList" :key="item.code" v-show="activeTrack === item.code" class="track-goal">
+          目标：{{ item.goal }}
+        </div>
+      </div>
+    </div>
 
     <el-skeleton :loading="loading" animated :rows="6">
       <section class="surface-card pixel-stage">
@@ -848,5 +863,95 @@ onUnmounted(() => {
 .map-world.reduced-motion .progress-truck,
 .map-world.reduced-motion .truck-wheel {
   animation: none !important;
+}
+
+/* 自定义标签导航样式 */
+.custom-tabs {
+  margin-bottom: 20px;
+}
+
+.tabs-nav {
+  display: flex;
+  gap: 8px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(74, 111, 157, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.tab-item {
+  position: relative;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.tab-item:hover {
+  color: #4a6f9d;
+  background: rgba(74, 111, 157, 0.08);
+}
+
+.tab-item.active {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  font-weight: 600;
+}
+
+.tab-indicator {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #10b981;
+  animation: indicator-bounce 0.5s ease;
+}
+
+@keyframes indicator-bounce {
+  0% {
+    transform: translateX(-50%) translateY(-4px);
+    opacity: 0;
+  }
+  60% {
+    transform: translateX(-50%) translateY(2px);
+  }
+  100% {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+}
+
+.tab-content {
+  margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+  .tabs-nav {
+    gap: 4px;
+    padding: 3px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tabs-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-item {
+    padding: 8px 14px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
 }
 </style>

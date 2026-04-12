@@ -33,6 +33,8 @@ const loading = ref(false)
 const attemptsInRun = ref(0)
 const startTimestamp = ref(Date.now())
 const evaluationResult = ref(null)
+const evaluationStreamingText = ref('')
+const isEvaluatingStream = ref(false)
 const runResult = ref(null)
 const isAiDockExpanded = ref(false)
 
@@ -130,6 +132,88 @@ const normalizeEvaluationResult = (result) => {
   }
 }
 
+const buildEvaluationPayload = () => ({
+  code: String(answer.value || ''),
+  language: LANGUAGE_LABEL_MAP[language.value] || language.value,
+  question: currentLevel.value?.question,
+  description: currentLevel.value?.description,
+  stdinInput: stdinInput.value,
+})
+
+const parseEvaluationResponseContent = (content) => {
+  const rawText = String(content || '').trim()
+  if (!rawText) {
+    throw new Error('AI 未返回评测内容')
+  }
+
+  let jsonText = rawText
+  if (jsonText.startsWith('```json')) {
+    jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+  } else if (jsonText.startsWith('```')) {
+    jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '')
+  }
+
+  return normalizeEvaluationResult(JSON.parse(jsonText.trim()))
+}
+
+const JSON_SEPARATOR = '---JSON---'
+
+const extractTextBeforeJson = (text) => {
+  const separatorIndex = text.indexOf(JSON_SEPARATOR)
+  if (separatorIndex === -1) {
+    return text
+  }
+  return text.substring(0, separatorIndex).trim()
+}
+
+const extractJsonAfterSeparator = (text) => {
+  const separatorIndex = text.indexOf(JSON_SEPARATOR)
+  if (separatorIndex === -1) {
+    return text
+  }
+  return text.substring(separatorIndex + JSON_SEPARATOR.length).trim()
+}
+
+const requestStreamEvaluation = (payload) => new Promise((resolve, reject) => {
+  let fullText = ''
+
+  api.evaluateCodeStream(
+    payload,
+    (chunk) => {
+      fullText += chunk
+      evaluationStreamingText.value = extractTextBeforeJson(fullText)
+    },
+    async () => {
+      try {
+        const jsonText = extractJsonAfterSeparator(fullText) || fullText
+        const parsed = parseEvaluationResponseContent(jsonText)
+        resolve(parsed)
+      } catch (streamParseError) {
+        try {
+          const response = await api.evaluateCode(payload)
+          if (response.data?.code !== 0 || !response.data?.data) {
+            throw new Error(response.data?.message || '代码评测失败')
+          }
+          resolve(normalizeEvaluationResult(response.data.data))
+        } catch (fallbackError) {
+          reject(fallbackError)
+        }
+      }
+    },
+    async (streamError) => {
+      try {
+        const response = await api.evaluateCode(payload)
+        if (response.data?.code !== 0 || !response.data?.data) {
+          throw new Error(response.data?.message || '代码评测失败')
+        }
+        resolve(normalizeEvaluationResult(response.data.data))
+      } catch (fallbackError) {
+        reject(streamError || fallbackError)
+      }
+    },
+  )
+})
+
 const normalizeRunResult = (result) => {
   return {
     output: String(result?.output ?? '').trim(),
@@ -225,6 +309,8 @@ const initializeChallenge = async () => {
   attemptsInRun.value = 0
   startTimestamp.value = Date.now()
   evaluationResult.value = null
+  evaluationStreamingText.value = ''
+  isEvaluatingStream.value = false
   isAiDockExpanded.value = false
   runResult.value = null
   answer.value = createEmptyAnswer()
@@ -286,21 +372,37 @@ const syncCodeProgress = async () => {
   })
 }
 
-const submitCodeChallenge = async () => {
-  const response = await api.evaluateCode({
-    code: String(answer.value || ''),
-    language: LANGUAGE_LABEL_MAP[language.value] || language.value,
-    question: currentLevel.value.question,
-    description: currentLevel.value.description,
-    stdinInput: stdinInput.value,
-  })
+const refreshErrorBook = async () => {
+  try {
+    await errorStore.refreshAll()
+  } catch (syncError) {
+    console.warn('错题本状态刷新失败', syncError)
+  }
+}
 
-  if (response.data?.code !== 0 || !response.data?.data) {
+const submitCodeChallenge = async () => {
+  const payload = buildEvaluationPayload()
+
+  evaluationResult.value = null
+  evaluationStreamingText.value = ''
+  isEvaluatingStream.value = true
+  isAiDockExpanded.value = true
+
+  try {
+    evaluationResult.value = await requestStreamEvaluation(payload)
+  } catch (error) {
+    console.error('AI 代码评测失败。', error)
+    ElMessage.error('代码评测失败，请稍后重试')
+    return
+  } finally {
+    isEvaluatingStream.value = false
+  }
+
+  if (!evaluationResult.value) {
     ElMessage.error('代码评测失败，请稍后重试')
     return
   }
 
-  evaluationResult.value = normalizeEvaluationResult(response.data.data)
   evaluationResult.value.pointsEarned = 0
   isAiDockExpanded.value = true
 
@@ -313,7 +415,7 @@ const submitCodeChallenge = async () => {
         language: language.value,
         stdinInput: stdinInput.value,
       })
-      await errorStore.fetchErrors({ skipIfLoaded: false })
+      await refreshErrorBook()
     } catch (syncError) {
       console.warn('编程题错题落库失败。', syncError)
     }
@@ -331,6 +433,7 @@ const submitCodeChallenge = async () => {
     userStore.addPoints(progressResult.pointsEarned)
   }
 
+  await refreshErrorBook()
   evaluationResult.value.pointsEarned = progressResult.pointsEarned || 0
   removeDraft()
   ElMessage.success('代码评测通过，关卡进度已同步')
@@ -392,6 +495,7 @@ const submitStandardChallenge = async () => {
     userStore.addPoints(result.pointsEarned)
     removeDraft()
 
+    await refreshErrorBook()
     const starsEarned = result.starsEarned || 0
     const starsText = '★'.repeat(starsEarned) + '☆'.repeat(3 - starsEarned)
 
@@ -406,7 +510,7 @@ const submitStandardChallenge = async () => {
   }
 
   try {
-    await errorStore.fetchErrors({ skipIfLoaded: false })
+    await refreshErrorBook()
   } catch (syncError) {
     console.warn('错题本刷新失败。', syncError)
   }
@@ -435,7 +539,12 @@ const handleSubmit = async () => {
     }
   } catch (error) {
     console.error('提交异常。', error)
-    ElMessage.error('提交异常，请稍后重试')
+    // AI测评超时不显示错误提示，因为AI测评可能需要较长时间
+    if (error.code === 'ECONNABORTED') {
+      console.warn('AI测评请求超时，用户可以继续等待或重新提交')
+    } else {
+      ElMessage.error('提交异常，请稍后重试')
+    }
   } finally {
     loading.value = false
   }
@@ -453,12 +562,18 @@ const handleQuickRun = () => {
 const handleResetTemplate = () => {
   applyCodeTemplate(true)
   evaluationResult.value = null
+  evaluationStreamingText.value = ''
+  isEvaluatingStream.value = false
   isAiDockExpanded.value = false
   runResult.value = null
   ElMessage.success('已恢复当前语言的默认模板')
 }
 
 const openEvaluationDialog = () => {
+  if (isEvaluatingStream.value) {
+    isAiDockExpanded.value = true
+    return
+  }
   if (!hasEvaluationResult.value) {
     ElMessage.info('请先运行评测')
     return
@@ -480,6 +595,8 @@ watch(language, (nextLanguage, previousLanguage) => {
   }
 
   evaluationResult.value = null
+  evaluationStreamingText.value = ''
+  isEvaluatingStream.value = false
   isAiDockExpanded.value = false
   runResult.value = null
 
@@ -503,6 +620,16 @@ watch(
 
 <template>
   <div v-if="currentLevel" class="page-container challenge-page">
+    <!-- 浮动返回键 -->
+    <button class="floating-back-btn" @click="goBack" title="返回关卡列表">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5" />
+        <path d="M12 19l-7-7 7-7" />
+      </svg>
+      <span class="back-text">返回</span>
+    </button>
+
     <header class="challenge-top">
       <div class="title-wrap">
         <div class="top-kicker">Challenge</div>
@@ -547,8 +674,8 @@ watch(
         <div class="ai-dock-head">
           <h3>AI评估结果</h3>
           <span class="ai-status"
-            :class="{ passed: hasEvaluationResult && Number(evaluationSummary.scoreText) >= CODE_PASS_SCORE }">
-            {{ evaluationSummary.statusText }}
+            :class="{ passed: hasEvaluationResult && Number(evaluationSummary.scoreText) >= CODE_PASS_SCORE, loading: isEvaluatingStream }">
+            {{ isEvaluatingStream ? '分析中' : evaluationSummary.statusText }}
           </span>
         </div>
 
@@ -567,7 +694,7 @@ watch(
 
           <p class="ai-dock-tip">点击下方按钮查看完整代码评审与优化建议。</p>
 
-          <el-button type="primary" plain class="open-eval-btn" :disabled="!hasEvaluationResult"
+          <el-button type="primary" plain class="open-eval-btn" :disabled="!hasEvaluationResult && !isEvaluatingStream"
             @click="openEvaluationDialog">
             展开评估详情
           </el-button>
@@ -576,8 +703,13 @@ watch(
         <!-- 展开状态：显示完整评估内容 -->
         <template v-else>
           <div class="ai-dock-full-content">
-            <ChallengeEvaluationPanel v-if="hasEvaluationResult" :result="evaluationResult"
-              :pass-score="CODE_PASS_SCORE" />
+            <ChallengeEvaluationPanel
+              v-if="hasEvaluationResult || isEvaluatingStream"
+              :result="evaluationResult"
+              :pass-score="CODE_PASS_SCORE"
+              :loading="isEvaluatingStream"
+              :streaming-text="evaluationStreamingText"
+            />
           </div>
           <el-button type="primary" plain class="open-eval-btn" @click="openEvaluationDialog">
             收起评估详情
@@ -603,6 +735,64 @@ watch(
   padding-bottom: 28px;
   display: grid;
   gap: 16px;
+  position: relative;
+}
+
+/* 浮动返回键样式 - 固定在页面左上角 */
+.floating-back-btn {
+  position: fixed;
+  top: 100px;
+  left: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(74, 111, 157, 0.15);
+  border-radius: 10px;
+  cursor: pointer;
+  color: #4a6f9d;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 2px 12px rgba(74, 111, 157, 0.12);
+  backdrop-filter: blur(10px);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.floating-back-btn:hover {
+  transform: translateX(-3px);
+  background: #4a6f9d;
+  color: white;
+  box-shadow: 0 4px 20px rgba(74, 111, 157, 0.3);
+}
+
+.floating-back-btn:active {
+  transform: translateX(-1px) scale(0.97);
+}
+
+.back-text {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  letter-spacing: 0.3px;
+}
+
+@media (max-width: 980px) {
+  .floating-back-btn {
+    top: 92px;
+    left: 16px;
+    padding: 6px 10px;
+  }
+  
+  .back-text {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .floating-back-btn {
+    top: 88px;
+    left: 12px;
+  }
 }
 
 .challenge-top {
@@ -644,7 +834,7 @@ watch(
 }
 
 .challenge-layout.with-ai-dock {
-  grid-template-columns: 300px minmax(0, 1fr) 320px;
+  grid-template-columns: 280px minmax(0, 1fr) minmax(280px, 25%);
 }
 
 .workspace-layout {
@@ -700,6 +890,11 @@ watch(
   background: #dcfce7;
 }
 
+.ai-status.loading {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
 .ai-dock-meta {
   display: grid;
   gap: 8px;
@@ -738,13 +933,15 @@ watch(
   transition: all 0.3s ease;
   max-height: 300px;
   overflow: hidden;
+  width: 100%;
 }
 
 .ai-dock.expanded {
   max-height: calc(100vh - 200px);
   overflow-y: auto;
   grid-column: 3;
-  width: 520px;
+  width: 100%;
+  min-width: 0;
 }
 
 .ai-dock-full-content {
@@ -813,12 +1010,20 @@ watch(
 
 @media (max-width: 1200px) {
   .challenge-layout.with-ai-dock {
-    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-columns: 260px minmax(0, 1fr);
   }
 
   .ai-dock {
     grid-column: 1 / -1;
     position: static;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .ai-dock.expanded {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: 100%;
   }
 }
 
@@ -827,21 +1032,304 @@ watch(
     grid-template-columns: 1fr;
   }
 
+  .challenge-layout.with-ai-dock {
+    grid-template-columns: 1fr;
+  }
+
   .top-title {
     font-size: 24px;
+  }
+
+  .challenge-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .top-action-group {
+    width: 100%;
+  }
+
+  .top-action-group .el-button {
+    flex: 1;
+  }
+
+  .ai-dock.expanded {
+    width: 100%;
+    max-width: 100%;
+    max-height: 80vh;
+    grid-column: 1;
+  }
+
+  .workspace-layout {
+    min-width: 0;
   }
 }
 
 @media (max-width: 720px) {
-
-  .challenge-top,
-  .action-row {
-    flex-direction: column;
-    align-items: stretch;
+  .challenge-page {
+    gap: 12px;
+    padding-bottom: 80px;
   }
 
-  .top-action-group {
-    justify-content: stretch;
+  .challenge-top {
+    padding: 0 8px;
+  }
+
+  .top-title {
+    font-size: 20px;
+  }
+
+  .top-kicker {
+    font-size: 11px;
+  }
+
+  .challenge-layout,
+  .challenge-layout.with-ai-dock {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .task-panel {
+    padding: 12px;
+  }
+
+  .task-panel h3 {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+
+  .task-name {
+    font-size: 16px;
+  }
+
+  .task-rule {
+    font-size: 12px;
+  }
+
+  .task-desc {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .task-tags {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .workspace-layout {
+    gap: 10px;
+  }
+
+  .answer-pane {
+    padding: 12px;
+  }
+
+  .editor-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .toolbar-left {
+    font-size: 11px;
+  }
+
+  .toolbar-right {
+    font-size: 10px;
+    opacity: 0.7;
+  }
+
+  .topbar-right span {
+    display: none;
+  }
+
+  .topbar-right span:first-child {
+    display: inline;
+  }
+
+  .stdin-box {
+    padding: 10px;
+  }
+
+  .stdin-title {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  .editor-help {
+    font-size: 11px;
+    padding: 8px 10px;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .editor-footer {
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .footer-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .footer-actions .el-button {
+    flex: 1;
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+
+  .action-row {
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.95);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.1);
+    z-index: 50;
+  }
+
+  .action-row .el-button {
+    width: 100%;
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  .ai-dock {
+    padding: 10px;
+  }
+
+  .ai-dock-head h3 {
+    font-size: 16px;
+  }
+
+  .ai-status {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .ai-dock.expanded {
+    max-height: 60vh;
+    width: 100%;
+    max-width: 100%;
+    grid-column: 1;
+  }
+
+  .eval-panel {
+    padding: 10px;
+    font-size: 13px;
+  }
+
+  .eval-title {
+    font-size: 14px;
+  }
+
+  .eval-score-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .eval-score-row .score {
+    font-size: 20px;
+  }
+
+  .eval-section-title {
+    font-size: 12px;
+    margin-top: 10px;
+  }
+
+  .eval-pre,
+  .eval-analysis {
+    font-size: 11px;
+    padding: 8px;
+    min-height: 60px;
+  }
+
+  .eval-detail {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .eval-suggestions {
+    font-size: 12px;
+    padding-left: 16px;
+  }
+
+  .eval-suggestions li {
+    margin: 4px 0;
+    line-height: 1.4;
+  }
+
+  .open-eval-btn {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .floating-back-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+    top: 80px;
+    left: 12px;
+  }
+
+  .floating-back-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .challenge-page {
+    width: 100vw;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .top-title {
+    font-size: 18px;
+  }
+
+  .task-name {
+    font-size: 15px;
+  }
+
+  .task-rule {
+    font-size: 11px;
+  }
+
+  .editor-stage {
+    min-height: 280px !important;
+  }
+
+  .editor-stage > div > div {
+    height: 280px !important;
+  }
+
+  .ai-dock-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ai-dock-head h3 {
+    width: 100%;
+  }
+
+  .stars {
+    font-size: 16px;
+  }
+
+  .eval-meta {
+    font-size: 11px;
   }
 }
 </style>

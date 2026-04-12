@@ -1,7 +1,15 @@
 package com.example.demo.entity;
 
-import jakarta.persistence.*;
+import com.example.demo.author.AuthorLevelProfile;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.Data;
+
 import java.time.OffsetDateTime;
 
 @Data
@@ -16,10 +24,12 @@ public class User {
     private String email;
     private String password;
     private Integer points;
+    private Integer authorScore;
+    private String authorLevelCode;
     private String bio;
     private String gender;
 
-    @Column(columnDefinition = "TEXT")
+    @jakarta.persistence.Column(columnDefinition = "TEXT")
     private String avatar;
 
     private String targetTrack;
@@ -32,23 +42,14 @@ public class User {
     private Boolean isBusy;
     private String busyAutoReply;
     private OffsetDateTime busyEndTime;
+    private OffsetDateTime authorLevelUpdatedAt;
 
-    // 社交链接
     private String github;
     private String website;
 
-    /**
-     * 获取用户等级（根据积分计算）
-     * Lv.1: 0-100分
-     * Lv.2: 101-300分
-     * Lv.3: 301-600分
-     * Lv.4: 601-1000分
-     * Lv.5: 1001-1500分
-     * Lv.6: 1501-2100分
-     * Lv.7: 2101-2800分
-     * Lv.8: 2801-3600分
-     * Lv.9: 3601分以上
-     */
+    @Transient
+    private AuthorLevelProfile authorLevelProfile;
+
     public String getLevel() {
         int p = points != null ? points : 0;
         if (p >= 3601) return "Lv.9";
@@ -60,5 +61,27 @@ public class User {
         if (p >= 301) return "Lv.3";
         if (p >= 101) return "Lv.2";
         return "Lv.1";
+    }
+
+    @PrePersist
+    public void prePersist() {
+        if (points == null) {
+            points = 0;
+        }
+        if (authorScore == null) {
+            authorScore = 0;
+        }
+        if (authorLevelCode == null || authorLevelCode.isBlank()) {
+            authorLevelCode = "seed";
+        }
+        if (createdAt == null) {
+            createdAt = OffsetDateTime.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = OffsetDateTime.now();
+        }
+        if (authorLevelUpdatedAt == null) {
+            authorLevelUpdatedAt = OffsetDateTime.now();
+        }
     }
 }

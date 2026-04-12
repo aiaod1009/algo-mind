@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from './stores/user'
 import { getTrackLabel } from './constants'
+import AppFooter from './components/AppFooter.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -186,12 +187,21 @@ const clearNavSearch = () => {
     <main :class="['app-main', { 'with-topbar': showTopbar }]">
       <RouterView />
     </main>
+
+    <!-- 页脚 -->
+    <AppFooter />
   </div>
 </template>
 
 <style scoped>
 .app-shell {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1;
 }
 
 .topbar {

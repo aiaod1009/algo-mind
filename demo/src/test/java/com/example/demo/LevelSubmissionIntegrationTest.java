@@ -4,6 +4,7 @@ import com.example.demo.entity.ErrorItem;
 import com.example.demo.entity.Level;
 import com.example.demo.entity.QuestionAttempt;
 import com.example.demo.entity.User;
+import com.example.demo.repository.CompletedErrorItemRepository;
 import com.example.demo.repository.ErrorItemRepository;
 import com.example.demo.repository.LevelRepository;
 import com.example.demo.repository.QuestionAttemptRepository;
@@ -51,6 +52,9 @@ class LevelSubmissionIntegrationTest {
 
     @Autowired
     private ErrorItemRepository errorItemRepository;
+
+    @Autowired
+    private CompletedErrorItemRepository completedErrorItemRepository;
 
     @Autowired
     private QuestionAttemptRepository questionAttemptRepository;
@@ -153,17 +157,25 @@ class LevelSubmissionIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.correct").value(true))
-                .andExpect(jsonPath("$.data.pointsEarned").value(20))
+                .andExpect(jsonPath("$.data.pointsEarned").value(10))
                 .andExpect(jsonPath("$.data.latestStatus").value("CORRECT"));
 
         assertThat(errorItemRepository.findByUserIdAndLevelId(testUser.getId(), testLevel.getId())).isEmpty();
+        assertThat(completedErrorItemRepository.findByUserIdAndLevelId(testUser.getId(), testLevel.getId()))
+                .isPresent()
+                .get()
+                .satisfies(item -> {
+                    assertThat(item.getQuestion()).isEqualTo(testLevel.getQuestion());
+                    assertThat(item.getCorrectAnswer()).isEqualTo("B");
+                    assertThat(item.getCompletedAt()).isNotNull();
+                });
 
         QuestionAttempt attempt = questionAttemptRepository.findByUserIdAndLevelId(testUser.getId(), testLevel.getId()).orElseThrow();
         assertThat(attempt.getLatestStatus()).isEqualTo("CORRECT");
         assertThat(attempt.getSubmitCount()).isEqualTo(2);
 
         User refreshedUser = userRepository.findById(testUser.getId()).orElseThrow();
-        assertThat(refreshedUser.getPoints()).isEqualTo(20);
+        assertThat(refreshedUser.getPoints()).isEqualTo(10);
     }
 
     private String loginAndGetToken() throws Exception {

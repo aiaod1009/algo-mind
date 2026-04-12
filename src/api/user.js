@@ -3,6 +3,128 @@ import { withNonBlockingAuth } from './requestOptions'
 
 const AI_TIMEOUT = 60000
 const LONG_TIMEOUT = 30000
+const VERY_LONG_TIMEOUT = 120000
+
+const getStreamHeaders = () => {
+  const headers = {
+    'Content-Type': 'application/json',
+  }
+
+  const userRaw = localStorage.getItem('user')
+  if (!userRaw) {
+    return headers
+  }
+
+  try {
+    const token = JSON.parse(userRaw)?.token
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+  } catch (error) {
+    console.warn('解析用户 token 失败，流式请求将继续匿名发送。', error)
+  }
+
+  return headers
+}
+
+const extractSsePayload = (block) => {
+  if (!block) {
+    return null
+  }
+
+  const payload = block
+    .split('\n')
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).replace(/^ /, ''))
+    .join('\n')
+
+  if (!payload || payload === '[DONE]') {
+    return null
+  }
+
+  return payload
+}
+
+const streamRequest = async (url, data, onMessage, onComplete, onError) => {
+  let hasDeliveredContent = false
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: getStreamHeaders(),
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(errorText || `请求失败，状态码：${response.status}`)
+    }
+
+    const reader = response.body?.getReader()
+    if (!reader) {
+      throw new Error('当前环境不支持流式读取')
+    }
+
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    let sseMode = null
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+
+      const chunk = decoder.decode(value, { stream: true }).replace(/\r/g, '')
+      buffer += chunk
+
+      if (sseMode === null) {
+        sseMode = buffer.startsWith('data:') || buffer.includes('\ndata:') || buffer.includes('event:')
+      }
+
+      if (!sseMode) {
+        hasDeliveredContent = true
+        await onMessage?.(chunk)
+        buffer = ''
+        continue
+      }
+
+      let separatorIndex = buffer.indexOf('\n\n')
+      while (separatorIndex !== -1) {
+        const eventBlock = buffer.slice(0, separatorIndex)
+        buffer = buffer.slice(separatorIndex + 2)
+        const payload = extractSsePayload(eventBlock)
+        if (payload !== null) {
+          hasDeliveredContent = true
+          await onMessage?.(payload)
+        }
+        separatorIndex = buffer.indexOf('\n\n')
+      }
+    }
+
+    if (buffer.length > 0) {
+      if (sseMode) {
+        const payload = extractSsePayload(buffer)
+        if (payload !== null) {
+          hasDeliveredContent = true
+          await onMessage?.(payload)
+        }
+      } else {
+        hasDeliveredContent = true
+        await onMessage?.(buffer)
+      }
+    }
+
+    await onComplete?.()
+  } catch (error) {
+    console.error('AI 流式请求出错：', error)
+    if (hasDeliveredContent) {
+      await onComplete?.()
+      return
+    }
+    await onError?.(error)
+  }
+}
 
 export const userApi = {
   getUserProblemHeatmap(year) {
@@ -11,6 +133,10 @@ export const userApi = {
 
   getUserProblemStats() {
     return api.get('/users/me/stats')
+  },
+
+  getUserAuthorLevel() {
+    return api.get('/users/me/author-level')
   },
 
   getUserActivities(params = {}) {
@@ -38,7 +164,7 @@ export const userApi = {
   },
 
   deleteUserError(errorId) {
-    return api.delete(`/errors/${errorId}`)
+    return api.delete(`/errors/${Number(errorId)}`)
   },
 
   getUserRanking() {
@@ -76,7 +202,7 @@ export const userApi = {
     return api.post(
       '/learning-plans/generate',
       data,
-      withNonBlockingAuth({ timeout: AI_TIMEOUT }),
+      withNonBlockingAuth({ timeout: VERY_LONG_TIMEOUT }),
     )
   },
 
@@ -109,8 +235,16 @@ export const userApi = {
     return api.post('/ai/chat', data, withNonBlockingAuth({ timeout: AI_TIMEOUT }))
   },
 
+  aiChatStream(data, onMessage, onComplete, onError) {
+    return streamRequest('/api/ai/chat/stream', data, onMessage, onComplete, onError)
+  },
+
   evaluateCode(data) {
     return api.post('/ai/evaluate-code', data, { timeout: AI_TIMEOUT })
+  },
+
+  evaluateCodeStream(data, onMessage, onComplete, onError) {
+    return streamRequest('/api/ai/evaluate-code/stream', data, onMessage, onComplete, onError)
   },
 
   runCode(data) {

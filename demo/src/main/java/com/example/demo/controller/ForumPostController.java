@@ -10,6 +10,7 @@ import com.example.demo.repository.ForumCommentRepository;
 import com.example.demo.repository.ForumPostRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.repository.UserPostLikeRepository;
+import com.example.demo.service.AuthorLevelService;
 import com.example.demo.util.IpLocation;
 import com.example.demo.util.IpLocationUtil;
 import jakarta.servlet.http.HttpServletRequest;
@@ -43,19 +44,22 @@ public class ForumPostController {
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
     private final IpLocationUtil ipLocationUtil;
+    private final AuthorLevelService authorLevelService;
 
     public ForumPostController(ForumPostRepository forumPostRepository,
             ForumCommentRepository forumCommentRepository,
             UserPostLikeRepository userPostLikeRepository,
             UserRepository userRepository,
             CurrentUserService currentUserService,
-            IpLocationUtil ipLocationUtil) {
+            IpLocationUtil ipLocationUtil,
+            AuthorLevelService authorLevelService) {
         this.forumPostRepository = forumPostRepository;
         this.forumCommentRepository = forumCommentRepository;
         this.userPostLikeRepository = userPostLikeRepository;
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
         this.ipLocationUtil = ipLocationUtil;
+        this.authorLevelService = authorLevelService;
     }
 
     @GetMapping("/forum-posts")
@@ -79,6 +83,7 @@ public class ForumPostController {
             post.setLiked(likedPostIds.contains(post.getId()));
             fillPostAvatarIfMissing(post);
         });
+        authorLevelService.attachProfilesToPosts(posts);
 
         Map<String, Object> responseData = new HashMap<>();
         responseData.put("list", posts);
@@ -101,15 +106,17 @@ public class ForumPostController {
                 .orElse(false);
         post.setLiked(liked);
         fillPostAvatarIfMissing(post);
+        authorLevelService.attachProfilesToPosts(List.of(post));
         return Result.success(post);
     }
 
     @PostMapping("/forum-posts")
     public Result<ForumPost> publishPost(@RequestBody ForumPost forumPost, HttpServletRequest request) {
         User currentUser = currentUserService.requireCurrentUserEntity();
+        currentUser.setAuthorLevelProfile(authorLevelService.attachProfile(currentUser));
         forumPost.setUserId(currentUser.getId());
         forumPost.setAuthor(currentUser.getName());
-        forumPost.setAuthorLevel(currentUser.getLevel());
+        forumPost.setAuthorLevel(currentUser.getAuthorLevelProfile().getShortLabel());
         forumPost.setAvatar(currentUser.getAvatar());
 
         if (!StringUtils.hasText(forumPost.getTopic())) {
@@ -133,6 +140,13 @@ public class ForumPostController {
         }
 
         ForumPost savedPost = forumPostRepository.save(forumPost);
+        var profile = authorLevelService.refreshAuthorLevel(currentUser.getId(),
+                "FORUM_POST_CREATED",
+                savedPost.getId(),
+                "发布帖子");
+        savedPost.setAuthorLevel(profile.getShortLabel());
+        savedPost.setAuthorLevelProfile(profile);
+        forumPostRepository.save(savedPost);
         savedPost.setLiked(false);
         return Result.success(savedPost);
     }
@@ -164,6 +178,12 @@ public class ForumPostController {
 
                 post.setLikes(defaultInt(post.getLikes()) + 1);
                 forumPostRepository.save(post);
+                if (post.getUserId() != null) {
+                    authorLevelService.refreshAuthorLevel(post.getUserId(),
+                            "FORUM_POST_LIKED",
+                            post.getId(),
+                            "帖子收到点赞");
+                }
             }
             return Result.success(buildLikeResponse(post.getLikes(), true));
         }
@@ -172,6 +192,12 @@ public class ForumPostController {
             userPostLikeRepository.deleteByUserIdAndPostId(currentUserId, id);
             post.setLikes(Math.max(0, defaultInt(post.getLikes()) - 1));
             forumPostRepository.save(post);
+            if (post.getUserId() != null) {
+                authorLevelService.refreshAuthorLevel(post.getUserId(),
+                        "FORUM_POST_UNLIKED",
+                        post.getId(),
+                        "帖子点赞数更新");
+            }
         }
         return Result.success(buildLikeResponse(post.getLikes(), false));
     }
@@ -187,6 +213,12 @@ public class ForumPostController {
 
         post.setComments(defaultInt(post.getComments()) + 1);
         forumPostRepository.save(post);
+        if (post.getUserId() != null) {
+            authorLevelService.refreshAuthorLevel(post.getUserId(),
+                    "FORUM_POST_COMMENTED",
+                    post.getId(),
+                    "帖子评论数更新");
+        }
 
         Map<String, Object> responseData = new HashMap<>();
         responseData.put("comments", post.getComments());
@@ -223,6 +255,7 @@ public class ForumPostController {
         List<ForumComment> pageComments = start < allComments.size()
                 ? allComments.subList(start, end)
                 : List.of();
+        authorLevelService.attachProfilesToComments(pageComments);
 
         Map<String, Object> responseData = new HashMap<>();
         responseData.put("list", pageComments);
@@ -238,6 +271,7 @@ public class ForumPostController {
             return Result.fail(40401, "帖子不存在");
         }
         List<ForumComment> hotComments = forumCommentRepository.findTop3ByPostIdOrderByLikesDesc(id);
+        authorLevelService.attachProfilesToComments(hotComments);
         return Result.success(hotComments);
     }
 
@@ -254,10 +288,11 @@ public class ForumPostController {
         }
 
         User currentUser = currentUserService.requireCurrentUserEntity();
+        currentUser.setAuthorLevelProfile(authorLevelService.attachProfile(currentUser));
         comment.setPostId(id);
         comment.setUserId(currentUser.getId());
         comment.setAuthor(currentUser.getName());
-        comment.setAuthorLevel(currentUser.getLevel());
+        comment.setAuthorLevel(currentUser.getAuthorLevelProfile().getShortLabel());
         comment.setAvatar(currentUser.getAvatar());
         if (comment.getLikes() == null) {
             comment.setLikes(0);
@@ -269,6 +304,13 @@ public class ForumPostController {
         ForumComment savedComment = forumCommentRepository.save(comment);
         post.setComments(defaultInt(post.getComments()) + 1);
         forumPostRepository.save(post);
+        savedComment.setAuthorLevelProfile(currentUser.getAuthorLevelProfile());
+        if (post.getUserId() != null) {
+            authorLevelService.refreshAuthorLevel(post.getUserId(),
+                    "FORUM_POST_COMMENTED",
+                    post.getId(),
+                    "帖子收到评论");
+        }
         return Result.success(savedComment);
     }
 

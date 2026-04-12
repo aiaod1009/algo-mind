@@ -50,6 +50,7 @@ export const useUserStore = defineStore('user', () => {
 
   const avatar = computed(() => getAvatarUrl(userInfo.value?.avatar))
   const isLogin = computed(() => !!userInfo.value)
+  const isLoggedIn = computed(() => !!userInfo.value)
 
   const syncLeaderboard = (payloadUser, payloadPoints) => {
     if (!payloadUser?.id) return
@@ -178,6 +179,7 @@ export const useUserStore = defineStore('user', () => {
     selectedTrack,
     avatar,
     isLogin,
+    isLoggedIn,
     login,
     logout,
     addPoints,
