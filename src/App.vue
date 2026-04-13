@@ -84,10 +84,21 @@ const clearNavSearch = () => {
   navSearchKeyword.value = ''
   navSearchExpanded.value = false
 }
+
+const isDark = ref(localStorage.getItem('theme') === 'dark')
+const toggleTheme = () => {
+  isDark.value = !isDark.value
+  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+  if (isDark.value) {
+    document.body.classList.add('dark-theme')
+  } else {
+    document.body.classList.remove('dark-theme')
+  }
+}
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'dark-mode': isDark }">
     <header v-if="showTopbar" class="topbar">
       <div class="page-container topbar-inner">
         <div class="brand" @click="handleMenuSelect('/home')">
@@ -141,6 +152,22 @@ const clearNavSearch = () => {
           </div>
         </div>
         <div class="actions">
+          <button class="theme-toggle-btn" @click="toggleTheme" :title="isDark ? '切换白昼模式' : '切换夜间模式'">
+            <svg v-if="!isDark" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5" />
+              <line x1="12" y1="1" x2="12" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="23" />
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+              <line x1="1" y1="12" x2="3" y2="12" />
+              <line x1="21" y1="12" x2="23" y2="12" />
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+            </svg>
+          </button>
           <el-tag type="success" effect="light">积分 {{ userStore.points }}</el-tag>
           <el-dropdown trigger="click" @command="handleUserCommand">
             <div class="user-entry">
@@ -198,12 +225,45 @@ const clearNavSearch = () => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.65)), url('@/assets/background.jpg');
+  background-image: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.65)), url('@/assets/background.jpg');
   background-size: cover;
   background-position: center top;
   background-attachment: fixed;
-  background-repeat: no-repeat;
+  background-repeat: no-repeat;  transition: background-image 0.5s ease;
 }
+
+.app-shell.dark-mode {
+  background-image: linear-gradient(rgba(15, 23, 42, 0.4), rgba(15, 23, 42, 0.4)), url('@/assets/background1.jpg');
+}
+
+.theme-toggle-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  margin-right: 8px;
+}
+
+.theme-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #3b82f6;
+  transform: scale(1.1);
+}
+
+.app-shell.dark-mode .theme-toggle-btn {
+  color: #cbd5e1;
+}
+
+.app-shell.dark-mode .theme-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fcd34d;}
 
 .app-main {
   flex: 1;
