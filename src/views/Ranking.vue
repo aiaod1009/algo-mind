@@ -291,7 +291,7 @@ const statsData = computed(() => [
   position: relative;
   overflow: hidden;
   min-height: 100vh;
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 50%, #f8fafc 100%);
+  background: transparent;
 }
 
 .page-header {
