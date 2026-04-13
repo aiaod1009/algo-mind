@@ -368,52 +368,70 @@ onMounted(async () => {
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 32px;
-  gap: 24px;
+  background: white;
+  padding: 24px 32px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
 .page-title {
   font-size: 28px;
   font-weight: 700;
   color: #1e293b;
-  margin: 0;
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-title::before {
+  content: '';
+  display: block;
+  width: 4px;
+  height: 24px;
+  background: #3b82f6;
+  border-radius: 2px;
 }
 
 .page-desc {
+  font-size: 15px;
   color: #64748b;
-  margin: 8px 0 0;
-  font-size: 14px;
+  margin: 0;
 }
 
 .track-filter {
   display: flex;
   gap: 8px;
-  flex-shrink: 0;
+  background: #f8fafc;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 }
 
 .filter-btn {
-  padding: 10px 20px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 24px;
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: #475569;
+  color: #64748b;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .filter-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  color: #334155;
+  background: #f1f5f9;
 }
 
 .filter-btn.active {
-  background: linear-gradient(135deg, #4a6f9d 0%, #6672cb 100%);
-  border-color: transparent;
+  background: #3b82f6;
   color: white;
-  box-shadow: 0 2px 8px rgba(74, 111, 157, 0.25);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
 }
 
 .ai-recommend-section {
