@@ -85,21 +85,19 @@ const clearNavSearch = () => {
   navSearchExpanded.value = false
 }
 
-const themeIndex = ref(parseInt(localStorage.getItem('themeIndex') || '1', 10))
+const themeIndex = ref(parseInt(localStorage.getItem('themeIndex') || '2', 10))
+if (themeIndex.value < 2 || themeIndex.value > 6) {
+  themeIndex.value = 2
+}
+
 const toggleTheme = () => {
-  themeIndex.value = themeIndex.value >= 6 ? 1 : themeIndex.value + 1
+  themeIndex.value = themeIndex.value >= 6 ? 2 : themeIndex.value + 1
   localStorage.setItem('themeIndex', themeIndex.value.toString())
-  // optionally toggle global classes if needed by other components
-  if (themeIndex.value > 3) {
-    document.body.classList.add('dark-theme')
-  } else {
-    document.body.classList.remove('dark-theme')
-  }
 }
 </script>
 
 <template>
-  <div :class="['app-shell', `theme-${themeIndex}`, { 'dark-theme': themeIndex > 3 }]">
+  <div :class="['app-shell', `theme-${themeIndex}`]">
     <header v-if="showTopbar" class="topbar">
       <div class="page-container topbar-inner">
         <div class="brand" @click="handleMenuSelect('/home')">
@@ -154,10 +152,11 @@ const toggleTheme = () => {
         </div>
         <div class="actions">
           <button class="theme-toggle-btn" @click="toggleTheme" title="切换背景主题">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
             </svg>
           </button>
           <el-tag type="success" effect="light">积分 {{ userStore.points }}</el-tag>
@@ -224,23 +223,24 @@ const toggleTheme = () => {
   transition: background-image 0.5s ease;
 }
 
-.theme-1 {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.65)), url('@/assets/1.jpg');
-}
 .theme-2 {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.65)), url('@/assets/2.jpg');
+  background-image: linear-gradient(rgba(180, 180, 180, 0.4), rgba(180, 180, 180, 0.4)), url('@/assets/2.jpg');
 }
+
 .theme-3 {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.65)), url('@/assets/3.jpg');
+  background-image: linear-gradient(rgba(180, 180, 180, 0.4), rgba(180, 180, 180, 0.4)), url('@/assets/3.jpg');
 }
+
 .theme-4 {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.65)), url('@/assets/4.jpg');
+  background-image: linear-gradient(rgba(180, 180, 180, 0.4), rgba(180, 180, 180, 0.4)), url('@/assets/4.jpg');
 }
+
 .theme-5 {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.65)), url('@/assets/5.jpg');
+  background-image: linear-gradient(rgba(180, 180, 180, 0.4), rgba(180, 180, 180, 0.4)), url('@/assets/5.jpg');
 }
+
 .theme-6 {
-  background-image: linear-gradient(rgba(15, 23, 42, 0.2), rgba(15, 23, 42, 0.5)), url('@/assets/6.jpg');
+  background-image: linear-gradient(rgba(180, 180, 180, 0.4), rgba(180, 180, 180, 0.4)), url('@/assets/6.jpg');
 }
 
 .theme-toggle-btn {
@@ -262,15 +262,6 @@ const toggleTheme = () => {
   background: rgba(0, 0, 0, 0.05);
   color: #3b82f6;
   transform: scale(1.1);
-}
-
-.app-shell.dark-theme .theme-toggle-btn {
-  color: #cbd5e1;
-}
-
-.app-shell.dark-theme .theme-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fcd34d;
 }
 
 .app-main {
