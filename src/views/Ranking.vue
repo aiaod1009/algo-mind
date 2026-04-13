@@ -273,16 +273,13 @@ const statsData = computed(() => [
 }
 
 .ranking-page {
-  padding: 32px 40px;
+  padding: 20px;
   max-width: 1200px;
-  margin: 32px auto;
+  margin: 0 auto;
   position: relative;
   overflow: hidden;
-  min-height: calc(100vh - 64px);
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 24px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+  min-height: 100vh;
+  background: transparent;
 }
 
 .page-header {
