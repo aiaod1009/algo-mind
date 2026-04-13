@@ -198,7 +198,7 @@ const clearNavSearch = () => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-image: url('@/assets/background.jpg');
+  background-image: linear-gradient(rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.65)), url('@/assets/background.jpg');
   background-size: cover;
   background-position: center top;
   background-attachment: fixed;
