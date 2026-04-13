@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useUserStore } from '../stores/user'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
 import { withNonBlockingAuth } from '../api/requestOptions'
 
@@ -72,7 +72,22 @@ const quickPrompts = [
   { text: '解答我的疑问', icon: '❓' },
 ]
 
+const typeDisplayMap = {
+  'practice': '练习',
+  'review': '复习',
+  'learn': '学习',
+  'single': '单项',
+}
+
+const getTaskTypeLabel = (type) => {
+  return typeDisplayMap[type] || type
+}
+
 const taskTypeColors = {
+  'practice': { bg: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }, // Red
+  'review': { bg: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }, // Blue
+  'learn': { bg: 'rgba(16, 185, 129, 0.1)', color: '#10b981' },  // Green
+  // fallback for old chinese ones
   '数组': { bg: 'rgba(37, 99, 235, 0.1)', color: '#2563eb' },
   '字符串': { bg: 'rgba(22, 163, 74, 0.1)', color: '#16a34a' },
   '动态规划': { bg: 'rgba(217, 119, 6, 0.1)', color: '#d97706' },
@@ -80,15 +95,49 @@ const taskTypeColors = {
   '图论': { bg: 'rgba(220, 38, 38, 0.1)', color: '#dc2626' },
   '排序': { bg: 'rgba(8, 145, 178, 0.1)', color: '#0891b2' },
   '贪心': { bg: 'rgba(219, 39, 119, 0.1)', color: '#db2777' },
-  '复盘': { bg: 'rgba(107, 114, 128, 0.1)', color: '#6b7280' },
+  '复盘': { bg: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' },
 }
 
-const getTaskTypeStyle = (type) => {
-  const style = taskTypeColors[type] || taskTypeColors['复盘']
+const getDayMarkerStyle = (day, index) => {
   return {
-    backgroundColor: style.bg,
-    color: style.color,
+    backgroundColor: '#1cb0f6', // 统一的蓝色背景
   }
+}
+
+const unknownTaskColors = [
+  { bg: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }, // Red
+  { bg: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }, // Blue
+  { bg: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }, // Green
+  { bg: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }, // Amber
+]
+
+const getTaskTypeStyle = (type) => {
+  if (taskTypeColors[type]) {
+    return {
+      backgroundColor: taskTypeColors[type].bg,
+      color: taskTypeColors[type].color,
+    }
+  }
+  // 未知类型随机但固定分配一个好看的颜色
+  let hash = 0
+  const str = String(type)
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const colorObj = unknownTaskColors[Math.abs(hash) % unknownTaskColors.length]
+  return {
+    backgroundColor: colorObj.bg,
+    color: colorObj.color,
+  }
+}
+
+const formatDuration = (val) => {
+  if (!val) return '1h'
+  const str = String(val)
+  if (str.includes('h') || str.includes('m') || str.includes('分钟') || str.includes('小时')) {
+    return str
+  }
+  return str + 'h'
 }
 
 const normalizeMessageContent = (content) => {
@@ -354,7 +403,7 @@ const loadStudyHabits = async () => {
 // 检查是否已有当前赛道的学习计划
 const checkExistingPlan = async () => {
   if (!userStore.isLogin) return false
-  
+
   try {
     const response = await api.getCurrentLearningPlan(props.selectedTrack)
     if (response.data?.code === 0 && response.data?.data) {
@@ -377,6 +426,32 @@ const checkExistingPlan = async () => {
   return false
 }
 
+const showConfirmDialog = ref(false)
+let confirmDialogResolve = null
+
+const requestGenerateConfirm = () => {
+  showConfirmDialog.value = true
+  return new Promise((resolve, reject) => {
+    confirmDialogResolve = { resolve, reject }
+  })
+}
+
+const handleConfirmGenerate = () => {
+  showConfirmDialog.value = false
+  if (confirmDialogResolve) {
+    confirmDialogResolve.resolve()
+    confirmDialogResolve = null
+  }
+}
+
+const handleConfirmCancel = () => {
+  showConfirmDialog.value = false
+  if (confirmDialogResolve) {
+    confirmDialogResolve.reject(new Error('cancel'))
+    confirmDialogResolve = null
+  }
+}
+
 const generateLearningPlan = async (forceRegenerate = false) => {
   if (isGenerating.value) return
 
@@ -391,6 +466,12 @@ const generateLearningPlan = async (forceRegenerate = false) => {
       })
       return
     }
+  }
+
+  try {
+    await requestGenerateConfirm()
+  } catch (error) {
+    return
   }
 
   isGenerating.value = true
@@ -420,7 +501,7 @@ const generateLearningPlan = async (forceRegenerate = false) => {
         duration: 3000,
         offset: 80,
       })
-      
+
       // 触发自定义事件，通知父组件学习计划已更新
       emit('planGenerated', learningPlan.value)
     }
@@ -433,60 +514,60 @@ const generateLearningPlan = async (forceRegenerate = false) => {
         { title: '每日坚持打卡', target: 1, current: 0 },
       ],
       dailyTasks: [
-        { 
-          day: '周一', 
+        {
+          day: '周一',
           tasks: [
             { type: '数组', title: '数组基础练习', duration: '1h' },
             { type: '字符串', title: '字符串处理', duration: '1.5h' },
             { type: '排序', title: '排序算法复习', duration: '1.5h' },
-          ] 
+          ]
         },
-        { 
-          day: '周二', 
+        {
+          day: '周二',
           tasks: [
             { type: '二叉树', title: '二叉树遍历', duration: '1.5h' },
             { type: '二叉树', title: 'BST与平衡树', duration: '1.5h' },
-          ] 
+          ]
         },
-        { 
-          day: '周三', 
+        {
+          day: '周三',
           tasks: [
             { type: '动态规划', title: 'DP基础入门', duration: '1h' },
             { type: '动态规划', title: '背包问题专题', duration: '1.5h' },
             { type: '动态规划', title: '线性DP练习', duration: '1.5h' },
-          ] 
+          ]
         },
-        { 
-          day: '周四', 
+        {
+          day: '周四',
           tasks: [
             { type: '图论', title: '图的表示与遍历', duration: '1.5h' },
             { type: '图论', title: '最短路径算法', duration: '1.5h' },
             { type: '贪心', title: '贪心算法入门', duration: '1.5h' },
-          ] 
+          ]
         },
-        { 
-          day: '周五', 
+        {
+          day: '周五',
           tasks: [
             { type: '数组', title: '双指针专题', duration: '1.5h' },
             { type: '字符串', title: '字符串匹配', duration: '1.5h' },
             { type: '动态规划', title: '区间DP练习', duration: '1.5h' },
-          ] 
+          ]
         },
-        { 
-          day: '周六', 
+        {
+          day: '周六',
           tasks: [
             { type: '复盘', title: '周赛模拟', duration: '2h' },
             { type: '二叉树', title: '树形DP专题', duration: '1.5h' },
             { type: '图论', title: '拓扑排序', duration: '1.5h' },
-          ] 
+          ]
         },
-        { 
-          day: '周日', 
+        {
+          day: '周日',
           tasks: [
             { type: '复盘', title: '本周知识点总结', duration: '2h' },
             { type: '排序', title: '高级排序算法', duration: '1.5h' },
             { type: '贪心', title: '贪心经典问题', duration: '1.5h' },
-          ] 
+          ]
         },
       ],
       recommendations: [
@@ -733,7 +814,7 @@ watch(inputMessage, () => {
       <div class="header-left">
         <div class="helper-icon">
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
           </svg>
         </div>
         <div class="header-info">
@@ -745,18 +826,13 @@ watch(inputMessage, () => {
         </div>
       </div>
       <div class="section-tabs">
-        <button
-          v-for="tab in [
-            { key: 'overview', label: '总览' },
-            { key: 'errors', label: '错题' },
-            { key: 'plan', label: '计划' },
-            { key: 'chat', label: '对话' },
-          ]"
-          :key="tab.key"
-          class="tab"
-          :class="{ active: activeSection === tab.key }"
-          @click.stop="switchSection(tab.key)"
-        >
+        <button v-for="tab in [
+          { key: 'overview', label: '总览' },
+          { key: 'errors', label: '错题' },
+          { key: 'plan', label: '计划' },
+          { key: 'chat', label: '对话' },
+        ]" :key="tab.key" class="tab" :class="{ active: activeSection === tab.key }"
+          @click.stop="switchSection(tab.key)">
           {{ tab.label }}
         </button>
       </div>
@@ -769,9 +845,9 @@ watch(inputMessage, () => {
           <div class="stat-card">
             <div class="stat-icon errors">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="8" x2="12" y2="12"/>
-                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
             </div>
             <div class="stat-info">
@@ -782,8 +858,8 @@ watch(inputMessage, () => {
           <div class="stat-card">
             <div class="stat-icon time">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <polyline points="12 6 12 12 16 14"/>
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
               </svg>
             </div>
             <div class="stat-info">
@@ -794,8 +870,8 @@ watch(inputMessage, () => {
           <div class="stat-card">
             <div class="stat-icon score">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                <polyline points="22 4 12 14.01 9 11.01"/>
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
               </svg>
             </div>
             <div class="stat-info">
@@ -904,17 +980,17 @@ watch(inputMessage, () => {
           <div class="week-goals">
             <h4>本周目标</h4>
             <div class="goal-list">
-              <div v-for="goal in learningPlan.weekGoals" :key="goal.title" class="goal-item">
+              <div v-for="(goal, index) in learningPlan.weekGoals" :key="goal.title" class="goal-item">
                 <div class="goal-check">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="10" />
                   </svg>
                 </div>
                 <div class="goal-content">
                   <span class="goal-title">{{ goal.title }}</span>
                   <div class="goal-progress">
                     <div class="progress-bar">
-                      <div class="progress-fill" :style="{ width: `${(goal.current / goal.target) * 100}%` }"></div>
+                      <div class="progress-fill" :class="`progress-fill-${index % 4}`" :style="{ width: `${(goal.current / goal.target) * 100}%` }"></div>
                     </div>
                     <span class="progress-text">{{ goal.current }}/{{ goal.target }}</span>
                   </div>
@@ -926,13 +1002,14 @@ watch(inputMessage, () => {
           <div class="daily-tasks">
             <h4>每日安排</h4>
             <div class="task-timeline">
-              <div v-for="day in learningPlan.dailyTasks" :key="day.day" class="timeline-day">
-                <div class="day-marker">{{ day.day }}</div>
+              <div v-for="(day, index) in learningPlan.dailyTasks" :key="day.day" class="timeline-day">
+                <div class="day-marker" :style="getDayMarkerStyle(day.day, index)">{{ day.day }}</div>
                 <div class="day-tasks">
                   <div v-for="task in day.tasks" :key="task.title" class="task-card">
-                    <span class="task-type" :style="getTaskTypeStyle(task.type)">{{ task.type }}</span>
+                    <span class="task-type" :style="getTaskTypeStyle(task.type)">{{ getTaskTypeLabel(task.type)
+                    }}</span>
                     <span class="task-title">{{ task.title }}</span>
-                    <span class="task-duration">{{ task.duration }}</span>
+                    <span class="task-duration">{{ formatDuration(task.duration) }}</span>
                   </div>
                 </div>
               </div>
@@ -942,7 +1019,7 @@ watch(inputMessage, () => {
           <div class="plan-actions">
             <button class="plan-btn primary" @click.stop="saveLearningPlan">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 4v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6a2 2 0 0 0-2 2z"/>
+                <path d="M4 4v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6a2 2 0 0 0-2 2z" />
               </svg>
               保存计划
             </button>
@@ -963,66 +1040,60 @@ watch(inputMessage, () => {
       <!-- 对话 -->
       <div v-if="activeSection === 'chat'" class="chat-section">
         <div ref="chatContainerRef" class="chat-messages">
-          <div
-            v-for="(msg, index) in chatMessages"
-            :key="index"
-            class="chat-message"
-            :class="[msg.role, { streaming: msg.streaming }]"
-          >
+          <div v-for="(msg, index) in chatMessages" :key="index" class="chat-message"
+            :class="[msg.role, { streaming: msg.streaming }]">
             <div class="message-avatar">
               <span>{{ msg.role === 'assistant' ? 'AI' : '我' }}</span>
             </div>
             <div class="message-body">
-              <div
-                v-if="msg.streaming && !msg.content"
-                class="typing-indicator"
-              >
+              <div v-if="msg.streaming && !msg.content" class="typing-indicator">
                 <span></span>
                 <span></span>
                 <span></span>
               </div>
-              <div
-                v-else
-                class="message-text"
-                v-html="msg.content ? renderMessageContent(msg.content) : ''"
-              ></div>
+              <div v-else class="message-text" v-html="msg.content ? renderMessageContent(msg.content) : ''"></div>
               <div class="message-time">{{ msg.time }}</div>
             </div>
           </div>
         </div>
 
         <div class="quick-prompts">
-          <button
-            v-for="prompt in quickPrompts"
-            :key="prompt.text"
-            class="prompt-btn"
-            @click.stop="useQuickPrompt(prompt)"
-          >
+          <button v-for="prompt in quickPrompts" :key="prompt.text" class="prompt-btn"
+            @click.stop="useQuickPrompt(prompt)">
             <span>{{ prompt.icon }}</span>
             {{ prompt.text }}
           </button>
         </div>
 
         <div class="chat-input-area">
-          <textarea
-            ref="textareaRef"
-            v-model="inputMessage"
-            rows="1"
-            class="chat-input"
-            placeholder="输入你的问题..."
-            @keydown="handleInputKeyDown"
-            @click.stop
-          ></textarea>
-          <button
-            class="send-btn"
-            :disabled="!inputMessage.trim() || isTyping"
-            @click.stop="sendMessage"
-          >
+          <textarea ref="textareaRef" v-model="inputMessage" rows="1" class="chat-input" placeholder="输入你的问题..."
+            @keydown="handleInputKeyDown" @click.stop></textarea>
+          <button class="send-btn" :disabled="!inputMessage.trim() || isTyping" @click.stop="sendMessage">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
             </svg>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 自定义确认弹窗 -->
+    <div v-if="showConfirmDialog" class="confirm-overlay" @click.stop="handleConfirmCancel">
+      <div class="confirm-dialog" @click.stop>
+        <div class="confirm-icon">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <div class="confirm-content">
+          <h3>生成学习计划</h3>
+          <p>每天仅限生成 2 次学习计划，是否确认继续生成并消耗配额？</p>
+        </div>
+        <div class="confirm-actions">
+          <button class="btn-cancel" @click="handleConfirmCancel">取消</button>
+          <button class="btn-confirm" @click="handleConfirmGenerate">确认生成</button>
         </div>
       </div>
     </div>
@@ -1113,8 +1184,15 @@ watch(inputMessage, () => {
 }
 
 @keyframes statusBlink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* 标签页 */
@@ -1474,15 +1552,27 @@ watch(inputMessage, () => {
   animation: typingBounce 1.4s ease-in-out infinite;
 }
 
-.typing-indicator span:nth-child(1) { animation-delay: 0s; }
-.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+.typing-indicator span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
 
 @keyframes typingBounce {
-  0%, 60%, 100% {
+
+  0%,
+  60%,
+  100% {
     transform: translateY(0);
     opacity: 0.4;
   }
+
   30% {
     transform: translateY(-8px);
     opacity: 1;
@@ -1670,9 +1760,24 @@ watch(inputMessage, () => {
 
 .progress-fill {
   height: 100%;
-  background: #0ea5e9;
   border-radius: 3px;
   transition: width 0.3s ease;
+}
+
+.progress-fill-0 {
+  background: #3b82f6; /* Blue */
+}
+
+.progress-fill-1 {
+  background: #10b981; /* Emerald */
+}
+
+.progress-fill-2 {
+  background: #f59e0b; /* Amber */
+}
+
+.progress-fill-3 {
+  background: #8b5cf6; /* Violet */
 }
 
 .progress-text {
@@ -1685,25 +1790,26 @@ watch(inputMessage, () => {
 .task-timeline {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .timeline-day {
   display: flex;
   gap: 16px;
+  align-items: flex-start;
 }
 
 .day-marker {
-  width: 50px;
-  height: 50px;
-  background: #0ea5e9;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  background: #1cb0f6;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  color: white;
+  color: #ffffff;
   flex-shrink: 0;
 }
 
@@ -1711,38 +1817,37 @@ watch(inputMessage, () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .day-tasks .task-card {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.7);
-  border-radius: 12px;
-  border: 1px solid rgba(14, 165, 233, 0.1);
+  padding: 14px 16px;
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #f1f5f9;
 }
 
 .task-type {
   padding: 4px 10px;
-  background: rgba(14, 165, 233, 0.1);
   border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
-  color: #0ea5e9;
 }
 
 .day-tasks .task-title {
   flex: 1;
   font-size: 14px;
   color: #334155;
+  font-weight: 500;
 }
 
 .day-tasks .task-duration {
-  font-size: 12px;
-  color: #64748b;
-  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: #94a3b8;
+  font-family: inherit;
 }
 
 .plan-actions {
@@ -1757,8 +1862,8 @@ watch(inputMessage, () => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 14px;
-  border-radius: 12px;
+  padding: 12px;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -1766,25 +1871,24 @@ watch(inputMessage, () => {
 }
 
 .plan-btn.primary {
-  background: #0ea5e9;
+  background: #1cb0f6;
   border: none;
   color: white;
 }
 
 .plan-btn.primary:hover {
-  background: #0284c7;
-  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.3);
+  background: #1899d6;
+  box-shadow: 0 4px 12px rgba(28, 176, 246, 0.3);
 }
 
 .plan-btn.secondary {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(14, 165, 233, 0.2);
-  color: #0ea5e9;
+  background: #ffffff;
+  border: 1px solid #1cb0f6;
+  color: #1cb0f6;
 }
 
 .plan-btn.secondary:hover {
-  background: rgba(14, 165, 233, 0.1);
-  border-color: rgba(14, 165, 233, 0.3);
+  background: #f0f9ff;
 }
 
 /* 生成提示 */
@@ -1866,18 +1970,41 @@ watch(inputMessage, () => {
   transform: translateX(-50%);
 }
 
-.orbit-1 { animation-duration: 2s; }
-.orbit-2 { animation-duration: 3s; animation-direction: reverse; }
-.orbit-3 { animation-duration: 4s; }
+.orbit-1 {
+  animation-duration: 2s;
+}
+
+.orbit-2 {
+  animation-duration: 3s;
+  animation-direction: reverse;
+}
+
+.orbit-3 {
+  animation-duration: 4s;
+}
 
 @keyframes brainPulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.1); opacity: 0.8; }
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
 }
 
 @keyframes orbitSpin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .generating-text {
@@ -1943,5 +2070,115 @@ watch(inputMessage, () => {
   color: #94a3b8;
   text-align: center;
   padding: 12px;
+}
+
+/* 自定义弹窗 */
+.confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.confirm-dialog {
+  width: 90%;
+  max-width: 320px;
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.confirm-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.confirm-content h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.confirm-content p {
+  margin: 0 0 24px;
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.confirm-actions button {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-cancel {
+  background: #f1f5f9;
+  border: none;
+  color: #64748b;
+}
+
+.btn-cancel:hover {
+  background: #e2e8f0;
+}
+
+.btn-confirm {
+  background: #1cb0f6;
+  border: none;
+  color: #ffffff;
+}
+
+.btn-confirm:hover {
+  background: #1899d6;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 </style>
