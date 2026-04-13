@@ -609,7 +609,7 @@ const autoResizeTextarea = async () => {
   }
 
   textareaRef.value.style.height = 'auto'
-  textareaRef.value.style.height = `${Math.min(textareaRef.value.scrollHeight, 200)}px`
+  textareaRef.value.style.height = `${Math.min(textareaRef.value.scrollHeight, 120)}px`
 }
 
 const buildChatHistory = () => chatMessages.value
@@ -1599,7 +1599,7 @@ watch(inputMessage, () => {
   outline: none;
   resize: none;
   min-height: 48px;
-  max-height: 200px;
+  max-height: 120px;
   overflow-y: auto;
   transition: all 0.3s ease;
 }

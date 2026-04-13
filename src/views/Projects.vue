@@ -163,12 +163,8 @@ onMounted(() => {
         <p class="page-desc">基于真实场景的算法项目，在实战中淬炼工程能力，让代码不再停留在控制台</p>
       </div>
       <div class="track-filter">
-        <button
-          v-for="opt in trackOptions"
-          :key="opt.value"
-          :class="['filter-btn', { active: activeTrack === opt.value }]"
-          @click="activeTrack = opt.value"
-        >
+        <button v-for="opt in trackOptions" :key="opt.value"
+          :class="['filter-btn', { active: activeTrack === opt.value }]" @click="activeTrack = opt.value">
           {{ opt.label }}
         </button>
       </div>

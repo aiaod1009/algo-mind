@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../views/Login.vue'
 import Home from '../views/Home.vue'
+import Projects from '../views/Projects.vue'
 import Levels from '../views/Levels.vue'
 import Errors from '../views/Errors.vue'
 import Ranking from '../views/Ranking.vue'
@@ -27,6 +28,12 @@ const router = createRouter({
       path: '/home',
       name: 'home',
       component: Home,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/projects',
+      name: 'projects',
+      component: Projects,
       meta: { requiresAuth: true },
     },
     {

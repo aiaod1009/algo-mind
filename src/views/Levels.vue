@@ -1,10 +1,12 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import finalFlagImage from '../assets/icons/final-flag.svg'
 import { useLevelStore } from '../stores/level'
 import { useUserStore } from '../stores/user'
 
+const route = useRoute()
 const router = useRouter()
 const levelStore = useLevelStore()
 const userStore = useUserStore()
@@ -12,14 +14,23 @@ const userStore = useUserStore()
 const loading = ref(false)
 const dialogVisible = ref(false)
 const selectedLevel = ref(null)
-const activeTrack = ref(userStore.userInfo?.targetTrack || userStore.selectedTrack || 'algo')
+const activeTrack = ref((typeof route.query.project === 'string' && route.query.project) || userStore.userInfo?.targetTrack || userStore.selectedTrack || 'algo')
 const prefersReducedMotion = ref(false)
+
+const FINAL_PROJECT_ORDER = 11
 
 let motionMediaQuery = null
 let motionListener = null
 
 const trackList = computed(() => levelStore.tracks)
 const trackLevels = computed(() => levelStore.getLevelsByTrack(activeTrack.value))
+const activeTrackMeta = computed(() => trackList.value.find((item) => item.code === activeTrack.value) || null)
+const projectDisplayName = computed(() => {
+  if (typeof route.query.projectName === 'string' && route.query.projectName.trim()) {
+    return route.query.projectName.trim()
+  }
+  return activeTrackMeta.value?.name || '算法项目'
+})
 
 const progressLevelId = computed(() => {
   if (!trackLevels.value.length) return null
@@ -45,6 +56,12 @@ const getLevelStars = (level) => {
   const rawStars = Number(level.bestStars ?? level.stars ?? 0)
   if (!Number.isFinite(rawStars)) return 0
   return Math.max(0, Math.min(3, Math.floor(rawStars)))
+}
+
+const isFinalProjectLevel = (level, index = -1) => {
+  if (!level) return false
+  const levelOrder = Number(level.order || index + 1)
+  return levelOrder === FINAL_PROJECT_ORDER
 }
 
 const mapWorldStyle = computed(() => {
@@ -98,7 +115,10 @@ const startChallengeFromDialog = () => {
     return
   }
   dialogVisible.value = false
-  router.push(`/challenge/${selectedLevel.value.id}`)
+  router.push({
+    path: `/challenge/${selectedLevel.value.id}`,
+    query: { project: activeTrack.value },
+  })
 }
 
 const loadData = async () => {
@@ -164,6 +184,25 @@ watch(activeTrack, () => {
   selectedLevel.value = null
 })
 
+watch(
+  trackList,
+  (tracks) => {
+    if (!tracks.length) return
+    if (tracks.some((item) => item.code === activeTrack.value)) return
+    activeTrack.value = tracks[0].code
+  },
+  { immediate: true },
+)
+
+watch(
+  () => route.query.project,
+  (projectCode) => {
+    if (typeof projectCode !== 'string') return
+    if (!trackList.value.some((item) => item.code === projectCode)) return
+    activeTrack.value = projectCode
+  },
+)
+
 onMounted(() => {
   setupMotionPreference()
   loadData()
@@ -176,27 +215,10 @@ onUnmounted(() => {
 
 <template>
   <div class="page-container levels-page">
-    <h2 class="section-title">选关地图</h2>
-
-    <!-- 自定义标签导航 -->
-    <div class="custom-tabs">
-      <div class="tabs-nav">
-        <button
-          v-for="item in trackList"
-          :key="item.code"
-          class="tab-item"
-          :class="{ active: activeTrack === item.code }"
-          @click="activeTrack = item.code"
-        >
-          {{ item.name }}
-          <span v-if="activeTrack === item.code" class="tab-indicator"></span>
-        </button>
-      </div>
-      <div class="tab-content">
-        <div v-for="item in trackList" :key="item.code" v-show="activeTrack === item.code" class="track-goal">
-          目标：{{ item.goal }}
-        </div>
-      </div>
+    <h2 class="section-title">{{ projectDisplayName }} · 项目闯关路线</h2>
+    <p class="track-tip">本项目共 11 关：前 10 关训练题，第 11 关为终极实战关卡。</p>
+    <div v-if="activeTrackMeta?.goal" class="track-goal">
+      目标：{{ activeTrackMeta.goal }}
     </div>
 
     <el-skeleton :loading="loading" animated :rows="6">
@@ -215,7 +237,8 @@ onUnmounted(() => {
             <span class="pipe pipe-c" aria-hidden="true"></span>
             <span class="pipe pipe-d" aria-hidden="true"></span>
 
-            <div v-for="(item, index) in trackLevels" :key="item.id" class="level-sign-wrap" :style="nodeStyles[index]">
+            <div v-for="(item, index) in trackLevels" :key="item.id" class="level-sign-wrap"
+              :class="{ 'final-node': isFinalProjectLevel(item, index) }" :style="nodeStyles[index]">
               <div class="node-stars" :class="{ dimmed: !item.isUnlocked }">
                 <span v-for="star in 3" :key="`${item.id}-${star}`" class="star"
                   :class="{ filled: star <= getLevelStars(item) }">
@@ -226,16 +249,24 @@ onUnmounted(() => {
               <button class="level-sign" :class="{
                 completed: item.isCompleted,
                 locked: !item.isUnlocked,
+                'final-project': isFinalProjectLevel(item, index),
               }" type="button" @click="openLevelDialog(item)">
-                <span class="sign-plate">
-                  <span class="piece-index">{{ item.order || index + 1 }}</span>
-                  <span v-if="!item.isUnlocked" class="sign-lock" aria-hidden="true">🔒</span>
-                </span>
-                <span class="sign-pole" aria-hidden="true"></span>
-                <span class="sign-base" aria-hidden="true"></span>
+                <template v-if="isFinalProjectLevel(item, index)">
+                  <img :src="finalFlagImage" class="final-flag-image" alt="" aria-hidden="true" />
+                </template>
+                <template v-else>
+                  <span class="sign-plate">
+                    <span class="piece-index">{{ item.order || index + 1 }}</span>
+                  </span>
+                  <span class="sign-pole" aria-hidden="true"></span>
+                  <span class="sign-base" aria-hidden="true"></span>
+                </template>
+                <span v-if="!item.isUnlocked" class="sign-lock" aria-hidden="true">🔒</span>
               </button>
 
-              <div class="piece-name">{{ item.name }}</div>
+              <div class="piece-name" :class="{ 'piece-name-final': isFinalProjectLevel(item, index) }">
+                {{ isFinalProjectLevel(item, index) ? '终极项目实战' : item.name }}
+              </div>
             </div>
 
             <div v-if="progressTruckStyle" class="progress-truck" :style="progressTruckStyle" aria-hidden="true">
@@ -298,6 +329,12 @@ onUnmounted(() => {
   display: grid;
   gap: 10px;
   padding-bottom: 26px;
+}
+
+.track-tip {
+  margin: 0;
+  color: var(--text-sub);
+  font-size: 13px;
 }
 
 .track-goal {
@@ -509,6 +546,12 @@ onUnmounted(() => {
   z-index: 2;
 }
 
+.level-sign-wrap.final-node {
+  width: 184px;
+  height: 188px;
+  z-index: 3;
+}
+
 .node-stars {
   position: absolute;
   bottom: 108px;
@@ -518,6 +561,7 @@ onUnmounted(() => {
   width: 108px;
   justify-content: center;
   gap: 4px;
+  z-index: 5;
 }
 
 .node-stars.dimmed {
@@ -525,23 +569,25 @@ onUnmounted(() => {
 }
 
 .star {
-  font-size: 24px;
+  font-size: 30px;
   line-height: 1;
-  color: #f3f7f0;
+  color: rgba(255, 255, 255, 0.88);
   text-shadow:
-    -2px 0 #5ca03f,
-    2px 0 #5ca03f,
-    0 -2px #5ca03f,
-    0 2px #5ca03f;
+    -2px 0 rgba(39, 85, 23, 0.9),
+    2px 0 rgba(39, 85, 23, 0.9),
+    0 -2px rgba(39, 85, 23, 0.9),
+    0 2px rgba(39, 85, 23, 0.9),
+    0 3px 6px rgba(0, 0, 0, 0.32);
 }
 
 .star.filled {
-  color: #ffd84d;
+  color: #ffe15e;
   text-shadow:
-    -2px 0 #568f38,
-    2px 0 #568f38,
-    0 -2px #568f38,
-    0 2px #568f38;
+    -2px 0 #3f7427,
+    2px 0 #3f7427,
+    0 -2px #3f7427,
+    0 2px #3f7427,
+    0 3px 8px rgba(255, 217, 77, 0.55);
 }
 
 .level-sign {
@@ -629,6 +675,22 @@ onUnmounted(() => {
   font-size: 34px;
   font-weight: 700;
   line-height: 1;
+}
+
+.level-sign.final-project {
+  width: 184px;
+  height: 172px;
+}
+
+.final-flag-image {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 172px;
+  height: 172px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.38));
 }
 
 .progress-truck {
@@ -727,6 +789,25 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.piece-name.piece-name-final {
+  bottom: 215px;
+  top: auto;
+  height: auto;
+  max-width: 180px;
+  padding: 6px 14px;
+  background: linear-gradient(180deg, #ff4c4c 0%, #c92020 100%);
+  border: 1px solid rgba(255, 210, 210, 0.95);
+  color: #ffffff;
+  font-size: 14px;
+  box-shadow: 0 6px 12px rgba(160, 20, 20, 0.45);
+  z-index: 10;
+}
+
+.level-sign-wrap.final-node .node-stars {
+  bottom: 176px;
+  z-index: 10;
 }
 
 @keyframes cloud-float {
@@ -846,7 +927,26 @@ onUnmounted(() => {
   }
 
   .star {
-    font-size: 21px;
+    font-size: 26px;
+  }
+
+  .level-sign.final-project {
+    width: 152px;
+    height: 140px;
+  }
+
+  .final-flag-image {
+    width: 140px;
+    height: 140px;
+  }
+
+  .piece-name.piece-name-final {
+    bottom: 184px;
+    top: auto;
+  }
+
+  .level-sign-wrap.final-node .node-stars {
+    bottom: 146px;
   }
 }
 
@@ -863,95 +963,5 @@ onUnmounted(() => {
 .map-world.reduced-motion .progress-truck,
 .map-world.reduced-motion .truck-wheel {
   animation: none !important;
-}
-
-/* 自定义标签导航样式 */
-.custom-tabs {
-  margin-bottom: 20px;
-}
-
-.tabs-nav {
-  display: flex;
-  gap: 8px;
-  padding: 4px;
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 12px;
-  border: 1px solid rgba(74, 111, 157, 0.1);
-  backdrop-filter: blur(10px);
-}
-
-.tab-item {
-  position: relative;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #666;
-  background: transparent;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.tab-item:hover {
-  color: #4a6f9d;
-  background: rgba(74, 111, 157, 0.08);
-}
-
-.tab-item.active {
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.1);
-  font-weight: 600;
-}
-
-.tab-indicator {
-  position: absolute;
-  bottom: 2px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-top: 6px solid #10b981;
-  animation: indicator-bounce 0.5s ease;
-}
-
-@keyframes indicator-bounce {
-  0% {
-    transform: translateX(-50%) translateY(-4px);
-    opacity: 0;
-  }
-  60% {
-    transform: translateX(-50%) translateY(2px);
-  }
-  100% {
-    transform: translateX(-50%) translateY(0);
-    opacity: 1;
-  }
-}
-
-.tab-content {
-  margin-top: 12px;
-}
-
-@media (max-width: 768px) {
-  .tabs-nav {
-    gap: 4px;
-    padding: 3px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-
-  .tabs-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .tab-item {
-    padding: 8px 14px;
-    font-size: 13px;
-    white-space: nowrap;
-  }
 }
 </style>

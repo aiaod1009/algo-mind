@@ -14,15 +14,15 @@ const showTopbar = computed(() => !['/', '/register'].includes(route.path))
 const menuItems = [
   { path: '/home', label: '学习计划' },
   { path: '/courses', label: '网课' },
-  { path: '/levels', label: '关卡练习' },
+  { path: '/projects', label: '项目实战' },
   { path: '/forum', label: '论坛' },
   { path: '/ranking', label: '积分排行' },
   { path: '/errors', label: '错题本' },
 ]
 
 const activePath = computed(() => {
-  if (route.path.startsWith('/challenge/')) {
-    return '/levels'
+  if (route.path.startsWith('/challenge/') || route.path.startsWith('/levels')) {
+    return '/projects'
   }
   return route.path
 })
@@ -109,7 +109,7 @@ const clearNavSearch = () => {
         <el-menu class="main-menu" :default-active="activePath" mode="horizontal" @select="handleMenuSelect">
           <el-menu-item index="/home">学习计划</el-menu-item>
           <el-menu-item index="/courses">网课</el-menu-item>
-          <el-menu-item index="/levels">关卡练习</el-menu-item>
+          <el-menu-item index="/projects">项目实战</el-menu-item>
           <el-menu-item index="/forum">论坛</el-menu-item>
           <el-menu-item index="/ranking">积分排行</el-menu-item>
           <el-menu-item index="/errors">错题本</el-menu-item>
