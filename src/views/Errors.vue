@@ -353,7 +353,12 @@ onMounted(loadData)
             :value="subject"
           />
         </el-select>
-        <el-button type="primary" @click="addDialogVisible = true">手动添加错题</el-button>
+        <el-button type="primary" class="add-error-btn" @click="addDialogVisible = true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px;">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          手动添加错题
+        </el-button>
       </div>
     </div>
 
@@ -419,7 +424,10 @@ onMounted(loadData)
         <div class="empty-text">
           {{ viewMode === 'active' ? '当前没有待处理的错题，继续保持。' : '还没有已完成的错题，完成复习后会自动归档到这里。' }}
         </div>
-        <el-button v-if="viewMode === 'active'" type="primary" @click="addDialogVisible = true">
+        <el-button v-if="viewMode === 'active'" type="primary" class="add-error-btn" @click="addDialogVisible = true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px;">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
           手动添加错题
         </el-button>
       </div>
@@ -465,16 +473,14 @@ onMounted(loadData)
 .errors-page {
   --chip-bg: #eef3f9;
   --chip-text: #4a6486;
-  --card-border: #c9d7e8;
-  --card-border-active: #9db6d3;
   --status-urgent-bg: #f8edf0;
-  --status-urgent-border: #e6c9d2;
+  --status-urgent-border: transparent;
   --status-urgent-text: #8f5f6c;
   --status-normal-bg: #f6f1ea;
-  --status-normal-border: #e6d6c5;
+  --status-normal-border: transparent;
   --status-normal-text: #8b7053;
   --status-mastered-bg: #edf2f8;
-  --status-mastered-border: #d6deea;
+  --status-mastered-border: transparent;
   --status-mastered-text: #5f7287;
   display: grid;
   gap: 16px;
@@ -576,7 +582,7 @@ onMounted(loadData)
 .filter-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
 }
 
@@ -588,29 +594,65 @@ onMounted(loadData)
   width: 220px;
 }
 
+:deep(.filter-select .el-input__wrapper) {
+  border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  padding: 4px 16px;
+  border: none;
+}
+
+:deep(.filter-select .el-input__wrapper.is-focus),
+:deep(.filter-select .el-input__wrapper:hover) {
+  box-shadow: 0 4px 16px rgba(74, 144, 217, 0.15) !important;
+}
+
+:deep(.add-error-btn) {
+  border-radius: 20px;
+  padding: 8px 24px;
+  height: 40px;
+  border: none;
+  background: linear-gradient(135deg, #4a90d9, #6672cb);
+  box-shadow: 0 4px 16px rgba(74, 144, 217, 0.3);
+  font-weight: 600;
+  transition: all 0.3s;
+  display: inline-flex;
+  align-items: center;
+}
+
+:deep(.add-error-btn:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(74, 144, 217, 0.4);
+  background: linear-gradient(135deg, #5b9ce0, #737ed3);
+}
+
 .error-list {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .error-card {
   display: grid;
   grid-template-columns: 1fr;
-  border: 2px solid var(--card-border-active);
-  border-radius: 28px;
-  background: var(--card-bg);
-  padding: 20px 22px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  border: none;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  padding: 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  transition: all 0.3s ease;
 }
 
 .error-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 36px -26px rgba(15, 23, 42, 0.35);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .error-card.done {
-  border-color: var(--card-border);
-  background: var(--panel-bg);
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
 }
 
 .card-main {
@@ -709,9 +751,10 @@ onMounted(loadData)
   gap: 14px;
   place-items: center;
   padding: 42px 20px;
-  border-radius: 28px;
-  border: 1px dashed rgba(141, 161, 185, 0.35);
-  background: rgba(255, 255, 255, 0.42);
+  border-radius: 20px;
+  border: 2px dashed rgba(74, 144, 217, 0.3);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
   text-align: center;
 }
 
