@@ -253,6 +253,11 @@ const statsData = computed(() => [
   padding: 60px 20px;
   text-align: center;
   color: var(--text-sub);
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 .empty-state svg {
@@ -390,14 +395,16 @@ const statsData = computed(() => [
 }
 
 .stat-card {
-  background: white;
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-radius: 16px;
   padding: 20px;
   display: flex;
   align-items: center;
   gap: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   transition: all 0.3s ease;
   animation: fadeInUp 0.6s ease forwards;
   animation-delay: var(--delay);
@@ -727,11 +734,13 @@ const statsData = computed(() => [
 }
 
 .ranking-list-section {
-  background: white;
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-radius: 24px;
   padding: 24px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 .section-header {
@@ -776,7 +785,9 @@ const statsData = computed(() => [
   align-items: center;
   gap: 16px;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #fafbfc 0%, #ffffff 100%);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 16px;
   border: 1px solid rgba(0, 0, 0, 0.04);
   transition: all 0.3s ease;
@@ -804,12 +815,12 @@ const statsData = computed(() => [
 }
 
 .ranking-row.is-self {
-  background: linear-gradient(135deg, #edf3fb 0%, #f0f5ff 100%);
+  background: rgba(237, 243, 251, 0.7);
   border-color: #4a90d9;
 }
 
 .ranking-row.is-top-three {
-  background: linear-gradient(135deg, #fffbe6 0%, #fff7cc 100%);
+  background: rgba(255, 251, 230, 0.7);
 }
 
 .row-rank {

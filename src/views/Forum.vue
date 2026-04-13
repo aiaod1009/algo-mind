@@ -150,14 +150,14 @@ const handleDeletePost = async (post) => {
     ElMessage.error('只能删除自己的帖子')
     return
   }
-  
+
   try {
     await ElMessageBox.confirm('确定要删除这条帖子吗？删除后无法恢复。', '删除确认', {
       confirmButtonText: '删除',
       cancelButtonText: '取消',
       type: 'warning',
     })
-    
+
     const result = await forumStore.deletePost(post.id)
     if (result.success) {
       ElMessage.success('帖子已删除')
@@ -332,10 +332,10 @@ const updateSearchBarPosition = () => {
   const windowHeight = window.innerHeight
   const docHeight = document.documentElement.scrollHeight
   const scrollBottom = scrollTop + windowHeight
-  if (scrollBottom >= docHeight - 100) {
-    searchBarAtBottom.value = true
-  } else if (scrollTop < 200) {
+  if (scrollTop < 200) {
     searchBarAtBottom.value = false
+  } else if (scrollBottom >= docHeight - 100) {
+    searchBarAtBottom.value = true
   }
 }
 
@@ -550,7 +550,7 @@ onUnmounted(() => {
 
 <template>
   <div class="page-container forum-page">
-    <h2 class="section-title">简版论坛</h2>
+    <h2 class="section-title"> </h2>
 
     <Transition name="search-slide">
       <SearchBar v-if="!searchBarAtBottom" placeholder="搜索帖子、话题..." :is-sticky="false" @search="handleSearch" />
@@ -778,7 +778,8 @@ onUnmounted(() => {
               <div>
                 <div class="name-row">
                   <span class="name">{{ resolvePostAuthor(item) }}</span>
-                  <AuthorLevelBadge :profile="item.authorLevelProfile" :raw-label="item.authorLevel || 'Lv.1'" size="sm" />
+                  <AuthorLevelBadge :profile="item.authorLevelProfile" :raw-label="item.authorLevel || 'Lv.1'"
+                    size="sm" />
                 </div>
                 <div class="meta">算法社区 · {{ formatTime(item.createdAt) }}</div>
               </div>
@@ -947,8 +948,10 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
-  border: 1px solid var(--line-soft);
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 16px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1046,8 +1049,10 @@ onUnmounted(() => {
 }
 
 .composer-card {
-  background: #ffffff;
-  border: 1px solid var(--line-soft);
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 20px;
   padding: 20px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
@@ -1635,7 +1640,7 @@ onUnmounted(() => {
 
 .forum-layout {
   display: grid;
-  grid-template-columns: 1fr 400px;
+  grid-template-columns: 1fr 340px;
   gap: 16px;
 }
 
@@ -1645,14 +1650,17 @@ onUnmounted(() => {
 }
 
 .feed-card {
+  background: var(--card-bg) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
   border-radius: 16px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
 .feed-card:hover {
-  border-color: rgba(74, 144, 217, 0.3);
+  border-color: rgba(74, 144, 217, 0.4) !important;
   box-shadow: 0 4px 16px rgba(74, 144, 217, 0.1);
 }
 
@@ -1762,9 +1770,11 @@ onUnmounted(() => {
 .hot-comments-section {
   margin-top: 12px;
   padding: 12px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f0f4f8 100%);
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-radius: 12px;
-  border: 1px solid rgba(74, 144, 217, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .hot-comments-carousel {
@@ -1996,10 +2006,12 @@ onUnmounted(() => {
 }
 
 .hot-card {
-  width: 400px;
+  width: 340px;
   height: 420px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border: 1px solid var(--line-soft);
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 16px;
   padding: 16px;
   overflow: hidden;
