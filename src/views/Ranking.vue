@@ -93,11 +93,6 @@ const statsData = computed(() => [
         </div>
         <p class="page-subtitle">挑战自我，攀登巅峰</p>
       </div>
-      <div class="header-decoration">
-        <div class="deco-circle c1"></div>
-        <div class="deco-circle c2"></div>
-        <div class="deco-circle c3"></div>
-      </div>
     </div>
 
     <section class="stats-section">
@@ -246,13 +241,6 @@ const statsData = computed(() => [
         </div>
       </div>
     </section>
-
-    <div class="floating-elements">
-      <div class="float-item f1">⭐</div>
-      <div class="float-item f2">🌟</div>
-      <div class="float-item f3">💫</div>
-      <div class="float-item f4">✨</div>
-    </div>
   </div>
 </template>
 
@@ -285,20 +273,23 @@ const statsData = computed(() => [
 }
 
 .ranking-page {
-  padding: 20px;
+  padding: 32px 40px;
   max-width: 1200px;
-  margin: 0 auto;
+  margin: 32px auto;
   position: relative;
   overflow: hidden;
-  min-height: 100vh;
-  background: transparent;
+  min-height: calc(100vh - 64px);
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 24px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
 }
 
 .page-header {
   position: relative;
-  padding: 40px 20px;
+  padding: 20px 20px 40px;
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
 }
 
 .header-content {
@@ -329,12 +320,15 @@ const statsData = computed(() => [
   font-size: 42px;
   font-weight: 900;
   letter-spacing: 2px;
+  color: #0f172a;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .page-subtitle {
   font-size: 16px;
-  color: var(--text-sub);
+  color: #334155;
   letter-spacing: 4px;
+  font-weight: 500;
 }
 
 .header-decoration {
@@ -948,70 +942,6 @@ const statsData = computed(() => [
 
 .status-icon {
   font-size: 14px;
-}
-
-.floating-elements {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
-}
-
-.float-item {
-  position: absolute;
-  font-size: 24px;
-  opacity: 0.15;
-  animation: floatAround 20s linear infinite;
-}
-
-.float-item.f1 {
-  top: 10%;
-  left: 5%;
-  animation-delay: 0s;
-}
-
-.float-item.f2 {
-  top: 30%;
-  right: 8%;
-  animation-delay: -5s;
-}
-
-.float-item.f3 {
-  bottom: 20%;
-  left: 10%;
-  animation-delay: -10s;
-}
-
-.float-item.f4 {
-  bottom: 40%;
-  right: 5%;
-  animation-delay: -15s;
-}
-
-@keyframes floatAround {
-  0% {
-    transform: translate(0, 0) rotate(0deg);
-  }
-
-  25% {
-    transform: translate(30px, -30px) rotate(90deg);
-  }
-
-  50% {
-    transform: translate(0, -60px) rotate(180deg);
-  }
-
-  75% {
-    transform: translate(-30px, -30px) rotate(270deg);
-  }
-
-  100% {
-    transform: translate(0, 0) rotate(360deg);
-  }
 }
 
 @media (max-width: 900px) {
