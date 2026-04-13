@@ -43,11 +43,12 @@ const actionText = (progress) => {
 
 const getCover = (course) => {
   if (course.cover) return course.cover
+  // 使用本地图片作为默认封面
   const defaultCovers = [
-    'https://api.dicebear.com/7.x/shapes/svg?seed=algo&backgroundColor=4a6f9d',
-    'https://api.dicebear.com/7.x/shapes/svg?seed=ds&backgroundColor=6672cb',
-    'https://api.dicebear.com/7.x/shapes/svg?seed=contest&backgroundColor=f59e0b',
-    'https://api.dicebear.com/7.x/shapes/svg?seed=dp&backgroundColor=10b981'
+    '/covers/course-algo.jpg',
+    '/covers/course-ds.jpg',
+    '/covers/course-contest.jpg',
+    '/covers/course-dp.jpg'
   ]
   return defaultCovers[course.id % defaultCovers.length]
 }
@@ -65,7 +66,7 @@ const fetchCourses = async () => {
       lessons: 16,
       progress: 35,
       tags: ['复杂度', '双指针', '二分'],
-      cover: '',
+      cover: '/covers/course-ds.jpg',
       bvid: 'BV19e4y1q7JJ',
       rating: 4.8,
       students: 1234,
@@ -87,7 +88,7 @@ const fetchCourses = async () => {
       lessons: 20,
       progress: 62,
       tags: ['链表', '哈希', '并查集'],
-      cover: '',
+      cover: '/covers/course-ds2.jpg',
       bvid: 'BV1Zs411g7LG',
       rating: 4.9,
       students: 892,
@@ -109,7 +110,7 @@ const fetchCourses = async () => {
       lessons: 24,
       progress: 12,
       tags: ['贪心', '最短路', '拓扑排序'],
-      cover: '',
+      cover: '/covers/course-ds3.jpg',
       bvid: 'BV1xx411c7mD',
       rating: 4.7,
       students: 456,
@@ -131,7 +132,7 @@ const fetchCourses = async () => {
       lessons: 18,
       progress: 0,
       tags: ['记忆化', '状态转移', '背包'],
-      cover: '',
+      cover: '/covers/course-ds4.jpg',
       bvid: 'BV1xb411e7ww',
       rating: 4.6,
       students: 678,

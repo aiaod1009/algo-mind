@@ -159,11 +159,14 @@ export const useErrorStore = defineStore('error', () => {
     throw new Error(res.data?.message || 'AI 分析失败')
   }
 
-  const markAnalysis = (errorId, analysis) => {
+  const markAnalysis = (errorId, analysis, analysisData = null) => {
     const item = errors.value.find((row) => Number(row.id) === Number(errorId))
     if (!item) return
     item.analysisStatus = '已分析'
     item.analysis = analysis
+    if (analysisData) {
+      item.analysisData = analysisData
+    }
   }
 
   return {

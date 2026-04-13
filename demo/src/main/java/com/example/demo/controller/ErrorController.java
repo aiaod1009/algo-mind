@@ -28,9 +28,10 @@ public class ErrorController {
     private static final String ANALYSIS_COMPLETED = "ANALYZED";
 
     private static final String PROBLEM_ANALYSIS_PROMPT = """
-            You are an experienced algorithm coach.
-            Please analyze the learner's wrong answer and return a structured JSON report.
-            Focus on root cause, key knowledge points, practice suggestions, and a short study plan.
+            你是一位经验丰富的算法教练。
+            请分析学习者的错误答案，并返回结构化的JSON报告。
+            重点关注根本原因、关键知识点、练习建议和短期学习计划。
+            所有内容必须使用中文返回。
             """;
 
     @Resource
@@ -184,18 +185,18 @@ public class ErrorController {
 
     private String buildAnalysisPrompt(ProblemAnalysisRequest request) {
         StringBuilder prompt = new StringBuilder();
-        prompt.append("Please analyze the following wrong answer.\n\n");
-        prompt.append("Question: ").append(nullToText(request.getQuestion())).append('\n');
-        prompt.append("User answer: ").append(joinList(request.getUserAnswer())).append('\n');
+        prompt.append("请分析以下错误答案，所有回复必须使用中文。\n\n");
+        prompt.append("题目: ").append(nullToText(request.getQuestion())).append('\n');
+        prompt.append("用户答案: ").append(joinList(request.getUserAnswer())).append('\n');
 
         if (hasText(request.getDescription())) {
-            prompt.append("Description: ").append(request.getDescription()).append('\n');
+            prompt.append("描述: ").append(request.getDescription()).append('\n');
         }
         if (hasText(request.getDifficulty())) {
-            prompt.append("Difficulty: ").append(request.getDifficulty()).append('\n');
+            prompt.append("难度: ").append(request.getDifficulty()).append('\n');
         }
         if (hasText(request.getTrack())) {
-            prompt.append("Track: ").append(request.getTrack()).append('\n');
+            prompt.append("赛道: ").append(request.getTrack()).append('\n');
         }
         return prompt.toString();
     }
@@ -216,40 +217,40 @@ public class ErrorController {
 
     private ProblemAnalysisResponse generateLocalAnalysis(ProblemAnalysisRequest request) {
         ProblemAnalysisResponse response = new ProblemAnalysisResponse();
-        response.setSummary("Review the question intent first, then compare the wrong answer with the expected answer.");
+        response.setSummary("首先审题理解题意，然后对比错误答案和正确答案的差异。");
 
         ProblemAnalysisResponse.ErrorAnalysis errorAnalysis = new ProblemAnalysisResponse.ErrorAnalysis();
-        errorAnalysis.setRootCause("The learner likely missed a key condition, concept, or boundary case.");
-        errorAnalysis.setDetailedExplanation("Re-read the prompt, identify the mismatch, and summarize the mistake in one sentence.");
-        errorAnalysis.setCommonMistakes(List.of("Missed boundary condition", "Mixed up concepts", "Incomplete option comparison"));
+        errorAnalysis.setRootCause("学习者可能遗漏了关键条件、概念或边界情况。");
+        errorAnalysis.setDetailedExplanation("重新阅读题目，找出答案不匹配的原因，并用一句话总结错误。");
+        errorAnalysis.setCommonMistakes(List.of("遗漏边界条件", "概念混淆", "选项比较不完整"));
         response.setErrorAnalysis(errorAnalysis);
 
         ProblemAnalysisResponse.KnowledgePoint knowledgePoint = new ProblemAnalysisResponse.KnowledgePoint();
-        knowledgePoint.setName("Question intent analysis");
-        knowledgePoint.setDescription("Clarify what the question is really asking before evaluating answers.");
+        knowledgePoint.setName("题目意图分析");
+        knowledgePoint.setDescription("在评估答案之前，先明确题目真正要求什么。");
         knowledgePoint.setMasteryLevel("beginner");
-        knowledgePoint.setRelatedResources(List.of("Review the prompt", "Write down the error reason"));
+        knowledgePoint.setRelatedResources(List.of("重新审题", "记录错误原因"));
         response.setKnowledgePoints(List.of(knowledgePoint));
 
         ProblemAnalysisResponse.ImprovementSuggestion suggestion = new ProblemAnalysisResponse.ImprovementSuggestion();
-        suggestion.setTitle("Do one focused review");
-        suggestion.setDescription("Write the correct answer, your answer, and the root cause side by side.");
+        suggestion.setTitle("进行一次针对性复习");
+        suggestion.setDescription("将正确答案、你的答案和错误原因并排写在一起进行对比。");
         suggestion.setPriority("high");
-        suggestion.setActionItems(List.of("Re-read the prompt", "Compare with the correct answer", "Record the mistake"));
+        suggestion.setActionItems(List.of("重新审题", "与正确答案对比", "记录错误"));
         response.setSuggestions(List.of(suggestion));
 
         ProblemAnalysisResponse.RecommendedProblem recommendedProblem = new ProblemAnalysisResponse.RecommendedProblem();
-        recommendedProblem.setTitle("Practice one similar basic question");
+        recommendedProblem.setTitle("练习一道相似的基础题");
         recommendedProblem.setDifficulty("easy");
-        recommendedProblem.setReason("Reinforce the same knowledge point before increasing difficulty.");
+        recommendedProblem.setReason("在增加难度之前，先巩固相同的知识点。");
         recommendedProblem.setSource("AlgoMind");
         response.setRecommendedProblems(List.of(recommendedProblem));
 
         ProblemAnalysisResponse.StudyPlan studyPlan = new ProblemAnalysisResponse.StudyPlan();
-        studyPlan.setShortTerm("Finish the review of this problem today.");
-        studyPlan.setMidTerm("Practice three similar problems this week.");
-        studyPlan.setLongTerm("Build a stable habit for reviewing wrong answers.");
-        studyPlan.setDailyTasks(List.of("Review one wrong answer", "Write one mistake note", "Redo one similar problem"));
+        studyPlan.setShortTerm("今天完成这道题的复习。");
+        studyPlan.setMidTerm("本周练习三道相似的题目。");
+        studyPlan.setLongTerm("建立稳定的错题复习习惯。");
+        studyPlan.setDailyTasks(List.of("复习一道错题", "写一条错误笔记", "重做一道相似题"));
         response.setStudyPlan(studyPlan);
 
         return response;

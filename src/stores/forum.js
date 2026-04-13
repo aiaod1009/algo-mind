@@ -180,5 +180,24 @@ export const useForumStore = defineStore('forum', () => {
     saveLocalPosts(posts.value)
   }
 
-  return { posts, isFromCache, hydratePostsFromLocal, fetchPosts, addPost, toggleLike, addCommentCount }
+  const deletePost = async (postId) => {
+    try {
+      const res = await api.delete(`/forum-posts/${postId}`)
+      if (res.data?.code === 0) {
+        posts.value = posts.value.filter((post) => Number(post.id) !== Number(postId))
+        saveLocalPosts(posts.value)
+        return { success: true }
+      } else {
+        throw new Error(res.data?.message || '删除失败')
+      }
+    } catch (error) {
+      console.error('删除帖子失败:', error)
+      // 如果后端接口不存在，先从本地删除
+      posts.value = posts.value.filter((post) => Number(post.id) !== Number(postId))
+      saveLocalPosts(posts.value)
+      return { success: true, localOnly: true }
+    }
+  }
+
+  return { posts, isFromCache, hydratePostsFromLocal, fetchPosts, addPost, toggleLike, addCommentCount, deletePost }
 })

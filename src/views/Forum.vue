@@ -113,6 +113,66 @@ const filteredTags = computed(() => {
   return allTags.filter(t => t.name.toLowerCase().includes(input))
 })
 
+// 删除菜单相关状态
+const activePostMenu = ref(null)
+const showPostMenu = (postId) => {
+  activePostMenu.value = activePostMenu.value === postId ? null : postId
+}
+
+const hidePostMenu = () => {
+  activePostMenu.value = null
+}
+
+// 点击外部关闭菜单
+const handleClickOutside = (e) => {
+  const menuWrappers = document.querySelectorAll('.post-menu-wrapper')
+  let clickedInside = false
+  menuWrappers.forEach(wrapper => {
+    if (wrapper.contains(e.target)) {
+      clickedInside = true
+    }
+  })
+  if (!clickedInside) {
+    hidePostMenu()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
+
+const handleDeletePost = async (post) => {
+  if (!isCurrentUsersPost(post)) {
+    ElMessage.error('只能删除自己的帖子')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm('确定要删除这条帖子吗？删除后无法恢复。', '删除确认', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    
+    const result = await forumStore.deletePost(post.id)
+    if (result.success) {
+      ElMessage.success('帖子已删除')
+      hidePostMenu()
+    } else {
+      ElMessage.error(result.error || '删除失败')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除帖子失败:', error)
+      ElMessage.error('删除失败')
+    }
+  }
+}
+
 const emojiList = ['😀', '😂', '🥰', '😎', '🤔', '👍', '👏', '🎉', '🔥', '❤️', '💯', '✨', '🚀', '💪', '🙏', '😊']
 const recentEmojis = ref([])
 
@@ -723,7 +783,17 @@ onUnmounted(() => {
                 <div class="meta">算法社区 · {{ formatTime(item.createdAt) }}</div>
               </div>
             </div>
-            <el-button link type="info">···</el-button>
+            <div class="post-menu-wrapper" v-if="isCurrentUsersPost(item)">
+              <el-button link type="info" @click.stop="showPostMenu(item.id)">···</el-button>
+              <Transition name="menu-dropdown">
+                <div v-if="activePostMenu === item.id" class="post-menu-dropdown">
+                  <div class="menu-item delete" @click.stop="handleDeletePost(item)">
+                    <span class="menu-icon">🗑️</span>
+                    <span class="menu-text">删除帖子</span>
+                  </div>
+                </div>
+              </Transition>
+            </div>
           </div>
 
           <h3 class="topic topic-link" @click="goToPost(item.id)">{{ item.topic }}</h3>
@@ -2768,6 +2838,68 @@ onUnmounted(() => {
 .emoji-burst-enter-from,
 .emoji-burst-leave-to {
   opacity: 0;
+}
+
+/* 帖子菜单样式 */
+.post-menu-wrapper {
+  position: relative;
+}
+
+.post-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+.menu-item:hover {
+  background: #f5f5f5;
+}
+
+.menu-item.delete {
+  color: #ff4d4f;
+}
+
+.menu-item.delete:hover {
+  background: #fff2f0;
+}
+
+.menu-icon {
+  font-size: 14px;
+}
+
+.menu-text {
+  white-space: nowrap;
+}
+
+/* 菜单下拉动画 */
+.menu-dropdown-enter-active,
+.menu-dropdown-leave-active {
+  transition: all 0.2s ease;
+}
+
+.menu-dropdown-enter-from,
+.menu-dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.95);
 }
 
 @media (max-width: 1200px) {

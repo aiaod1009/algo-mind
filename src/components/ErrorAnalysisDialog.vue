@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
   modelValue: {
@@ -24,7 +24,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'refresh'])
 
 const visible = computed({
   get: () => props.modelValue,
@@ -33,8 +33,78 @@ const visible = computed({
 
 const activeTab = ref('analysis')
 
-const hasStructuredData = computed(() => {
-  return props.analysisData && Object.keys(props.analysisData).length > 0
+// 解析纯文本内容为结构化数据
+const parsedData = computed(() => {
+  // 如果有结构化数据，直接使用
+  if (props.analysisData && Object.keys(props.analysisData).length > 0) {
+    return props.analysisData
+  }
+  
+  // 否则解析 content 文本
+  if (!props.content) {
+    return {
+      summary: '暂无分析结果',
+      rootCause: '',
+      explanation: '',
+      knowledgePoints: [],
+      relatedTopics: [],
+      suggestions: [],
+      studyPlan: null
+    }
+  }
+  
+  const text = props.content
+  const data = {
+    summary: '',
+    rootCause: '',
+    explanation: '',
+    knowledgePoints: [],
+    relatedTopics: [],
+    suggestions: [],
+    studyPlan: null
+  }
+  
+  // 提取 Summary
+  const summaryMatch = text.match(/Summary:\s*([^\n]+(?:\n(?![A-Z][a-z]+:)[^\n]+)*)/i)
+  if (summaryMatch) {
+    data.summary = summaryMatch[1].trim()
+  }
+  
+  // 提取 Root cause
+  const rootCauseMatch = text.match(/Root cause:\s*([^\n]+(?:\n(?![A-Z][a-z]+:)[^\n]+)*)/i)
+  if (rootCauseMatch) {
+    data.rootCause = rootCauseMatch[1].trim()
+  }
+  
+  // 提取 Explanation
+  const explanationMatch = text.match(/Explanation:\s*([^\n]+(?:\n(?![A-Z][a-z]+:)[^\n]+)*)/i)
+  if (explanationMatch) {
+    data.explanation = explanationMatch[1].trim()
+  }
+  
+  // 提取 Suggestions
+  const suggestionsMatch = text.match(/Suggestions:\s*([\s\S]*?)(?=\n\n|$)/i)
+  if (suggestionsMatch) {
+    const suggestionsText = suggestionsMatch[1].trim()
+    const suggestionLines = suggestionsText.split('\n').filter(line => line.trim().startsWith('-') || line.trim().startsWith('•'))
+    data.suggestions = suggestionLines.map((line, index) => ({
+      title: `改进建议 ${index + 1}`,
+      description: line.replace(/^[-•]\s*/, '').trim(),
+      priority: index === 0 ? 'high' : 'medium'
+    }))
+  }
+  
+  // 如果没有解析到 summary，使用整个内容作为 summary
+  if (!data.summary && !data.rootCause) {
+    data.summary = text.slice(0, 200) + (text.length > 200 ? '...' : '')
+    data.rootCause = text
+  }
+  
+  return data
+})
+
+const hasData = computed(() => {
+  return parsedData.value.summary || parsedData.value.rootCause || parsedData.value.suggestions.length > 0
 })
 
 const getPriorityColor = (priority) => {
@@ -54,713 +124,756 @@ const getPriorityLabel = (priority) => {
   }
   return labels[priority] || priority
 }
-
-const getDifficultyColor = (difficulty) => {
-  const colors = {
-    easy: '#22c55e',
-    medium: '#f59e0b',
-    hard: '#ef4444',
-  }
-  return colors[difficulty] || '#6b7280'
-}
-
-const getDifficultyLabel = (difficulty) => {
-  const labels = {
-    easy: '简单',
-    medium: '中等',
-    hard: '困难',
-  }
-  return labels[difficulty] || difficulty
-}
-
-const getMasteryLabel = (level) => {
-  const labels = {
-    beginner: '入门',
-    intermediate: '进阶',
-    advanced: '高级',
-  }
-  return labels[level] || level
-}
 </script>
 
 <template>
-  <el-dialog
-    v-model="visible"
-    :title="title"
-    width="800px"
-    class="analysis-dialog"
-    :close-on-click-modal="false"
-  >
-    <div class="analysis-container">
-      <el-skeleton :loading="loading" animated :rows="8">
-        <template v-if="hasStructuredData">
-          <div class="analysis-tabs">
-            <button
-              :class="['tab-btn', { active: activeTab === 'analysis' }]"
-              @click="activeTab = 'analysis'"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="8" x2="12" y2="12"/>
-                <line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              错误分析
-            </button>
-            <button
-              :class="['tab-btn', { active: activeTab === 'knowledge' }]"
-              @click="activeTab = 'knowledge'"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-              </svg>
-              知识点
-            </button>
-            <button
-              :class="['tab-btn', { active: activeTab === 'suggestions' }]"
-              @click="activeTab = 'suggestions'"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                <path d="M2 17l10 5 10-5"/>
-                <path d="M2 12l10 5 10-5"/>
-              </svg>
-              改进建议
-            </button>
-            <button
-              :class="['tab-btn', { active: activeTab === 'plan' }]"
-              @click="activeTab = 'plan'"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-              学习计划
-            </button>
-          </div>
-
-          <div class="analysis-summary" v-if="analysisData.summary">
-            <div class="summary-icon">
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
+  <Teleport to="body">
+    <Transition name="dialog-backdrop">
+      <div v-if="visible" class="ai-analysis-modal" @click.self="visible = false">
+        <Transition name="dialog-scale">
+          <div v-if="visible" class="ai-analysis-card">
+            <!-- 头部 -->
+            <div class="ai-header">
+              <div class="ai-title-wrapper">
+                <div class="ai-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                  </svg>
+                </div>
+                <div class="ai-title-group">
+                  <h2 class="ai-title">{{ title }}</h2>
+                  <span class="ai-subtitle">智能错题分析助手</span>
+                </div>
+              </div>
+              <button class="ai-close-btn" @click="visible = false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
             </div>
-            <p class="summary-text">{{ analysisData.summary }}</p>
-          </div>
 
-          <Transition name="fade" mode="out-in">
-            <div :key="activeTab" class="tab-content">
-              <template v-if="activeTab === 'analysis' && analysisData.errorAnalysis">
-                <div class="section-card error-analysis">
-                  <div class="section-header">
-                    <div class="section-icon error">
-                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <!-- 加载状态 -->
+            <div v-if="loading" class="ai-loading">
+              <div class="ai-loading-spinner"></div>
+              <p>AI 正在分析中...</p>
+            </div>
+
+            <!-- 内容区域 -->
+            <div v-else class="ai-content">
+              <!-- 标签页 -->
+              <div class="ai-tabs">
+                <button 
+                  :class="['ai-tab', { active: activeTab === 'analysis' }]"
+                  @click="activeTab = 'analysis'"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4M12 8h.01"/>
+                  </svg>
+                  <span>错误分析</span>
+                </button>
+                <button 
+                  :class="['ai-tab', { active: activeTab === 'suggestions' }]"
+                  @click="activeTab = 'suggestions'"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 20h9M12 20l-4-4m4 4l-4 4M12 4v12M5 12l7-7 7 7"/>
+                  </svg>
+                  <span>改进建议</span>
+                </button>
+              </div>
+
+              <!-- 错误分析面板 -->
+              <div v-if="activeTab === 'analysis'" class="ai-panel">
+                <!-- 总结卡片 -->
+                <div class="ai-summary-box">
+                  <div class="ai-summary-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                  </div>
+                  <div class="ai-summary-content">
+                    <h3>分析总结</h3>
+                    <p>{{ parsedData.summary || '暂无分析总结' }}</p>
+                  </div>
+                </div>
+
+                <!-- 错误原因 -->
+                <div class="ai-section" v-if="parsedData.rootCause || parsedData.explanation">
+                  <div class="ai-section-header">
+                    <div class="ai-section-icon error">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="10"/>
                         <line x1="15" y1="9" x2="9" y2="15"/>
                         <line x1="9" y1="9" x2="15" y2="15"/>
                       </svg>
                     </div>
-                    <h3>根本原因</h3>
+                    <h4>错误原因</h4>
                   </div>
-                  <p class="root-cause">{{ analysisData.errorAnalysis.rootCause }}</p>
-                  <p class="explanation">{{ analysisData.errorAnalysis.detailedExplanation }}</p>
-                  
-                  <div class="common-mistakes" v-if="analysisData.errorAnalysis.commonMistakes?.length">
-                    <h4>常见错误</h4>
-                    <ul>
-                      <li v-for="(mistake, idx) in analysisData.errorAnalysis.commonMistakes" :key="idx">
-                        {{ mistake }}
-                      </li>
-                    </ul>
+                  <div class="ai-section-body">
+                    <p>{{ parsedData.rootCause || parsedData.explanation }}</p>
                   </div>
                 </div>
-              </template>
 
-              <template v-else-if="activeTab === 'knowledge' && analysisData.knowledgePoints?.length">
-                <div class="knowledge-grid">
+                <!-- 详细解释 -->
+                <div class="ai-section" v-if="parsedData.explanation && parsedData.rootCause">
+                  <div class="ai-section-header">
+                    <div class="ai-section-icon info">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 16v-4M12 8h.01"/>
+                      </svg>
+                    </div>
+                    <h4>详细解释</h4>
+                  </div>
+                  <div class="ai-section-body">
+                    <p>{{ parsedData.explanation }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 改进建议面板 -->
+              <div v-if="activeTab === 'suggestions'" class="ai-panel">
+                <div v-if="parsedData.suggestions.length > 0" class="ai-suggestions-list">
                   <div 
-                    v-for="(kp, idx) in analysisData.knowledgePoints" 
-                    :key="idx"
-                    class="knowledge-card"
+                    v-for="(suggestion, index) in parsedData.suggestions" 
+                    :key="index"
+                    class="ai-suggestion-item"
                   >
-                    <div class="kp-header">
-                      <span class="kp-name">{{ kp.name }}</span>
-                      <span class="kp-level" :class="kp.masteryLevel">
-                        {{ getMasteryLabel(kp.masteryLevel) }}
-                      </span>
-                    </div>
-                    <p class="kp-desc">{{ kp.description }}</p>
-                    <div class="kp-resources" v-if="kp.relatedResources?.length">
-                      <span class="resource-label">推荐资源：</span>
-                      <span v-for="(res, i) in kp.relatedResources" :key="i" class="resource-tag">
-                        {{ res }}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </template>
-
-              <template v-else-if="activeTab === 'suggestions' && analysisData.suggestions?.length">
-                <div class="suggestions-list">
-                  <div 
-                    v-for="(s, idx) in analysisData.suggestions" 
-                    :key="idx"
-                    class="suggestion-card"
-                  >
-                    <div class="suggestion-header">
-                      <div class="suggestion-icon">
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M9 11l3 3L22 4"/>
-                          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                        </svg>
-                      </div>
-                      <div class="suggestion-title">
-                        <h4>{{ s.title }}</h4>
-                        <span 
-                          class="priority-badge"
-                          :style="{ backgroundColor: getPriorityColor(s.priority) }"
-                        >
-                          {{ getPriorityLabel(s.priority) }}
-                        </span>
-                      </div>
-                    </div>
-                    <p class="suggestion-desc">{{ s.description }}</p>
-                    <ul class="action-items" v-if="s.actionItems?.length">
-                      <li v-for="(item, i) in s.actionItems" :key="i">{{ item }}</li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div class="recommended-section" v-if="analysisData.recommendedProblems?.length">
-                  <h4>推荐练习</h4>
-                  <div class="recommended-grid">
-                    <div 
-                      v-for="(p, idx) in analysisData.recommendedProblems" 
-                      :key="idx"
-                      class="recommended-card"
-                    >
-                      <div class="rec-header">
-                        <span class="rec-title">{{ p.title }}</span>
-                        <span 
-                          class="rec-difficulty"
-                          :style="{ color: getDifficultyColor(p.difficulty) }"
-                        >
-                          {{ getDifficultyLabel(p.difficulty) }}
-                        </span>
-                      </div>
-                      <p class="rec-reason">{{ p.reason }}</p>
-                      <span class="rec-source">{{ p.source }}</span>
-                    </div>
-                  </div>
-                </div>
-              </template>
-
-              <template v-else-if="activeTab === 'plan' && analysisData.studyPlan">
-                <div class="study-plan">
-                  <div class="plan-timeline">
-                    <div class="plan-item short">
-                      <div class="plan-dot"></div>
-                      <div class="plan-content">
-                        <span class="plan-label">本周目标</span>
-                        <p>{{ analysisData.studyPlan.shortTerm }}</p>
-                      </div>
-                    </div>
-                    <div class="plan-item mid">
-                      <div class="plan-dot"></div>
-                      <div class="plan-content">
-                        <span class="plan-label">本月目标</span>
-                        <p>{{ analysisData.studyPlan.midTerm }}</p>
-                      </div>
-                    </div>
-                    <div class="plan-item long">
-                      <div class="plan-dot"></div>
-                      <div class="plan-content">
-                        <span class="plan-label">本季度目标</span>
-                        <p>{{ analysisData.studyPlan.longTerm }}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="daily-tasks" v-if="analysisData.studyPlan.dailyTasks?.length">
-                    <h4>每日任务</h4>
-                    <div class="task-list">
-                      <div 
-                        v-for="(task, idx) in analysisData.studyPlan.dailyTasks" 
-                        :key="idx"
-                        class="task-item"
+                    <div class="ai-suggestion-header">
+                      <div class="ai-suggestion-number">{{ index + 1 }}</div>
+                      <h4>{{ suggestion.title }}</h4>
+                      <span 
+                        class="ai-priority-badge"
+                        :style="{ 
+                          backgroundColor: getPriorityColor(suggestion.priority) + '20',
+                          color: getPriorityColor(suggestion.priority)
+                        }"
                       >
-                        <span class="task-check">☐</span>
-                        <span class="task-text">{{ task }}</span>
-                      </div>
+                        {{ getPriorityLabel(suggestion.priority) }}
+                      </span>
                     </div>
+                    <p class="ai-suggestion-text">{{ suggestion.description }}</p>
                   </div>
                 </div>
-              </template>
+                <div v-else class="ai-empty">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4M12 8h.01"/>
+                  </svg>
+                  <p>暂无改进建议</p>
+                </div>
+              </div>
             </div>
-          </Transition>
-        </template>
 
-        <template v-else>
-          <div class="text-analysis">
-            <pre>{{ content || '暂无分析结果' }}</pre>
+            <!-- 底部 -->
+            <div class="ai-footer">
+              <button class="ai-btn-secondary" @click="visible = false">关闭</button>
+              <button class="ai-btn-refresh" @click="emit('refresh')" :disabled="loading">
+                <svg v-if="!loading" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                </svg>
+                <span v-else class="ai-spinner-small"></span>
+                {{ loading ? '分析中...' : '重新分析' }}
+              </button>
+              <button class="ai-btn-primary" @click="activeTab = 'suggestions'" v-if="activeTab === 'analysis' && parsedData.suggestions.length > 0">
+                查看建议
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              </button>
+              <button class="ai-btn-primary" @click="activeTab = 'analysis'" v-else-if="activeTab === 'suggestions'">
+                返回分析
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+              </button>
+            </div>
           </div>
-        </template>
-      </el-skeleton>
-    </div>
-
-    <template #footer>
-      <div class="dialog-footer">
-        <el-button @click="visible = false">关闭</el-button>
-        <el-button type="primary" v-if="hasStructuredData" @click="activeTab = 'plan'">
-          查看学习计划
-        </el-button>
+        </Transition>
       </div>
-    </template>
-  </el-dialog>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
-.analysis-dialog :deep(.el-dialog__body) {
-  padding: 0;
-}
+/* ================================
+   AI 智能分析对话框 - 全新设计
+   玻璃拟态 + 渐变 + 动画
+   ================================ */
 
-.analysis-container {
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: 20px;
-}
-
-.analysis-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.tab-btn {
+/* 遮罩层 */
+.ai-analysis-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
-  border: none;
-  background: #f3f4f6;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  color: #6b7280;
-  transition: all 0.2s;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
 }
 
-.tab-btn:hover {
-  background: #e5e7eb;
-}
-
-.tab-btn.active {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  color: white;
-}
-
-.analysis-summary {
+/* 对话框卡片 */
+.ai-analysis-card {
+  width: 100%;
+  max-width: 640px;
+  max-height: 85vh;
   display: flex;
-  gap: 16px;
-  padding: 16px;
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border-radius: 12px;
-  margin-bottom: 20px;
+  flex-direction: column;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 24px;
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  overflow: hidden;
 }
 
-.summary-icon {
-  flex-shrink: 0;
+/* 头部 */
+.ai-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 28px;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.ai-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ai-icon {
   width: 48px;
   height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: white;
-  border-radius: 12px;
-  color: #f59e0b;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  border-radius: 16px;
+  color: white;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.3);
 }
 
-.summary-text {
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.6;
-  color: #92400e;
+.ai-icon svg {
+  width: 24px;
+  height: 24px;
 }
 
-.section-card {
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.section-icon {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-}
-
-.section-icon.error {
-  background: #fef2f2;
-  color: #ef4444;
-}
-
-.section-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.root-cause {
-  font-size: 16px;
-  font-weight: 500;
-  color: #1f2937;
-  margin-bottom: 12px;
-}
-
-.explanation {
-  color: #6b7280;
-  line-height: 1.7;
-  margin-bottom: 16px;
-}
-
-.common-mistakes h4 {
-  font-size: 14px;
-  color: #6b7280;
-  margin: 0 0 8px 0;
-}
-
-.common-mistakes ul {
-  margin: 0;
-  padding-left: 20px;
-}
-
-.common-mistakes li {
-  color: #ef4444;
-  margin-bottom: 4px;
-}
-
-.knowledge-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
-
-.knowledge-card {
-  background: white;
-  border-radius: 12px;
-  padding: 16px;
-  border: 1px solid #e5e7eb;
-  transition: all 0.2s;
-}
-
-.knowledge-card:hover {
-  border-color: #4f46e5;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.1);
-}
-
-.kp-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.kp-name {
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.kp-level {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.kp-level.beginner {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
-.kp-level.intermediate {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.kp-level.advanced {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.kp-desc {
-  font-size: 14px;
-  color: #6b7280;
-  margin-bottom: 12px;
-}
-
-.kp-resources {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.resource-label {
-  font-size: 12px;
-  color: #9ca3af;
-}
-
-.resource-tag {
-  font-size: 12px;
-  padding: 2px 8px;
-  background: #f3f4f6;
-  border-radius: 4px;
-  color: #4b5563;
-}
-
-.suggestions-list {
+.ai-title-group {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 2px;
 }
 
-.suggestion-card {
-  background: white;
-  border-radius: 12px;
-  padding: 16px;
-  border: 1px solid #e5e7eb;
+.ai-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 }
 
-.suggestion-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+.ai-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
 }
 
-.suggestion-icon {
+.ai-close-btn {
   width: 36px;
   height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ecfdf5;
-  color: #10b981;
-  border-radius: 8px;
+  border: none;
+  background: rgba(241, 245, 249, 0.8);
+  border-radius: 12px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.suggestion-title {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.ai-close-btn:hover {
+  background: rgba(226, 232, 240, 0.8);
+  color: #0f172a;
+  transform: rotate(90deg);
 }
 
-.suggestion-title h4 {
-  margin: 0;
-  font-size: 16px;
-  color: #1f2937;
+.ai-close-btn svg {
+  width: 20px;
+  height: 20px;
 }
 
-.priority-badge {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  color: white;
-}
-
-.suggestion-desc {
-  color: #6b7280;
-  margin-bottom: 12px;
-}
-
-.action-items {
-  margin: 0;
-  padding-left: 20px;
-}
-
-.action-items li {
-  color: #4b5563;
-  margin-bottom: 4px;
-}
-
-.recommended-section {
-  margin-top: 24px;
-}
-
-.recommended-section h4 {
-  font-size: 16px;
-  color: #1f2937;
-  margin-bottom: 12px;
-}
-
-.recommended-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-}
-
-.recommended-card {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.rec-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.rec-title {
-  font-weight: 500;
-  color: #1f2937;
-}
-
-.rec-difficulty {
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.rec-reason {
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 8px;
-}
-
-.rec-source {
-  font-size: 12px;
-  color: #9ca3af;
-}
-
-.study-plan {
+/* 加载状态 */
+.ai-loading {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 40px;
+  gap: 20px;
 }
 
-.plan-timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.plan-item {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-}
-
-.plan-dot {
-  width: 16px;
-  height: 16px;
+.ai-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(79, 70, 229, 0.1);
+  border-top-color: #4f46e5;
   border-radius: 50%;
-  flex-shrink: 0;
-  margin-top: 4px;
+  animation: spin 1s linear infinite;
 }
 
-.plan-item.short .plan-dot {
-  background: #22c55e;
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
-.plan-item.mid .plan-dot {
-  background: #f59e0b;
+.ai-loading p {
+  margin: 0;
+  color: #64748b;
+  font-size: 15px;
 }
 
-.plan-item.long .plan-dot {
-  background: #8b5cf6;
-}
-
-.plan-content {
+/* 内容区域 */
+.ai-content {
   flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
 }
 
-.plan-label {
-  font-size: 13px;
-  color: #6b7280;
-  display: block;
-  margin-bottom: 4px;
+.ai-content::-webkit-scrollbar {
+  width: 6px;
 }
 
-.plan-content p {
+.ai-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-content::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+  border-radius: 3px;
+}
+
+/* 标签页 */
+.ai-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 6px;
+  background: rgba(241, 245, 249, 0.8);
+  border-radius: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.ai-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  background: transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ai-tab svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ai-tab:hover {
+  color: #475569;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.ai-tab.active {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  font-weight: 600;
+}
+
+/* 面板 */
+.ai-panel {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 总结卡片 */
+.ai-summary-box {
+  display: flex;
+  gap: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-radius: 20px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.ai-summary-icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 14px;
+  color: #f59e0b;
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.25);
+}
+
+.ai-summary-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.ai-summary-content h3 {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.ai-summary-content p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #78350f;
+}
+
+/* 内容区块 */
+.ai-section {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.3s ease;
+}
+
+.ai-section:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.ai-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ai-section-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.ai-section-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ai-section-icon.error {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  color: #ef4444;
+}
+
+.ai-section-icon.info {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #3b82f6;
+}
+
+.ai-section-header h4 {
   margin: 0;
   font-size: 15px;
-  color: #1f2937;
+  font-weight: 600;
+  color: #0f172a;
 }
 
-.daily-tasks h4 {
-  font-size: 16px;
-  color: #1f2937;
-  margin-bottom: 12px;
+.ai-section-body p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #475569;
 }
 
-.task-list {
+/* 建议列表 */
+.ai-suggestions-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
-.task-item {
+.ai-suggestion-item {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.3s ease;
+}
+
+.ai-suggestion-item:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  transform: translateY(-2px);
+}
+
+.ai-suggestion-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
-  background: #f9fafb;
+  margin-bottom: 10px;
+}
+
+.ai-suggestion-number {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: white;
   border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.task-check {
-  font-size: 18px;
-  color: #9ca3af;
-}
-
-.task-text {
-  color: #4b5563;
-}
-
-.text-analysis {
-  background: #f9fafb;
-  border-radius: 12px;
-  padding: 20px;
-}
-
-.text-analysis pre {
-  white-space: pre-wrap;
-  line-height: 1.8;
-  color: #374151;
-  font-family: inherit;
+.ai-suggestion-header h4 {
+  flex: 1;
   margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
 }
 
-.dialog-footer {
+.ai-priority-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ai-suggestion-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #475569;
+}
+
+/* 空状态 */
+.ai-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px;
+  color: #94a3b8;
+}
+
+.ai-empty svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.ai-empty p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* 底部 */
+.ai-footer {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+  padding: 20px 28px;
+  background: linear-gradient(180deg, #fafbfc 0%, #f8fafc 100%);
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
 }
 
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
+.ai-btn-secondary {
+  padding: 10px 20px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.fade-enter-from,
-.fade-leave-to {
+.ai-btn-secondary:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.ai-btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.ai-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4);
+}
+
+.ai-btn-primary svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 重新分析按钮 */
+.ai-btn-refresh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ai-btn-refresh:hover:not(:disabled) {
+  border-color: #4f46e5;
+  color: #4f46e5;
+  background: #f5f3ff;
+}
+
+.ai-btn-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ai-btn-refresh svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ai-spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(79, 70, 229, 0.2);
+  border-top-color: #4f46e5;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* 过渡动画 */
+.dialog-backdrop-enter-active,
+.dialog-backdrop-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.dialog-backdrop-enter-from,
+.dialog-backdrop-leave-to {
   opacity: 0;
+}
+
+.dialog-scale-enter-active,
+.dialog-scale-leave-active {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dialog-scale-enter-from,
+.dialog-scale-leave-to {
+  opacity: 0;
+  transform: scale(0.95) translateY(20px);
+}
+
+/* 响应式 */
+@media (max-width: 640px) {
+  .ai-analysis-modal {
+    padding: 16px;
+  }
+  
+  .ai-analysis-card {
+    max-height: 90vh;
+  }
+  
+  .ai-header {
+    padding: 20px;
+  }
+  
+  .ai-icon {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .ai-title {
+    font-size: 18px;
+  }
+  
+  .ai-content {
+    padding: 20px;
+  }
+  
+  .ai-tabs {
+    flex-wrap: wrap;
+  }
+  
+  .ai-tab {
+    flex: 1;
+    justify-content: center;
+    padding: 10px 16px;
+  }
+  
+  .ai-summary-box {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .ai-footer {
+    padding: 16px 20px;
+    flex-direction: column;
+  }
+  
+  .ai-btn-secondary,
+  .ai-btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

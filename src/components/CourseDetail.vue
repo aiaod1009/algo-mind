@@ -142,7 +142,7 @@ onMounted(() => {
       <div class="video-player">
         <iframe
           class="video-iframe"
-          src="https://player.bilibili.com/player.html?bvid=BV19e4y1q7JJ&poster=1"
+          src="https://player.bilibili.com/player.html?bvid=BV1r5411f7Bf&poster=1"
           frameborder="0"
           allowfullscreen
         ></iframe>

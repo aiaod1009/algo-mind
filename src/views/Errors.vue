@@ -196,9 +196,14 @@ const openAnalysisDialog = (content, data = null) => {
   analysisDialogVisible.value = true
 }
 
-const handleAnalyze = async (item) => {
-  if (item.analysis) {
-    openAnalysisDialog(item.analysis)
+const handleAnalyze = async (item, forceRefresh = false) => {
+  currentAnalysisItem.value = item
+
+  // 如果有已有分析且不是强制刷新，直接显示
+  if (item.analysis && !forceRefresh) {
+    analysisText.value = item.analysis
+    analysisData.value = item.analysisData || null
+    analysisDialogVisible.value = true
     return
   }
 
@@ -211,7 +216,7 @@ const handleAnalyze = async (item) => {
     const result = await errorStore.getAnalysis(item)
     analysisText.value = result.analysis
     analysisData.value = result.analysisData
-    errorStore.markAnalysis(item.id, result.analysis)
+    errorStore.markAnalysis(item.id, result.analysis, result.analysisData)
   } catch (error) {
     analysisDialogVisible.value = false
     ElMessage.error(error?.response?.data?.message || error?.message || 'AI 分析失败，请稍后再试')
@@ -220,6 +225,8 @@ const handleAnalyze = async (item) => {
   }
 }
 
+const currentAnalysisItem = ref(null)
+
 const handleReview = (item) => {
   const levelId = Number(item.levelId)
   if (!levelId) {
@@ -227,6 +234,11 @@ const handleReview = (item) => {
     return
   }
   router.push(`/challenge/${levelId}`)
+}
+
+const handleRefreshAnalysis = async () => {
+  if (!currentAnalysisItem.value) return
+  await handleAnalyze(currentAnalysisItem.value, true)
 }
 
 const handleMarkCompleted = async (item) => {
@@ -444,6 +456,7 @@ onMounted(loadData)
       :loading="analysisLoading"
       :content="analysisText"
       :analysis-data="analysisData"
+      @refresh="handleRefreshAnalysis"
     />
   </div>
 </template>
