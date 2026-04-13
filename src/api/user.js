@@ -254,6 +254,26 @@ export const userApi = {
   getCourseRecommendations() {
     return api.get('/course-recommendations', withNonBlockingAuth())
   },
+
+  getCodeSnapshots(params = {}) {
+    return api.get('/code-snapshots', { params })
+  },
+
+  getBestCodeSnapshot(levelId) {
+    return api.get('/code-snapshots/best', { params: { levelId } })
+  },
+
+  getCodeSnapshotStats() {
+    return api.get('/code-snapshots/stats')
+  },
+
+  saveCodeSnapshot(data) {
+    return api.post('/code-snapshots', data)
+  },
+
+  deleteCodeSnapshot(id) {
+    return api.delete(`/code-snapshots/${id}`)
+  },
 }
 
 export default userApi

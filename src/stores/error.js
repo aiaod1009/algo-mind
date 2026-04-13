@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '../api'
 
+const ANALYSIS_CACHE_PREFIX = 'error-analysis-cache'
+
 const toStringList = (value) => {
   if (Array.isArray(value)) {
     return value.map((item) => String(item).trim()).filter(Boolean)
@@ -21,7 +23,7 @@ const toStringList = (value) => {
     }
 
     return text
-      .split(/[,，、\n]/)
+      .split(/[\n,，、]/)
       .map((item) => item.trim())
       .filter(Boolean)
   }
@@ -31,6 +33,65 @@ const toStringList = (value) => {
 }
 
 const normalizeList = (items) => (Array.isArray(items) ? items : [])
+
+const parseAnalysisData = (value) => {
+  if (!value) return null
+  if (typeof value === 'object') return value
+
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value)
+    } catch (error) {
+      return null
+    }
+  }
+
+  return null
+}
+
+const readLocalUserId = () => {
+  try {
+    const raw = localStorage.getItem('user')
+    if (!raw) return 'guest'
+    const parsed = JSON.parse(raw)
+    return parsed?.id != null ? String(parsed.id) : 'guest'
+  } catch (error) {
+    return 'guest'
+  }
+}
+
+const getAnalysisCacheKey = () => `${ANALYSIS_CACHE_PREFIX}:${readLocalUserId()}`
+
+const readAnalysisCache = () => {
+  try {
+    const raw = localStorage.getItem(getAnalysisCacheKey())
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch (error) {
+    return {}
+  }
+}
+
+const writeAnalysisCache = (cache) => {
+  localStorage.setItem(getAnalysisCacheKey(), JSON.stringify(cache))
+}
+
+const normalizeErrorItem = (item, cached = null) => {
+  const serverAnalysisData = parseAnalysisData(item?.analysisData) || parseAnalysisData(item?.analysisDataJson)
+  const cachedAnalysisData = parseAnalysisData(cached?.analysisData)
+
+  return {
+    ...item,
+    analysis: item?.analysis || cached?.analysis || '',
+    analysisData: serverAnalysisData || cachedAnalysisData || null,
+  }
+}
+
+const attachCachedAnalysis = (items) => {
+  const cache = readAnalysisCache()
+  return normalizeList(items).map((item) => normalizeErrorItem(item, cache[String(item?.id)]))
+}
 
 const dedupeByLevel = (items, nextItem) => {
   if (!nextItem?.levelId) {
@@ -65,9 +126,10 @@ export const useErrorStore = defineStore('error', () => {
 
     const res = await api.get('/errors')
     if (res.data?.code === 0) {
-      errors.value = normalizeList(res.data.data)
+      errors.value = attachCachedAnalysis(res.data.data)
       return { fromCache: false }
     }
+
     throw new Error(res.data?.message || '获取错题数据失败')
   }
 
@@ -78,9 +140,10 @@ export const useErrorStore = defineStore('error', () => {
 
     const res = await api.get('/errors/completed')
     if (res.data?.code === 0) {
-      completedErrors.value = normalizeList(res.data.data)
+      completedErrors.value = attachCachedAnalysis(res.data.data)
       return { fromCache: false }
     }
+
     throw new Error(res.data?.message || '获取已完成错题失败')
   }
 
@@ -107,12 +170,17 @@ export const useErrorStore = defineStore('error', () => {
 
     const res = await api.post('/errors', payload)
     if (res.data?.code === 0 && res.data?.data) {
-      errors.value = [res.data.data, ...errors.value.filter((item) => Number(item.id) !== Number(res.data.data.id))]
+      errors.value = [
+        normalizeErrorItem(res.data.data),
+        ...errors.value.filter((item) => Number(item.id) !== Number(res.data.data.id)),
+      ]
+
       if (res.data.data.levelId != null) {
         completedErrors.value = completedErrors.value.filter(
           (item) => Number(item.levelId) !== Number(res.data.data.levelId),
         )
       }
+
       return res.data.data
     }
 
@@ -123,7 +191,7 @@ export const useErrorStore = defineStore('error', () => {
     const numericId = Number(errorId)
     const res = await api.post(`/errors/${numericId}/complete`)
     if (res.data?.code === 0 && res.data?.data) {
-      const completedItem = res.data.data
+      const completedItem = normalizeErrorItem(res.data.data)
       errors.value = errors.value.filter((item) => Number(item.id) !== numericId)
       completedErrors.value = dedupeByLevel(completedErrors.value, completedItem)
       return completedItem
@@ -150,23 +218,62 @@ export const useErrorStore = defineStore('error', () => {
     const res = await api.post('/error-analysis', payload, {
       timeout: 60000,
     })
+
     if (res.data?.code === 0) {
       return {
         analysis: res.data.data.analysis,
-        analysisData: res.data.data.analysisData,
+        analysisData: parseAnalysisData(res.data.data.analysisData),
+        analyzedAt: res.data.data.analyzedAt || null,
+        reusedLastAnalysis: Boolean(res.data.data.reusedLastAnalysis),
+        limitReached: Boolean(res.data.data.limitReached),
+        message: res.data.data.message || '',
+        quota: res.data.data.quota || null,
       }
     }
-    throw new Error(res.data?.message || 'AI 分析失败')
+
+    const error = new Error(res.data?.message || 'AI 分析失败')
+    error.code = res.data?.code
+    throw error
+  }
+
+  const cacheAnalysisResult = (errorId, analysis, analysisData = null) => {
+    if (errorId == null) return
+
+    const cache = readAnalysisCache()
+    cache[String(errorId)] = {
+      analysis: analysis || '',
+      analysisData: analysisData || null,
+      updatedAt: Date.now(),
+    }
+    writeAnalysisCache(cache)
+  }
+
+  const getCachedAnalysisResult = (errorId) => {
+    if (errorId == null) return null
+
+    const cached = readAnalysisCache()[String(errorId)]
+    if (!cached) return null
+
+    return {
+      analysis: cached.analysis || '',
+      analysisData: parseAnalysisData(cached.analysisData),
+      updatedAt: cached.updatedAt || null,
+    }
+  }
+
+  const applyAnalysisToCollection = (collection, errorId, analysis, analysisData = null) => {
+    const item = collection.value.find((row) => Number(row.id) === Number(errorId))
+    if (!item) return
+
+    item.analysisStatus = '已分析'
+    item.analysis = analysis
+    item.analysisData = analysisData || null
   }
 
   const markAnalysis = (errorId, analysis, analysisData = null) => {
-    const item = errors.value.find((row) => Number(row.id) === Number(errorId))
-    if (!item) return
-    item.analysisStatus = '已分析'
-    item.analysis = analysis
-    if (analysisData) {
-      item.analysisData = analysisData
-    }
+    cacheAnalysisResult(errorId, analysis, analysisData)
+    applyAnalysisToCollection(errors, errorId, analysis, analysisData)
+    applyAnalysisToCollection(completedErrors, errorId, analysis, analysisData)
   }
 
   return {
@@ -179,6 +286,8 @@ export const useErrorStore = defineStore('error', () => {
     addError,
     completeError,
     getAnalysis,
+    cacheAnalysisResult,
+    getCachedAnalysisResult,
     markAnalysis,
   }
 })

@@ -77,6 +77,8 @@ public class ErrorBookService {
         target.setCorrectAnswer(source.getCorrectAnswer());
         target.setAnalysisStatus(source.getAnalysisStatus());
         target.setAnalysis(source.getAnalysis());
+        target.setAnalysisDataJson(source.getAnalysisDataJson());
+        target.setAnalyzedAt(source.getAnalyzedAt());
         target.setSourceErrorId(source.getId());
         target.setCreatedAt(source.getCreatedAt());
         target.setLastErrorAt(source.getUpdatedAt());

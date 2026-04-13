@@ -33,6 +33,83 @@ const visible = computed({
 
 const activeTab = ref('analysis')
 
+watch(
+  () => props.modelValue,
+  (isVisible) => {
+    if (isVisible) {
+      activeTab.value = 'analysis'
+    }
+  }
+)
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const extractSectionText = (text, sectionTitles = []) => {
+  for (const title of sectionTitles) {
+    const match = text.match(
+      new RegExp(`${escapeRegExp(title)}:\\s*([\\s\\S]*?)(?=\\n[A-Z][A-Za-z\\s]+:|$)`, 'i')
+    )
+
+    if (match?.[1]) {
+      return match[1].trim()
+    }
+  }
+
+  return ''
+}
+
+const parseSectionList = (text, sectionTitles = []) => {
+  const sectionText = extractSectionText(text, sectionTitles)
+
+  if (!sectionText) {
+    return []
+  }
+
+  return sectionText
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) =>
+      line
+        .split(/[、,，]/)
+        .map((item) => item.replace(/^[-*•\d.\s]+/, '').trim())
+        .filter(Boolean)
+    )
+}
+
+const normalizeTopicList = (items = []) => {
+  if (!Array.isArray(items)) {
+    return []
+  }
+
+  return items
+    .map((item) => {
+      if (typeof item === 'string') {
+        return {
+          title: item,
+          description: '',
+        }
+      }
+
+      if (item && typeof item === 'object') {
+        const title = item.title || item.name || item.label || item.topic || item.point || ''
+        const description = item.description || item.detail || item.summary || item.content || ''
+
+        if (!title) {
+          return null
+        }
+
+        return {
+          title,
+          description,
+        }
+      }
+
+      return null
+    })
+    .filter(Boolean)
+}
+
 // 解析纯文本内容为结构化数据
 const parsedData = computed(() => {
   // 如果有结构化数据，直接使用
@@ -48,8 +125,7 @@ const parsedData = computed(() => {
       explanation: '',
       knowledgePoints: [],
       relatedTopics: [],
-      suggestions: [],
-      studyPlan: null
+      suggestions: []
     }
   }
   
@@ -60,8 +136,7 @@ const parsedData = computed(() => {
     explanation: '',
     knowledgePoints: [],
     relatedTopics: [],
-    suggestions: [],
-    studyPlan: null
+    suggestions: []
   }
   
   // 提取 Summary
@@ -81,6 +156,8 @@ const parsedData = computed(() => {
   if (explanationMatch) {
     data.explanation = explanationMatch[1].trim()
   }
+  data.knowledgePoints = parseSectionList(text, ['Knowledge points', 'Knowledge Points', 'Key concepts'])
+  data.relatedTopics = parseSectionList(text, ['Related topics', 'Related Topics', 'Topics'])
   
   // 提取 Suggestions
   const suggestionsMatch = text.match(/Suggestions:\s*([\s\S]*?)(?=\n\n|$)/i)
@@ -105,6 +182,12 @@ const parsedData = computed(() => {
 
 const hasData = computed(() => {
   return parsedData.value.summary || parsedData.value.rootCause || parsedData.value.suggestions.length > 0
+})
+
+const normalizedKnowledgePoints = computed(() => normalizeTopicList(parsedData.value.knowledgePoints))
+const normalizedRelatedTopics = computed(() => normalizeTopicList(parsedData.value.relatedTopics))
+const hasKnowledgeContent = computed(() => {
+  return normalizedKnowledgePoints.value.length > 0 || normalizedRelatedTopics.value.length > 0
 })
 
 const getPriorityColor = (priority) => {
@@ -173,6 +256,17 @@ const getPriorityLabel = (priority) => {
                   <span>错误分析</span>
                 </button>
                 <button 
+                  :class="['ai-tab', { active: activeTab === 'knowledge' }]"
+                  @click="activeTab = 'knowledge'"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+                    <path d="M6.5 17H20V4H6.5A2.5 2.5 0 004 6.5v13"/>
+                    <path d="M8 8h8M8 12h8"/>
+                  </svg>
+                  <span>&#x77E5;&#x8BC6;&#x70B9;</span>
+                </button>
+                <button 
                   :class="['ai-tab', { active: activeTab === 'suggestions' }]"
                   @click="activeTab = 'suggestions'"
                 >
@@ -230,9 +324,93 @@ const getPriorityLabel = (priority) => {
                     <p>{{ parsedData.explanation }}</p>
                   </div>
                 </div>
+
+                <!-- 知识点 -->
+                <div class="ai-section" v-if="normalizedKnowledgePoints.length">
+                  <div class="ai-section-header">
+                    <div class="ai-section-icon knowledge">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                      </svg>
+                    </div>
+                    <h4>&#x6D89;&#x53CA;&#x77E5;&#x8BC6;&#x70B9;</h4>
+                  </div>
+                  <div class="ai-section-body">
+                    <div class="knowledge-tags">
+                      <span class="knowledge-tag" v-for="(point, index) in normalizedKnowledgePoints" :key="`${point.title}-${index}`">
+                        {{ point.title }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <!-- 改进建议面板 -->
+              <div v-if="activeTab === 'knowledge'" class="ai-panel">
+                <div v-if="hasKnowledgeContent">
+                  <div class="ai-summary-box ai-summary-box--knowledge">
+                    <div class="ai-summary-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+                        <path d="M6.5 17H20V4H6.5A2.5 2.5 0 004 6.5v13"/>
+                        <path d="M8 8h8M8 12h8"/>
+                      </svg>
+                    </div>
+                    <div class="ai-summary-content">
+                      <h3>&#x77E5;&#x8BC6;&#x70B9;&#x68B3;&#x7406;</h3>
+                      <p>
+                        &#x5DF2;&#x6574;&#x7406; {{ normalizedKnowledgePoints.length }} &#x4E2A;&#x6838;&#x5FC3;&#x77E5;&#x8BC6;&#x70B9;
+                        <template v-if="normalizedRelatedTopics.length">
+                          &#xFF0C;&#x5E76;&#x5173;&#x8054; {{ normalizedRelatedTopics.length }} &#x4E2A;&#x76F8;&#x5173;&#x4E3B;&#x9898;
+                        </template>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div v-if="normalizedKnowledgePoints.length" class="ai-knowledge-grid">
+                    <article
+                      v-for="(point, index) in normalizedKnowledgePoints"
+                      :key="`${point.title}-${index}`"
+                      class="ai-knowledge-card"
+                    >
+                      <div class="ai-knowledge-card-head">
+                        <span class="ai-knowledge-index">{{ index + 1 }}</span>
+                        <h4>{{ point.title }}</h4>
+                      </div>
+                      <p v-if="point.description" class="ai-knowledge-description">{{ point.description }}</p>
+                    </article>
+                  </div>
+
+                  <div v-if="normalizedRelatedTopics.length" class="ai-section">
+                    <div class="ai-section-header">
+                      <div class="ai-section-icon topic">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M7 7h10v10H7z"/>
+                          <path d="M3 12h4M17 12h4M12 3v4M12 17v4"/>
+                        </svg>
+                      </div>
+                      <h4>&#x5173;&#x8054;&#x4E3B;&#x9898;</h4>
+                    </div>
+                    <div class="ai-section-body ai-section-body--stack">
+                      <p class="ai-section-text">&#x8FD9;&#x4E9B;&#x4E3B;&#x9898;&#x53EF;&#x4EE5;&#x548C;&#x5F53;&#x524D;&#x9519;&#x9898;&#x4E00;&#x8D77;&#x590D;&#x4E60;&#x3002;</p>
+                      <div class="knowledge-tags secondary">
+                        <span class="knowledge-tag related" v-for="(topic, index) in normalizedRelatedTopics" :key="`${topic.title}-${index}`">
+                          {{ topic.title }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="ai-empty">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+                    <path d="M6.5 17H20V4H6.5A2.5 2.5 0 004 6.5v13"/>
+                    <path d="M8 8h8M8 12h8"/>
+                  </svg>
+                  <p>&#x6682;&#x65E0;&#x77E5;&#x8BC6;&#x70B9;&#x6570;&#x636E;</p>
+                </div>
+              </div>
+
               <div v-if="activeTab === 'suggestions'" class="ai-panel">
                 <div v-if="parsedData.suggestions.length > 0" class="ai-suggestions-list">
                   <div 
@@ -276,10 +454,22 @@ const getPriorityLabel = (priority) => {
                 <span v-else class="ai-spinner-small"></span>
                 {{ loading ? '分析中...' : '重新分析' }}
               </button>
+              <button class="ai-btn-primary" @click="activeTab = 'knowledge'" v-if="activeTab === 'analysis' && hasKnowledgeContent">
+                &#x67E5;&#x770B;&#x77E5;&#x8BC6;&#x70B9;
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              </button>
               <button class="ai-btn-primary" @click="activeTab = 'suggestions'" v-if="activeTab === 'analysis' && parsedData.suggestions.length > 0">
                 查看建议
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              </button>
+              <button class="ai-btn-primary" @click="activeTab = 'analysis'" v-if="activeTab === 'knowledge'">
+                &#x8FD4;&#x56DE;&#x5206;&#x6790;
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 12H5M12 19l-7-7 7-7"/>
                 </svg>
               </button>
               <button class="ai-btn-primary" @click="activeTab = 'analysis'" v-else-if="activeTab === 'suggestions'">
@@ -608,6 +798,16 @@ const getPriorityLabel = (priority) => {
   color: #3b82f6;
 }
 
+.ai-section-icon.knowledge {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  color: #22c55e;
+}
+
+.ai-section-icon.topic {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  color: #f97316;
+}
+
 .ai-section-header h4 {
   margin: 0;
   font-size: 15px;
@@ -616,6 +816,122 @@ const getPriorityLabel = (priority) => {
 }
 
 .ai-section-body p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #475569;
+}
+
+/* 知识点标签 */
+.knowledge-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.knowledge-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  color: #166534;
+  border-radius: 24px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #bbf7d0;
+  transition: all 0.3s ease;
+}
+
+.knowledge-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.25);
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+}
+
+.knowledge-tags.secondary {
+  gap: 12px;
+}
+
+.knowledge-tag.related {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+.ai-summary-box--knowledge {
+  background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%);
+  border-color: rgba(34, 211, 238, 0.28);
+}
+
+.ai-summary-box--knowledge .ai-summary-icon {
+  color: #0891b2;
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.18);
+}
+
+.ai-summary-box--knowledge .ai-summary-content h3 {
+  color: #155e75;
+}
+
+.ai-summary-box--knowledge .ai-summary-content p {
+  color: #164e63;
+}
+
+.ai-knowledge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.ai-knowledge-card {
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.92) 100%);
+  border: 1px solid rgba(186, 230, 253, 0.9);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(14, 116, 144, 0.08);
+}
+
+.ai-knowledge-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ai-knowledge-card-head h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.ai-knowledge-index {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ai-knowledge-description {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #475569;
+}
+
+.ai-section-body--stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ai-section-text {
   margin: 0;
   font-size: 14px;
   line-height: 1.7;

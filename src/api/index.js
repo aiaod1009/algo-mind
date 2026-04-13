@@ -85,4 +85,10 @@ api.evaluateCodeStream = userApi.evaluateCodeStream
 api.runCode = userApi.runCode
 api.getCourseRecommendations = userApi.getCourseRecommendations
 
+api.getCodeSnapshots = userApi.getCodeSnapshots
+api.getBestCodeSnapshot = userApi.getBestCodeSnapshot
+api.getCodeSnapshotStats = userApi.getCodeSnapshotStats
+api.saveCodeSnapshot = userApi.saveCodeSnapshot
+api.deleteCodeSnapshot = userApi.deleteCodeSnapshot
+
 export default api

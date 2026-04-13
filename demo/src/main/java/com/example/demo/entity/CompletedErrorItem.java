@@ -47,6 +47,13 @@ public class CompletedErrorItem {
     @Column(length = 2000)
     private String analysis;
 
+    @Lob
+    @Column(name = "analysis_data_json", columnDefinition = "LONGTEXT")
+    private String analysisDataJson;
+
+    @Column(name = "analyzed_at")
+    private LocalDateTime analyzedAt;
+
     @Column(name = "source_error_id")
     private Long sourceErrorId;
 

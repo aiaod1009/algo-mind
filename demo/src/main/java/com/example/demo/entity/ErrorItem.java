@@ -47,6 +47,13 @@ public class ErrorItem {
     @Column(length = 2000)
     private String analysis;
 
+    @Lob
+    @Column(name = "analysis_data_json", columnDefinition = "LONGTEXT")
+    private String analysisDataJson;
+
+    @Column(name = "analyzed_at")
+    private LocalDateTime analyzedAt;
+
     @OneToMany(mappedBy = "errorItem", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @OrderBy("sortOrder ASC")
     private List<ErrorItemOptionSnapshot> optionSnapshots = new ArrayList<>();
