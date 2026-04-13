@@ -180,7 +180,26 @@ if (!levelStore.levels.length) {
   .hero {
     flex-direction: column;
     align-items: flex-start;
-    gap: 14px;
+    gap: 16px;
+    padding: 20px;
+  }
+}
+
+@media (max-width: 600px) {
+  .hero {
+    margin-top: 10px;
+  }
+  
+  .hero h2 {
+    font-size: 24px;
+  }
+  
+  .hero p {
+    font-size: 14px;
+  }
+
+  .start-project-btn {
+    width: 100%;
   }
 }
 </style>

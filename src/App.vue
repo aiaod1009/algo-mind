@@ -273,9 +273,10 @@ const toggleTheme = () => {
   top: 0;
   width: 100%;
   z-index: 20;
-  background: rgba(248, 250, 252, 0.94);
-  border-bottom: 1px solid var(--line);
-  backdrop-filter: blur(10px);
+  background: var(--card-bg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .topbar-inner {
@@ -779,9 +780,10 @@ const toggleTheme = () => {
     left: 0;
     right: 0;
     z-index: 19;
-    background: rgba(248, 250, 252, 0.94);
-    border-bottom: 1px solid var(--line);
-    backdrop-filter: blur(10px);
+    background: var(--card-bg);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;

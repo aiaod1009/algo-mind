@@ -373,12 +373,37 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .hero-title {
+  .projects-page {
+    padding: 16px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 20px;
+    gap: 16px;
+    margin-top: 10px;
+  }
+
+  .page-title {
     font-size: 24px;
   }
 
-  .projects-hero {
-    padding: 20px;
+  .page-desc {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .track-filter {
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    justify-content: flex-start;
+    padding-bottom: 2px;
+  }
+
+  .filter-btn {
+    flex-shrink: 0;
   }
 
   .project-grid {

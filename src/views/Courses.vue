@@ -971,12 +971,23 @@ onMounted(async () => {
   .page-header {
     flex-direction: column;
     align-items: flex-start;
+    padding: 20px;
+    gap: 16px;
+    margin-top: 10px;
+  }
+
+  .nav-tabs {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    white-space: nowrap;
   }
 
   .track-filter {
     width: 100%;
     overflow-x: auto;
     padding-bottom: 4px;
+    white-space: nowrap;
   }
 
   .recommend-list {
