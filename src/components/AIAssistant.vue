@@ -609,7 +609,7 @@ const autoResizeTextarea = async () => {
   }
 
   textareaRef.value.style.height = 'auto'
-  textareaRef.value.style.height = `${Math.min(textareaRef.value.scrollHeight, 120)}px`
+  textareaRef.value.style.height = `${Math.min(textareaRef.value.scrollHeight, 200)}px`
 }
 
 const buildChatHistory = () => chatMessages.value
@@ -990,7 +990,8 @@ watch(inputMessage, () => {
                   <span class="goal-title">{{ goal.title }}</span>
                   <div class="goal-progress">
                     <div class="progress-bar">
-                      <div class="progress-fill" :class="`progress-fill-${index % 4}`" :style="{ width: `${(goal.current / goal.target) * 100}%` }"></div>
+                      <div class="progress-fill" :class="`progress-fill-${index % 4}`"
+                        :style="{ width: `${(goal.current / goal.target) * 100}%` }"></div>
                     </div>
                     <span class="progress-text">{{ goal.current }}/{{ goal.target }}</span>
                   </div>
@@ -1598,7 +1599,7 @@ watch(inputMessage, () => {
   outline: none;
   resize: none;
   min-height: 48px;
-  max-height: 120px;
+  max-height: 200px;
   overflow-y: auto;
   transition: all 0.3s ease;
 }
@@ -1765,19 +1766,23 @@ watch(inputMessage, () => {
 }
 
 .progress-fill-0 {
-  background: #3b82f6; /* Blue */
+  background: #3b82f6;
+  /* Blue */
 }
 
 .progress-fill-1 {
-  background: #10b981; /* Emerald */
+  background: #10b981;
+  /* Emerald */
 }
 
 .progress-fill-2 {
-  background: #f59e0b; /* Amber */
+  background: #f59e0b;
+  /* Amber */
 }
 
 .progress-fill-3 {
-  background: #8b5cf6; /* Violet */
+  background: #8b5cf6;
+  /* Violet */
 }
 
 .progress-text {
