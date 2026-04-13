@@ -198,6 +198,11 @@ const clearNavSearch = () => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background-image: url('@/assets/background.jpg');
+  background-size: cover;
+  background-position: center top;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
 }
 
 .app-main {
