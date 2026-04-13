@@ -1559,7 +1559,7 @@ onMounted(async () => {
 
 .github-profile-page {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', Helvetica, Arial, sans-serif;
-  background: #ffffff;
+  background: transparent;
   min-height: 100vh;
   padding: 24px 32px;
 }
