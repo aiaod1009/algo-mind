@@ -183,6 +183,37 @@ CREATE TABLE IF NOT EXISTS `t_course_comment` (
   FOREIGN KEY (`course_id`) REFERENCES `t_course`(`id`) ON DELETE CASCADE
 ) COMMENT='课程评论表';
 
+-- 9. 历史代码表（用户保存的编译通过、AI测评通过的代码）
+CREATE TABLE IF NOT EXISTS `t_code_snapshot` (
+  `id` bigint PRIMARY KEY AUTO_INCREMENT,
+  `user_id` bigint NOT NULL COMMENT '用户ID',
+  `level_id` bigint NOT NULL COMMENT '关卡ID',
+  `level_name` varchar(200) DEFAULT NULL COMMENT '关卡名称快照',
+  `language` varchar(30) NOT NULL COMMENT '编程语言',
+  `code` longtext NOT NULL COMMENT '源代码',
+  `stdin_input` text DEFAULT NULL COMMENT '标准输入',
+  `score` int NOT NULL DEFAULT 0 COMMENT 'AI评测分数(0-100)',
+  `stars` tinyint NOT NULL DEFAULT 0 COMMENT '星级(0-3)',
+  `compile_passed` tinyint NOT NULL DEFAULT 0 COMMENT '编译是否通过',
+  `ai_eval_passed` tinyint NOT NULL DEFAULT 0 COMMENT 'AI评测是否通过(≥70分)',
+  `ai_analysis` text DEFAULT NULL COMMENT 'AI评测分析摘要',
+  `ai_correctness` varchar(500) DEFAULT NULL COMMENT '正确性评价',
+  `ai_quality` varchar(500) DEFAULT NULL COMMENT '代码质量评价',
+  `ai_efficiency` varchar(500) DEFAULT NULL COMMENT '效率评价',
+  `ai_suggestions_json` text DEFAULT NULL COMMENT 'AI改进建议JSON',
+  `run_output` text DEFAULT NULL COMMENT '运行输出',
+  `is_best` tinyint NOT NULL DEFAULT 0 COMMENT '是否为该题最佳版本',
+  `saved_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '保存时间',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  FOREIGN KEY (`user_id`) REFERENCES `t_user`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`level_id`) REFERENCES `t_level`(`id`) ON DELETE CASCADE,
+  UNIQUE KEY `uk_code_snapshot_user_level_best` (`user_id`, `level_id`, `is_best`),
+  INDEX `idx_code_snapshot_user` (`user_id`),
+  INDEX `idx_code_snapshot_level` (`level_id`),
+  INDEX `idx_code_snapshot_user_level` (`user_id`, `level_id`),
+  INDEX `idx_code_snapshot_saved_at` (`user_id`, `saved_at`)
+) COMMENT='历史代码表';
+
 -- ============================================
 -- 插入测试数据
 -- ============================================

@@ -645,6 +645,7 @@ watch(
       </div>
 
       <div class="top-action-group">
+        <el-button plain class="action-pill-btn" @click="router.push('/profile')">历史代码</el-button>
         <el-button plain class="action-pill-btn" @click="router.push('/errors')">错题本</el-button>
       </div>
     </header>

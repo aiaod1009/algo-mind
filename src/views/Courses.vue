@@ -960,16 +960,90 @@ onMounted(async () => {
   transform: scale(0.95);
 }
 
-@media (max-width: 900px) {
+/* 响应式设计 - 平板 */
+@media (max-width: 1024px) {
+  .courses-page {
+    padding: 20px;
+  }
+
+  .page-header {
+    padding: 20px 24px;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+
+  .page-title::before {
+    height: 20px;
+  }
+
+  .course-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
+/* 响应式设计 - 移动端 */
+@media (max-width: 768px) {
+  .courses-page {
+    padding: 16px;
+  }
+
   .page-header {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 16px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+  }
+
+  .header-content {
+    text-align: center;
+  }
+
+  .page-title {
+    font-size: 22px;
+    justify-content: center;
+    margin-bottom: 6px;
+  }
+
+  .page-title::before {
+    height: 18px;
+    width: 3px;
+  }
+
+  .page-desc {
+    font-size: 13px;
   }
 
   .track-filter {
     width: 100%;
     overflow-x: auto;
-    padding-bottom: 4px;
+    padding: 3px;
+    gap: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .track-filter::-webkit-scrollbar {
+    display: none;
+  }
+
+  .filter-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .section-title {
+    font-size: 18px;
   }
 
   .recommend-list {
@@ -978,6 +1052,57 @@ onMounted(async () => {
 
   .course-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .ai-recommend-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* 响应式设计 - 小屏手机 */
+@media (max-width: 480px) {
+  .courses-page {
+    padding: 12px;
+  }
+
+  .page-header {
+    padding: 14px 16px;
+    border-radius: 12px;
+  }
+
+  .page-title {
+    font-size: 20px;
+  }
+
+  .page-desc {
+    font-size: 12px;
+  }
+
+  .filter-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .course-card {
+    border-radius: 12px;
+  }
+
+  .course-image {
+    height: 160px;
+  }
+
+  .course-content {
+    padding: 16px;
+  }
+
+  .course-title {
+    font-size: 15px;
+  }
+
+  .course-desc {
+    font-size: 12px;
   }
 }
 </style>

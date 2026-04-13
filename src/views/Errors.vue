@@ -1,13 +1,15 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import ErrorAnalysisDialog from '../components/ErrorAnalysisDialog.vue'
 import FlowerPagination from '../components/FlowerPagination.vue'
 import { useErrorStore } from '../stores/error'
+import { useUserStore } from '../stores/user'
 
 const router = useRouter()
 const errorStore = useErrorStore()
+const userStore = useUserStore()
 
 const loading = ref(false)
 const analysisLoading = ref(false)
@@ -28,6 +30,43 @@ const addForm = reactive({
   userAnswer: '',
   description: '',
 })
+
+const currentAnalysisItem = ref(null)
+
+const ANALYSIS_NOTICE_PREFIX = 'ai-analysis-limit-notice'
+
+const getAnalysisUserKey = () => {
+  const userId = userStore.userInfo?.id
+  return userId != null ? String(userId) : 'guest'
+}
+
+const getAnalysisNoticeKey = () => `${ANALYSIS_NOTICE_PREFIX}:${getAnalysisUserKey()}`
+
+const getAnalysisQuotaStatus = () => ({
+  currentSlot: 'server',
+  usedSlots: [],
+  usedCount: 0,
+  remainingCount: 2,
+  canUseCurrentSlot: true,
+  isExhausted: false,
+})
+
+const consumeAnalysisSlot = () => []
+
+const ensureAnalysisNotice = async () => {
+  if (localStorage.getItem(getAnalysisNoticeKey()) === '1') return
+
+  await ElMessageBox.alert(
+    'AI 分析每天最多可使用 2 次：每天 00:00 和 12:00 各刷新 1 次，你可以在对应时间段内提前使用。次数用完后，系统会默认保留并展示最后一次生成的数据，请合理分析。',
+    '使用提示',
+    {
+      confirmButtonText: '我知道了',
+      type: 'warning',
+    },
+  )
+
+  localStorage.setItem(getAnalysisNoticeKey(), '1')
+}
 
 const inferSubject = (item) => {
   const text = `${item.title || ''} ${item.question || ''} ${item.description || ''}`
@@ -196,14 +235,65 @@ const openAnalysisDialog = (content, data = null) => {
   analysisDialogVisible.value = true
 }
 
+const resolveCachedAnalysis = (item) => {
+  if (!item?.id) return null
+
+  const cached = errorStore.getCachedAnalysisResult(item.id)
+  const content = item.analysis || cached?.analysis || ''
+  const data = item.analysisData || cached?.analysisData || null
+
+  if (!content && !data) {
+    return null
+  }
+
+  return {
+    analysis: content,
+    analysisData: data,
+  }
+}
+
+const openCachedAnalysis = (item, message = '') => {
+  const cached = resolveCachedAnalysis(item)
+  if (!cached) return false
+
+  currentAnalysisItem.value = item
+  analysisLoading.value = false
+  openAnalysisDialog(cached.analysis, cached.analysisData)
+
+  if (message) {
+    ElMessage.info(message)
+  }
+
+  return true
+}
+
 const handleAnalyze = async (item, forceRefresh = false) => {
+  if (analysisLoading.value) return
+
   currentAnalysisItem.value = item
 
   // 如果有已有分析且不是强制刷新，直接显示
-  if (item.analysis && !forceRefresh) {
-    analysisText.value = item.analysis
-    analysisData.value = item.analysisData || null
-    analysisDialogVisible.value = true
+  if (!forceRefresh && openCachedAnalysis(item)) {
+    return
+  }
+
+  await ensureAnalysisNotice()
+
+  const quotaStatus = getAnalysisQuotaStatus()
+  if (!quotaStatus.canUseCurrentSlot) {
+    const fallbackMessage = quotaStatus.isExhausted
+      ? '今日 AI 分析次数已用完，已为你展示最后一次生成的分析结果。'
+      : '当前时间段的 AI 分析机会已使用，已为你展示最后一次生成的分析结果。'
+
+    if (openCachedAnalysis(item, fallbackMessage)) {
+      return
+    }
+
+    ElMessage.warning(
+      quotaStatus.isExhausted
+        ? '今日 AI 分析次数已用完，请在中午 12:00 或次日 00:00 后再试。'
+        : '当前时间段的 AI 分析机会已使用，请等待下一个刷新时间后再试。',
+    )
     return
   }
 
@@ -217,6 +307,10 @@ const handleAnalyze = async (item, forceRefresh = false) => {
     analysisText.value = result.analysis
     analysisData.value = result.analysisData
     errorStore.markAnalysis(item.id, result.analysis, result.analysisData)
+    consumeAnalysisSlot()
+    if (result.message) {
+      ElMessage.info(result.message)
+    }
   } catch (error) {
     analysisDialogVisible.value = false
     ElMessage.error(error?.response?.data?.message || error?.message || 'AI 分析失败，请稍后再试')
@@ -224,8 +318,6 @@ const handleAnalyze = async (item, forceRefresh = false) => {
     analysisLoading.value = false
   }
 }
-
-const currentAnalysisItem = ref(null)
 
 const handleReview = (item) => {
   const levelId = Number(item.levelId)

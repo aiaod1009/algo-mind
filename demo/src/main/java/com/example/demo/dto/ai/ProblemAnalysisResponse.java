@@ -10,7 +10,6 @@ public class ProblemAnalysisResponse {
     private List<KnowledgePoint> knowledgePoints;
     private List<ImprovementSuggestion> suggestions;
     private List<RecommendedProblem> recommendedProblems;
-    private StudyPlan studyPlan;
 
     @Data
     public static class ErrorAnalysis {
@@ -24,7 +23,6 @@ public class ProblemAnalysisResponse {
         private String name;
         private String description;
         private String masteryLevel;
-        private List<String> relatedResources;
     }
 
     @Data
@@ -37,17 +35,13 @@ public class ProblemAnalysisResponse {
 
     @Data
     public static class RecommendedProblem {
+        private Long levelId;
         private String title;
+        private String question;
+        private String type;
         private String difficulty;
         private String reason;
-        private String source;
-    }
-
-    @Data
-    public static class StudyPlan {
-        private String shortTerm;
-        private String midTerm;
-        private String longTerm;
-        private List<String> dailyTasks;
+        private Boolean fromQuestionBank;
+        private List<String> options;
     }
 }
