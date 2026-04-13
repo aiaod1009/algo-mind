@@ -1569,6 +1569,11 @@ onMounted(async () => {
   margin: 0 auto;
   display: flex;
   gap: 32px;
+  background: rgba(255, 255, 255, 0.5);
+  padding: 32px;
+  border-radius: 24px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
 }
 
 /* 左侧边栏 */
