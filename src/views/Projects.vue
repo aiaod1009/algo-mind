@@ -367,22 +367,33 @@ onMounted(() => {
 }
 
 @media (max-width: 1200px) {
+  .projects-page {
+    padding: 24px 20px;
+  }
+
+  .page-header {
+    padding: 20px 24px;
+  }
+
   .project-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 992px) {
   .projects-page {
-    padding: 16px;
+    padding: 20px 16px;
   }
 
   .page-header {
     flex-direction: column;
     align-items: flex-start;
-    padding: 20px;
-    gap: 16px;
-    margin-top: 10px;
+    gap: 14px;
+    padding: 18px;
+  }
+
+  .header-content {
+    width: 100%;
   }
 
   .page-title {
@@ -390,28 +401,25 @@ onMounted(() => {
   }
 
   .page-desc {
-    font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.6;
   }
 
   .track-filter {
     width: 100%;
     overflow-x: auto;
+    overflow-y: hidden;
     white-space: nowrap;
     justify-content: flex-start;
-    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .track-filter::-webkit-scrollbar {
+    height: 4px;
   }
 
   .filter-btn {
     flex-shrink: 0;
-  }
-
-  .project-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .project-card {
-    padding: 16px;
   }
 
   .project-name {
@@ -419,7 +427,133 @@ onMounted(() => {
   }
 
   .project-goal {
+    min-height: 56px;
+  }
+
+  .project-meta {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 768px) {
+  .projects-page {
+    padding: 12px;
+  }
+
+  .page-header {
+    padding: 16px;
+    gap: 12px;
+    margin-top: 6px;
+  }
+
+  .page-title {
+    font-size: 22px;
+    gap: 10px;
+  }
+
+  .page-title::before {
+    height: 20px;
+  }
+
+  .page-desc {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .track-filter {
+    padding: 4px;
+    border-radius: 10px;
+    scrollbar-width: none;
+  }
+
+  .track-filter::-webkit-scrollbar {
+    display: none;
+  }
+
+  .filter-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .project-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .project-card {
+    padding: 16px;
+  }
+
+  .project-name {
+    font-size: 17px;
+  }
+
+  .project-goal {
     min-height: 0;
+    margin: 12px 0;
+    font-size: 14px;
+  }
+
+  .project-track-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .project-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    font-size: 12px;
+    gap: 4px;
+  }
+
+  .project-cta {
+    margin-top: 12px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .projects-page {
+    padding: 10px;
+  }
+
+  .page-header {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .page-title {
+    font-size: 20px;
+  }
+
+  .page-desc {
+    font-size: 12px;
+  }
+
+  .filter-btn {
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+
+  .project-card {
+    border-radius: 14px;
+    padding: 14px;
+  }
+
+  .project-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 18px;
+  }
+
+  .project-name {
+    font-size: 16px;
+  }
+
+  .project-goal {
+    font-size: 13px;
   }
 }
 </style>

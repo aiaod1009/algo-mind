@@ -189,11 +189,11 @@ if (!levelStore.levels.length) {
   .hero {
     margin-top: 10px;
   }
-  
+
   .hero h2 {
     font-size: 24px;
   }
-  
+
   .hero p {
     font-size: 14px;
   }

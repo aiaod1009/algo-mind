@@ -3304,12 +3304,64 @@ onMounted(async () => {
 
 /* 响应式 */
 @media (max-width: 1012px) {
+  .github-profile-page {
+    padding: 20px;
+  }
+
   .profile-container {
     flex-direction: column;
+    gap: 24px;
+    padding: 24px;
+    border-radius: 20px;
   }
 
   .profile-sidebar {
     width: 100%;
+  }
+
+  .avatar-section {
+    margin-bottom: 28px;
+  }
+
+  .profile-info {
+    margin-top: 8px;
+  }
+
+  .section-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .contributions-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .stats-summary {
+    flex-wrap: wrap;
+  }
+
+  .contributions-content {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .year-selector {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .year-btn {
+    border: 1px solid #d0d7de;
+    padding: 6px 12px;
+  }
+
+  .streak-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .avatar-container {
@@ -3354,20 +3406,160 @@ onMounted(async () => {
 
 @media (max-width: 768px) {
   .github-profile-page {
+    padding: 12px;
+  }
+
+  .profile-container {
     padding: 16px;
+    gap: 16px;
+    border-radius: 16px;
+  }
+
+  .profile-name {
+    font-size: 22px;
+  }
+
+  .profile-username {
+    font-size: 16px;
+    margin-bottom: 10px;
+  }
+
+  .profile-bio {
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .profile-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .stat-item {
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+    padding: 8px 10px;
+    justify-content: center;
+  }
+
+  .repo-tabs {
+    width: 100%;
   }
 
   .repo-grid {
     grid-template-columns: 1fr;
   }
 
+  .repo-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
   .contributions-calendar {
     overflow-x: scroll;
+  }
+
+  .streak-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .streak-card {
+    padding: 14px;
+  }
+
+  .streak-value {
+    font-size: 20px;
+  }
+
+  .activity-item {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+
+  .activity-time {
+    width: 100%;
+    padding-left: 24px;
   }
 
   .avatar-edit-section {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .edit-modal,
+  .status-modal,
+  .detail-edit-page {
+    padding: 12px;
+  }
+
+  .glass-body,
+  .detail-edit-body,
+  .status-modal-body {
+    padding: 16px !important;
+  }
+
+  .glass-footer,
+  .detail-edit-footer,
+  .status-modal-footer {
+    padding: 14px 16px !important;
+    flex-wrap: wrap;
+  }
+
+  .glass-primary,
+  .glass-secondary,
+  .detail-edit-footer .cancel-btn,
+  .detail-edit-footer .save-btn,
+  .status-modal-footer .cancel-btn,
+  .status-modal-footer .save-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .mood-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-container {
+    padding: 12px;
+  }
+
+  .avatar-section {
+    margin-bottom: 18px;
+  }
+
+  .avatar-container {
+    width: 104px;
+    height: 104px;
+  }
+
+  .status-emoji {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+    right: 6px;
+    bottom: 6px;
+  }
+
+  .profile-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .contributions-header h3,
+  .activity-section h3 {
+    font-size: 15px;
+  }
+
+  .stat-badge {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .mood-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>
