@@ -254,11 +254,24 @@ const streamingPreview = computed(() => {
   background: #0f172a;
   color: #e2e8f0;
   border-color: rgba(148, 163, 184, 0.3);
+  overflow: auto;
+  scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
+}
+
+.streaming-pre::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.streaming-pre::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
 }
 
 .streaming-pre::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.5);
+  border-radius: 4px;
 }
 
 .streaming-pre::-webkit-scrollbar-thumb:hover {
