@@ -1464,7 +1464,7 @@ watch(inputMessage, () => {
 
 /* 聊天区域 */
 .chat-messages {
-  height: 300px;
+  height: 500px;
   overflow-y: auto;
   padding: 16px;
   background: rgba(255, 255, 255, 0.6);
