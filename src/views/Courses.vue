@@ -368,10 +368,12 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 32px;
-  background: white;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   padding: 24px 32px;
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
@@ -619,10 +621,12 @@ onMounted(async () => {
 }
 
 .course-card {
-  background: white;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-radius: 20px;
   overflow: hidden;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.6);
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -915,7 +919,10 @@ onMounted(async () => {
 
 .detail-container {
   position: relative;
-  background: white;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 24px;
   width: 100%;
   max-width: 900px;

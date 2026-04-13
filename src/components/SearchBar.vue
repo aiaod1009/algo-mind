@@ -4,102 +4,90 @@
       <div class="search-main-row">
         <div class="search-input-container">
           <div class="search-input-wrapper">
-            <input 
-              type="text" 
-              class="search-input" 
-              v-model="searchKeyword"
-              :placeholder="placeholder"
-              @input="handleSearch"
-              @focus="isFocused = true"
-              @blur="isFocused = false"
-            />
+            <input type="text" class="search-input" v-model="searchKeyword" :placeholder="placeholder"
+              @input="handleSearch" @focus="isFocused = true" @blur="isFocused = false" />
             <button v-if="searchKeyword" class="clear-btn" @click="clearSearch">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="14" height="14">
-                <path fill="currentColor" d="M764.288 214.592 512 466.88 259.712 214.592a31.936 31.936 0 0 0-45.12 45.12L466.752 512 214.528 764.224a31.936 31.936 0 1 0 45.12 45.184L512 557.184l252.288 252.288a31.936 31.936 0 0 0 45.12-45.12L557.12 512.064l252.288-252.352a31.936 31.936 0 1 0-45.12-45.184z"/>
+                <path fill="currentColor"
+                  d="M764.288 214.592 512 466.88 259.712 214.592a31.936 31.936 0 0 0-45.12 45.12L466.752 512 214.528 764.224a31.936 31.936 0 1 0 45.12 45.184L512 557.184l252.288 252.288a31.936 31.936 0 0 0 45.12-45.12L557.12 512.064l252.288-252.352a31.936 31.936 0 1 0-45.12-45.184z" />
               </svg>
             </button>
           </div>
         </div>
       </div>
-      
+
       <div class="filter-options" :class="{ 'is-expanded': showFilters }">
         <div class="search-dropdown-container">
           <div class="search-dropdown-trigger" @click="toggleDropdown('sort')">
             <div class="trigger-content">
               <span class="trigger-text">{{ currentSort.label }}</span>
             </div>
-            <svg class="dropdown-arrow" :class="{ 'is-open': openDropdown === 'sort' }" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="12" height="12">
-              <path fill="currentColor" d="M340.864 149.312a30.592 30.592 0 0 0 0 42.752L652.736 512 340.864 831.872a30.592 30.592 0 0 0 0 42.752 29.12 29.12 0 0 0 41.728 0L714.24 534.336a32 32 0 0 0 0-44.672L382.592 149.376a29.12 29.12 0 0 0-41.728 0z"/>
+            <svg class="dropdown-arrow" :class="{ 'is-open': openDropdown === 'sort' }"
+              xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="12" height="12">
+              <path fill="currentColor"
+                d="M340.864 149.312a30.592 30.592 0 0 0 0 42.752L652.736 512 340.864 831.872a30.592 30.592 0 0 0 0 42.752 29.12 29.12 0 0 0 41.728 0L714.24 534.336a32 32 0 0 0 0-44.672L382.592 149.376a29.12 29.12 0 0 0-41.728 0z" />
             </svg>
           </div>
           <Transition name="dropdown">
             <div v-if="openDropdown === 'sort'" class="dropdown-menu">
-              <div 
-                v-for="item in sortOptions" 
-                :key="item.value" 
-                class="dropdown-item"
-                :class="{ 'is-active': currentSort.value === item.value }"
-                @click="selectSort(item)"
-              >
+              <div v-for="item in sortOptions" :key="item.value" class="dropdown-item"
+                :class="{ 'is-active': currentSort.value === item.value }" @click="selectSort(item)">
                 {{ item.label }}
               </div>
             </div>
           </Transition>
         </div>
-        
+
         <div class="search-dropdown-container">
           <div class="search-dropdown-trigger" @click="toggleDropdown('category')">
             <div class="trigger-content">
               <i class="el-icon trigger-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="14" height="14">
-                  <path fill="currentColor" d="M160 160v704h704V160zm-32-64h768a32 32 0 0 1 32 32v768a32 32 0 0 1-32 32H128a32 32 0 0 1-32-32V128a32 32 0 0 1 32-32"/>
-                  <path fill="currentColor" d="M384 288q64 0 64 64t-64 64-64-64 64-64M185.408 876.992l-50.816-38.912L350.72 556.032a96 96 0 0 1 134.592-17.856l1.856 1.472 122.88 99.136a32 32 0 0 0 44.992-4.864l216-269.888 49.92 39.936-215.808 269.824-.256.32a96 96 0 0 1-135.04 14.464l-122.88-99.072-.64-.512a32 32 0 0 0-44.8 5.952z"/>
+                  <path fill="currentColor"
+                    d="M160 160v704h704V160zm-32-64h768a32 32 0 0 1 32 32v768a32 32 0 0 1-32 32H128a32 32 0 0 1-32-32V128a32 32 0 0 1 32-32" />
+                  <path fill="currentColor"
+                    d="M384 288q64 0 64 64t-64 64-64-64 64-64M185.408 876.992l-50.816-38.912L350.72 556.032a96 96 0 0 1 134.592-17.856l1.856 1.472 122.88 99.136a32 32 0 0 0 44.992-4.864l216-269.888 49.92 39.936-215.808 269.824-.256.32a96 96 0 0 1-135.04 14.464l-122.88-99.072-.64-.512a32 32 0 0 0-44.8 5.952z" />
                 </svg>
               </i>
               <span class="trigger-text">{{ currentCategory.label }}</span>
             </div>
-            <svg class="dropdown-arrow" :class="{ 'is-open': openDropdown === 'category' }" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="12" height="12">
-              <path fill="currentColor" d="M340.864 149.312a30.592 30.592 0 0 0 0 42.752L652.736 512 340.864 831.872a30.592 30.592 0 0 0 0 42.752 29.12 29.12 0 0 0 41.728 0L714.24 534.336a32 32 0 0 0 0-44.672L382.592 149.376a29.12 29.12 0 0 0-41.728 0z"/>
+            <svg class="dropdown-arrow" :class="{ 'is-open': openDropdown === 'category' }"
+              xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="12" height="12">
+              <path fill="currentColor"
+                d="M340.864 149.312a30.592 30.592 0 0 0 0 42.752L652.736 512 340.864 831.872a30.592 30.592 0 0 0 0 42.752 29.12 29.12 0 0 0 41.728 0L714.24 534.336a32 32 0 0 0 0-44.672L382.592 149.376a29.12 29.12 0 0 0-41.728 0z" />
             </svg>
           </div>
           <Transition name="dropdown">
             <div v-if="openDropdown === 'category'" class="dropdown-menu">
-              <div 
-                v-for="item in categoryOptions" 
-                :key="item.value" 
-                class="dropdown-item"
-                :class="{ 'is-active': currentCategory.value === item.value }"
-                @click="selectCategory(item)"
-              >
+              <div v-for="item in categoryOptions" :key="item.value" class="dropdown-item"
+                :class="{ 'is-active': currentCategory.value === item.value }" @click="selectCategory(item)">
                 {{ item.label }}
               </div>
             </div>
           </Transition>
         </div>
-        
+
         <div class="search-dropdown-container">
           <div class="search-dropdown-trigger" @click="toggleDropdown('time')">
             <div class="trigger-content">
               <i class="el-icon trigger-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="14" height="14">
-                  <path fill="currentColor" d="M128 384a512 512 0 1 0 512-512 512 512 0 0 0-512 512m544 0a32 32 0 0 1-32 32H448a32 32 0 0 1-32-32V192a32 32 0 0 1 64 0v160h160a32 32 0 0 1 32 32"/>
+                  <path fill="currentColor"
+                    d="M128 384a512 512 0 1 0 512-512 512 512 0 0 0-512 512m544 0a32 32 0 0 1-32 32H448a32 32 0 0 1-32-32V192a32 32 0 0 1 64 0v160h160a32 32 0 0 1 32 32" />
                 </svg>
               </i>
               <span class="trigger-text">{{ currentTime.label }}</span>
             </div>
-            <svg class="dropdown-arrow" :class="{ 'is-open': openDropdown === 'time' }" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="12" height="12">
-              <path fill="currentColor" d="M340.864 149.312a30.592 30.592 0 0 0 0 42.752L652.736 512 340.864 831.872a30.592 30.592 0 0 0 0 42.752 29.12 29.12 0 0 0 41.728 0L714.24 534.336a32 32 0 0 0 0-44.672L382.592 149.376a29.12 29.12 0 0 0-41.728 0z"/>
+            <svg class="dropdown-arrow" :class="{ 'is-open': openDropdown === 'time' }"
+              xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="12" height="12">
+              <path fill="currentColor"
+                d="M340.864 149.312a30.592 30.592 0 0 0 0 42.752L652.736 512 340.864 831.872a30.592 30.592 0 0 0 0 42.752 29.12 29.12 0 0 0 41.728 0L714.24 534.336a32 32 0 0 0 0-44.672L382.592 149.376a29.12 29.12 0 0 0-41.728 0z" />
             </svg>
           </div>
           <Transition name="dropdown">
             <div v-if="openDropdown === 'time'" class="dropdown-menu">
-              <div 
-                v-for="item in timeOptions" 
-                :key="item.value" 
-                class="dropdown-item"
-                :class="{ 'is-active': currentTime.value === item.value }"
-                @click="selectTime(item)"
-              >
+              <div v-for="item in timeOptions" :key="item.value" class="dropdown-item"
+                :class="{ 'is-active': currentTime.value === item.value }" @click="selectTime(item)">
                 {{ item.label }}
               </div>
             </div>
@@ -254,11 +242,13 @@ onUnmounted(() => {
   width: 100%;
   height: 44px;
   padding: 0 40px 0 16px;
-  border: 2px solid var(--line-soft);
+  border: 2px solid rgba(255, 255, 255, 0.6);
   border-radius: 12px;
   font-size: 15px;
   color: var(--text-main);
-  background: white;
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   outline: none;
   transition: all 0.2s ease;
 }
@@ -315,8 +305,10 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  background: white;
-  border: 1px solid var(--line-soft);
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -361,8 +353,10 @@ onUnmounted(() => {
   top: calc(100% + 4px);
   left: 0;
   min-width: 140px;
-  background: white;
-  border: 1px solid var(--line-soft);
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   z-index: 200;
@@ -406,6 +400,7 @@ onUnmounted(() => {
     opacity: 0;
     transform: translateY(-8px);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0);
@@ -416,12 +411,12 @@ onUnmounted(() => {
   .filter-options {
     gap: 8px;
   }
-  
+
   .search-dropdown-trigger {
     padding: 6px 10px;
     min-width: 80px;
   }
-  
+
   .trigger-text {
     font-size: 12px;
   }

@@ -15,8 +15,8 @@
   --line-soft: #e1e8f1;
   --line-card: #dde6f2;
 
-  --panel-bg: #f3f6fa;
-  --card-bg: #ffffff;
+  --panel-bg: rgba(243, 246, 250, 0.85);
+  --card-bg: rgba(255, 255, 255, 0.85);
   --app-bg: linear-gradient(180deg, #f8fafc 0%, #eef2f6 100%);
 }
 
@@ -40,8 +40,18 @@ body {
 
 .surface-card {
   background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-radius: 16px;
   box-shadow: 0 12px 30px rgba(63, 89, 124, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
 }
 
 .section-title {

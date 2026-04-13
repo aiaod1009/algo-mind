@@ -190,12 +190,8 @@ const goToNextDay = () => {
           <span class="section-count">8 种类型</span>
         </div>
         <div class="type-tags">
-          <div
-            v-for="type in taskTypes"
-            :key="type.key"
-            class="type-tag"
-            :style="{ '--tag-color': getTypeColor(type.key) }"
-          >
+          <div v-for="type in taskTypes" :key="type.key" class="type-tag"
+            :style="{ '--tag-color': getTypeColor(type.key) }">
             <span class="tag-icon">{{ type.icon }}</span>
             <span class="tag-label">{{ type.label }}</span>
           </div>
@@ -204,13 +200,8 @@ const goToNextDay = () => {
 
       <!-- 星期标签 -->
       <div class="weekday-tabs">
-        <button
-          v-for="(day, index) in weekdays"
-          :key="index"
-          class="weekday-btn"
-          :class="{ active: currentDayIndex === index }"
-          @click="selectDay(index)"
-        >
+        <button v-for="(day, index) in weekdays" :key="index" class="weekday-btn"
+          :class="{ active: currentDayIndex === index }" @click="selectDay(index)">
           <span class="day-name">{{ day }}</span>
           <span v-if="currentDayIndex === index" class="active-indicator"></span>
         </button>
@@ -227,16 +218,11 @@ const goToNextDay = () => {
 
       <!-- 任务网格 -->
       <div class="task-grid">
-        <div
-          v-for="(task, index) in currentTasks"
-          :key="index"
-          class="task-card"
-          :style="{
-            animationDelay: `${index * 0.08}s`,
-            backgroundColor: getRandomColorScheme().bgColor,
-            '--task-color': getRandomColorScheme().color
-          }"
-        >
+        <div v-for="(task, index) in currentTasks" :key="index" class="task-card" :style="{
+          animationDelay: `${index * 0.08}s`,
+          backgroundColor: getRandomColorScheme().bgColor,
+          '--task-color': getRandomColorScheme().color
+        }">
           <div class="card-glow"></div>
           <div class="card-content">
             <div class="task-header-row">
@@ -266,10 +252,12 @@ const goToNextDay = () => {
 .daily-tasks-section {
   position: relative;
   font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #ffffff;
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-radius: 28px;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow:
     0 4px 24px rgba(0, 0, 0, 0.04),
     0 1px 3px rgba(0, 0, 0, 0.02);
