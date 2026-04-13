@@ -241,12 +241,8 @@ onMounted(async () => {
         <p class="page-desc">精选优质课程，助力算法进阶之路</p>
       </div>
       <div class="track-filter">
-        <button
-          v-for="opt in trackOptions"
-          :key="opt.value"
-          :class="['filter-btn', { active: activeTrack === opt.value }]"
-          @click="activeTrack = opt.value"
-        >
+        <button v-for="opt in trackOptions" :key="opt.value"
+          :class="['filter-btn', { active: activeTrack === opt.value }]" @click="activeTrack = opt.value">
           {{ opt.label }}
         </button>
       </div>
@@ -270,9 +266,9 @@ onMounted(async () => {
             <img v-if="getCover(course)" :src="getCover(course)" class="cover-image" alt="课程封面" />
             <div v-else class="cover-placeholder">
               <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
-                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                <line x1="8" y1="21" x2="16" y2="21"/>
-                <line x1="12" y1="17" x2="12" y2="21"/>
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                <line x1="8" y1="21" x2="16" y2="21" />
+                <line x1="12" y1="17" x2="12" y2="21" />
               </svg>
             </div>
             <div class="course-level" :class="course.level">{{ getLevelLabel(course.level) }}</div>
@@ -308,16 +304,17 @@ onMounted(async () => {
               <div class="course-stats">
                 <span class="stat">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                    <path
+                      d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                   </svg>
                   {{ course.rating }}
                 </span>
                 <span class="stat">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                    <circle cx="9" cy="7" r="4"/>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                   </svg>
                   {{ course.students }}
                 </span>
@@ -345,8 +342,8 @@ onMounted(async () => {
         <div class="detail-container">
           <button class="close-btn" @click="closeDetail">
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
           <CourseDetail :course="selectedCourse" />
@@ -369,52 +366,70 @@ onMounted(async () => {
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 32px;
-  gap: 24px;
+  background: white;
+  padding: 24px 32px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
 .page-title {
   font-size: 28px;
   font-weight: 700;
   color: #1e293b;
-  margin: 0;
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-title::before {
+  content: '';
+  display: block;
+  width: 4px;
+  height: 24px;
+  background: #3b82f6;
+  border-radius: 2px;
 }
 
 .page-desc {
+  font-size: 15px;
   color: #64748b;
-  margin: 8px 0 0;
-  font-size: 14px;
+  margin: 0;
 }
 
 .track-filter {
   display: flex;
   gap: 8px;
-  flex-shrink: 0;
+  background: #f8fafc;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 }
 
 .filter-btn {
-  padding: 10px 20px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 24px;
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: #475569;
+  color: #64748b;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .filter-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  color: #334155;
+  background: #f1f5f9;
 }
 
 .filter-btn.active {
-  background: linear-gradient(135deg, #4a6f9d 0%, #6672cb 100%);
-  border-color: transparent;
+  background: #3b82f6;
   color: white;
-  box-shadow: 0 2px 8px rgba(74, 111, 157, 0.25);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
 }
 
 .ai-recommend-section {
@@ -467,7 +482,9 @@ onMounted(async () => {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .recommend-list {

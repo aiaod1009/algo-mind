@@ -76,6 +76,14 @@ const practiceWindowText = computed(() => {
   const end = new Date(now.getTime() + 9 * 24 * 60 * 60 * 1000)
   return `${now.toLocaleDateString()} 00:00 至 ${end.toLocaleDateString()} 23:59`
 })
+const projectQuery = computed(() => (typeof route.query.project === 'string' ? route.query.project : undefined))
+
+const navigateBackToLevels = () => {
+  router.push({
+    path: '/levels',
+    query: projectQuery.value ? { project: projectQuery.value } : {},
+  })
+}
 
 const getDraftKey = () => `${DRAFT_KEY_PREFIX}${currentLevelId.value}`
 
@@ -290,19 +298,19 @@ const initializeChallenge = async () => {
   } catch (error) {
     console.error('关卡加载失败。', error)
     ElMessage.error('关卡加载失败，请稍后重试')
-    router.push('/levels')
+    navigateBackToLevels()
     return
   }
 
   if (!currentLevel.value) {
     ElMessage.error('关卡不存在')
-    router.push('/levels')
+    navigateBackToLevels()
     return
   }
 
   if (!currentLevel.value.isUnlocked) {
     ElMessage.warning('该关卡尚未解锁')
-    router.push('/levels')
+    navigateBackToLevels()
     return
   }
 
@@ -505,7 +513,7 @@ const submitStandardChallenge = async () => {
       { type: 'success' },
     )
 
-    router.push('/levels')
+    navigateBackToLevels()
     return
   }
 
@@ -582,7 +590,7 @@ const openEvaluationDialog = () => {
 }
 
 const goBack = () => {
-  router.push('/levels')
+  navigateBackToLevels()
 }
 
 onMounted(initializeChallenge)
@@ -703,13 +711,8 @@ watch(
         <!-- 展开状态：显示完整评估内容 -->
         <template v-else>
           <div class="ai-dock-full-content">
-            <ChallengeEvaluationPanel
-              v-if="hasEvaluationResult || isEvaluatingStream"
-              :result="evaluationResult"
-              :pass-score="CODE_PASS_SCORE"
-              :loading="isEvaluatingStream"
-              :streaming-text="evaluationStreamingText"
-            />
+            <ChallengeEvaluationPanel v-if="hasEvaluationResult || isEvaluatingStream" :result="evaluationResult"
+              :pass-score="CODE_PASS_SCORE" :loading="isEvaluatingStream" :streaming-text="evaluationStreamingText" />
           </div>
           <el-button type="primary" plain class="open-eval-btn" @click="openEvaluationDialog">
             收起评估详情
@@ -782,7 +785,7 @@ watch(
     left: 16px;
     padding: 6px 10px;
   }
-  
+
   .back-text {
     display: none;
   }
@@ -1311,7 +1314,7 @@ watch(
     min-height: 280px !important;
   }
 
-  .editor-stage > div > div {
+  .editor-stage>div>div {
     height: 280px !important;
   }
 

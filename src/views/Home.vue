@@ -70,17 +70,22 @@ if (!levelStore.levels.length) {
         <h2>欢迎回来，{{ userStore.userInfo?.name || '同学' }}</h2>
         <p>今天继续挑战算法关卡，稳步提升思维与代码实现能力。</p>
       </div>
-      <el-button type="primary" size="large" @click="goTo('/levels')">开始闯关</el-button>
+      <button class="start-project-btn" @click="goTo('/projects')">
+        <span class="btn-content">
+          <svg class="btn-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          开始训练
+        </span>
+        <div class="hover-effect"></div>
+      </button>
     </section>
 
     <DailyTasks :learning-plan="currentLearningPlan" />
 
-    <AIAssistant
-      :selected-track="selectedTrack"
-      :weekly-goal="weeklyGoal"
-      :track-options="trackOptions"
-      @plan-generated="handlePlanGenerated"
-    />
+    <AIAssistant :selected-track="selectedTrack" :weekly-goal="weeklyGoal" :track-options="trackOptions"
+      @plan-generated="handlePlanGenerated" />
   </div>
 </template>
 
@@ -108,6 +113,67 @@ if (!levelStore.levels.length) {
 .hero p {
   margin-top: 8px;
   color: var(--text-sub);
+  font-size: 15px;
+}
+
+.start-project-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 28px;
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.start-project-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.4);
+}
+
+.btn-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-icon {
+  transition: transform 0.3s ease;
+  fill: currentColor;
+}
+
+.start-project-btn:hover .btn-icon {
+  transform: scale(1.1);
+}
+
+.hover-effect {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transform: translateX(-100%);
+}
+
+.start-project-btn:hover .hover-effect {
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 @media (max-width: 900px) {
