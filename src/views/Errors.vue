@@ -330,10 +330,12 @@ onMounted(loadData)
 
     <div class="toolbar-row">
       <div class="board-switch">
-        <button class="switch-btn" :class="{ active: viewMode === 'active' }" type="button" @click="viewMode = 'active'">
+        <button class="switch-btn" :class="{ active: viewMode === 'active' }" type="button"
+          @click="viewMode = 'active'">
           当前错题
         </button>
-        <button class="switch-btn" :class="{ active: viewMode === 'completed' }" type="button" @click="viewMode = 'completed'">
+        <button class="switch-btn" :class="{ active: viewMode === 'completed' }" type="button"
+          @click="viewMode = 'completed'">
           已完成
         </button>
       </div>
@@ -346,16 +348,13 @@ onMounted(loadData)
         </el-select>
         <el-select v-model="subjectFilter" class="filter-select">
           <el-option label="科目：全部" value="all" />
-          <el-option
-            v-for="subject in subjectOptions.filter((item) => item !== 'all')"
-            :key="subject"
-            :label="`科目：${subject}`"
-            :value="subject"
-          />
+          <el-option v-for="subject in subjectOptions.filter((item) => item !== 'all')" :key="subject"
+            :label="`科目：${subject}`" :value="subject" />
         </el-select>
         <el-button type="primary" class="add-error-btn" @click="addDialogVisible = true">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px;">
-            <path d="M12 5v14M5 12h14"/>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"
+            style="margin-right: 6px;">
+            <path d="M12 5v14M5 12h14" />
           </svg>
           手动添加错题
         </el-button>
@@ -363,12 +362,8 @@ onMounted(loadData)
     </div>
 
     <div v-loading="loading" class="error-list">
-      <article
-        v-for="item in visibleItems"
-        :key="`${viewMode}-${item.id}`"
-        class="error-card"
-        :class="{ done: item.isCompleted }"
-      >
+      <article v-for="item in visibleItems" :key="`${viewMode}-${item.id}`" class="error-card"
+        :class="{ done: item.isCompleted }">
         <div class="card-main">
           <div class="card-tags">
             <span class="subject-chip">{{ item.subject }}</span>
@@ -384,34 +379,17 @@ onMounted(loadData)
           <div class="card-foot">
             <div class="status-group">
               <span class="status-chip" :class="item.statusType">{{ item.statusLabel }}</span>
-              <el-button
-                v-if="item.levelId"
-                size="small"
-                type="primary"
-                plain
-                @click="handleReview(item)"
-              >
+              <el-button v-if="item.levelId" size="small" type="primary" plain @click="handleReview(item)">
                 {{ item.isCompleted ? '再练一次' : '去复习' }}
               </el-button>
-              <el-button
-                v-if="!item.isCompleted"
-                size="small"
-                type="success"
-                plain
-                :loading="completingId === item.id"
-                @click="handleMarkCompleted(item)"
-              >
+              <el-button v-if="!item.isCompleted" size="small" type="success" plain :loading="completingId === item.id"
+                @click="handleMarkCompleted(item)">
                 标记完成
               </el-button>
             </div>
 
             <div class="action-links">
-              <el-button
-                v-if="item.analysis || !item.isCompleted"
-                link
-                type="primary"
-                @click="handleAnalyze(item)"
-              >
+              <el-button v-if="item.analysis || !item.isCompleted" link type="primary" @click="handleAnalyze(item)">
                 {{ item.analysis ? '查看分析' : 'AI 分析' }}
               </el-button>
             </div>
@@ -425,20 +403,17 @@ onMounted(loadData)
           {{ viewMode === 'active' ? '当前没有待处理的错题，继续保持。' : '还没有已完成的错题，完成复习后会自动归档到这里。' }}
         </div>
         <el-button v-if="viewMode === 'active'" type="primary" class="add-error-btn" @click="addDialogVisible = true">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px;">
-            <path d="M12 5v14M5 12h14"/>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"
+            style="margin-right: 6px;">
+            <path d="M12 5v14M5 12h14" />
           </svg>
           手动添加错题
         </el-button>
       </div>
     </div>
 
-    <FlowerPagination
-      v-if="totalPages > 1"
-      :total="totalPages"
-      :default-page="currentPage"
-      @change="currentPage = $event"
-    />
+    <FlowerPagination v-if="totalPages > 1" :total="totalPages" :default-page="currentPage"
+      @change="currentPage = $event" />
 
     <el-dialog v-model="addDialogVisible" title="添加错题" width="560px">
       <el-form label-width="88px">
@@ -459,13 +434,8 @@ onMounted(loadData)
       </template>
     </el-dialog>
 
-    <ErrorAnalysisDialog
-      v-model="analysisDialogVisible"
-      :loading="analysisLoading"
-      :content="analysisText"
-      :analysis-data="analysisData"
-      @refresh="handleRefreshAnalysis"
-    />
+    <ErrorAnalysisDialog v-model="analysisDialogVisible" :loading="analysisLoading" :content="analysisText"
+      :analysis-data="analysisData" @refresh="handleRefreshAnalysis" />
   </div>
 </template>
 
