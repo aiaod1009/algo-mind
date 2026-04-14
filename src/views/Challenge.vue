@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { confirmInfo, confirmWarning } from '../composables/useConfirm.js'
+import { message } from '../composables/useMessage.js'
 import api from '../api'
 import { useLevelStore } from '../stores/level'
 import { useErrorStore } from '../stores/error'
@@ -9,6 +10,7 @@ import { useUserStore } from '../stores/user'
 import ChallengeTaskPanel from '../components/challenge/ChallengeTaskPanel.vue'
 import ChallengeAnswerPane from '../components/challenge/ChallengeAnswerPane.vue'
 import ChallengeEvaluationPanel from '../components/challenge/ChallengeEvaluationPanel.vue'
+import CodeComparisonPanel from '../components/challenge/CodeComparisonPanel.vue'
 import {
   DEFAULT_EDITOR_LANGUAGE,
   LANGUAGE_LABEL_MAP,
@@ -37,6 +39,10 @@ const evaluationStreamingText = ref('')
 const isEvaluatingStream = ref(false)
 const runResult = ref(null)
 const isAiDockExpanded = ref(false)
+const hasHistoryCode = ref(false)
+const comparisonResult = ref(null)
+const selectedHistorySnapshot = ref(null)
+const isComparing = ref(false)
 let isDraftSyncPaused = false
 
 const typeLabelMap = {
@@ -331,19 +337,19 @@ const initializeChallenge = async () => {
     }
   } catch (error) {
     console.error('关卡加载失败。', error)
-    ElMessage.error('关卡加载失败，请稍后重试')
+    message.error('关卡加载失败，请稍后重试')
     navigateBackToLevels()
     return
   }
 
   if (!currentLevel.value) {
-    ElMessage.error('关卡不存在')
+    message.error('关卡不存在')
     navigateBackToLevels()
     return
   }
 
   if (!currentLevel.value.isUnlocked) {
-    ElMessage.warning('该关卡尚未解锁')
+    message.warning('该关卡尚未解锁')
     navigateBackToLevels()
     return
   }
@@ -372,6 +378,17 @@ const initializeChallenge = async () => {
   } else {
     restoreDraft()
   }
+
+  const compareSnapshotId = route.query.compareSnapshot
+  if (compareSnapshotId) {
+    await performCodeComparison(Number(compareSnapshotId))
+    router.replace({
+      path: `/challenge/${currentLevelId.value}`,
+      query: projectQuery.value ? { project: projectQuery.value } : {},
+    })
+  }
+
+  await checkHistoryCode()
   } finally {
     isDraftSyncPaused = false
     persistDraft()
@@ -386,7 +403,7 @@ const validateCurrentAnswer = () => {
   if (currentLevel.value.type === 'multi') {
     if (hasChoiceOptions(currentLevel.value)) {
       if (!Array.isArray(answer.value) || answer.value.length === 0) {
-        ElMessage.warning('请至少选择一个答案')
+        message.warning('请至少选择一个答案')
         return false
       }
       return true
@@ -396,7 +413,7 @@ const validateCurrentAnswer = () => {
       ? answer.value.join(',').trim()
       : String(answer.value || '').trim()
     if (!textValue) {
-      ElMessage.warning('请先填写答案')
+      message.warning('请先填写答案')
       return false
     }
     return true
@@ -404,12 +421,12 @@ const validateCurrentAnswer = () => {
 
   const textValue = String(answer.value || '').trim()
   if (!textValue) {
-    ElMessage.warning(isCodeChallenge.value ? '请先输入代码' : '请先完成作答')
+    message.warning(isCodeChallenge.value ? '请先输入代码' : '请先完成作答')
     return false
   }
 
   if (isCodeChallenge.value && isTemplateLikeCode(textValue)) {
-    ElMessage.warning('请先补全你的代码，再进行评测')
+    message.warning('请先补全你的代码，再进行评测')
     return false
   }
 
@@ -452,14 +469,14 @@ const submitCodeChallenge = async () => {
     persistDraft()
   } catch (error) {
     console.error('AI 代码评测失败。', error)
-    ElMessage.error('代码评测失败，请稍后重试')
+    message.error('代码评测失败，请稍后重试')
     return
   } finally {
     isEvaluatingStream.value = false
   }
 
   if (!evaluationResult.value) {
-    ElMessage.error('代码评测失败，请稍后重试')
+    message.error('代码评测失败，请稍后重试')
     return
   }
 
@@ -480,14 +497,14 @@ const submitCodeChallenge = async () => {
     } catch (syncError) {
       console.warn('编程题错题落库失败。', syncError)
     }
-    ElMessage.warning(`评测已完成，达到 ${CODE_PASS_SCORE} 分即可通关`)
+    message.warning(`评测已完成，达到 ${CODE_PASS_SCORE} 分即可通关`)
     return
   }
 
   try {
     const progressResult = await syncCodeProgress()
     if (!progressResult?.correct) {
-      ElMessage.warning('代码评测已通过，但关卡进度同步失败，请再试一次')
+      message.warning('代码评测已通过，但关卡进度同步失败，请再试一次')
       persistDraft()
       return
     }
@@ -499,11 +516,11 @@ const submitCodeChallenge = async () => {
     await refreshErrorBook()
     evaluationResult.value.pointsEarned = progressResult.pointsEarned || 0
     persistDraft()
-    ElMessage.success('代码评测通过，关卡进度已同步')
+    message.success('代码评测通过，关卡进度已同步')
   } catch (error) {
     console.error('代码评测结果同步失败。', error)
     persistDraft()
-    ElMessage.error('代码评测已完成，但保存结果失败，请稍后重试')
+    message.error('代码评测已完成，但保存结果失败，请稍后重试')
   }
 }
 
@@ -526,7 +543,7 @@ const runCodeOnly = async () => {
     })
 
     if (response.data?.code !== 0 || !response.data?.data) {
-      ElMessage.error(response.data?.message || '代码运行失败，请稍后重试')
+      message.error(response.data?.message || '代码运行失败，请稍后重试')
       return
     }
 
@@ -534,13 +551,13 @@ const runCodeOnly = async () => {
     persistDraft()
 
     if (runResult.value.error) {
-      ElMessage.warning('代码已运行，存在错误输出')
+      message.warning('代码已运行，存在错误输出')
     } else {
-      ElMessage.success('代码运行成功')
+      message.success('代码运行成功')
     }
   } catch (error) {
     console.error('代码运行异常。', error)
-    ElMessage.error('代码运行异常，请稍后重试')
+    message.error('代码运行异常，请稍后重试')
   } finally {
     loading.value = false
   }
@@ -556,7 +573,7 @@ const submitStandardChallenge = async () => {
   })
 
   if (!result) {
-    ElMessage.error('提交失败，请稍后重试')
+    message.error('提交失败，请稍后重试')
     return
   }
 
@@ -593,7 +610,7 @@ const handleSubmit = async () => {
   }
 
   if (attemptsInRun.value >= maxAttempts.value) {
-    ElMessage.warning(`本关最多尝试 ${maxAttempts.value} 次，请稍后再来`)
+    message.warning(`本关最多尝试 ${maxAttempts.value} 次，请稍后再来`)
     return
   }
 
@@ -612,7 +629,7 @@ const handleSubmit = async () => {
     if (error.code === 'ECONNABORTED') {
       console.warn('AI测评请求超时，用户可以继续等待或重新提交')
     } else {
-      ElMessage.error('提交异常，请稍后重试')
+      message.error('提交异常，请稍后重试')
     }
   } finally {
     loading.value = false
@@ -621,11 +638,30 @@ const handleSubmit = async () => {
 
 const handleSaveDraft = () => {
   persistDraft()
-  ElMessage.success('当前作答已保存')
+  message.success('当前作答已保存')
 }
 
-const handleQuickRun = () => {
-  runCodeOnly()
+const handleQuickRun = async () => {
+  // AI 代码评测（仅评测，不提交进度）
+  const payload = buildEvaluationPayload()
+
+  evaluationResult.value = null
+  evaluationStreamingText.value = ''
+  isEvaluatingStream.value = true
+  isAiDockExpanded.value = true
+  loading.value = true
+
+  try {
+    evaluationResult.value = await requestStreamEvaluation(payload)
+    persistDraft()
+    message.success('代码评测完成')
+  } catch (error) {
+    console.error('AI 代码评测失败。', error)
+    message.error('代码评测失败，请稍后重试')
+  } finally {
+    isEvaluatingStream.value = false
+    loading.value = false
+  }
 }
 
 const handleResetTemplate = () => {
@@ -635,7 +671,7 @@ const handleResetTemplate = () => {
   isEvaluatingStream.value = false
   isAiDockExpanded.value = false
   runResult.value = null
-  ElMessage.success('已恢复当前语言的默认模板')
+  message.success('已恢复当前语言的默认模板')
 }
 
 const loadAndApplySnapshot = async (snapshotId, targetLanguage) => {
@@ -645,7 +681,7 @@ const loadAndApplySnapshot = async (snapshotId, targetLanguage) => {
     const snapshot = list.find(item => item.id === snapshotId)
 
     if (!snapshot) {
-      ElMessage.warning('历史代码不存在')
+      message.warning('历史代码不存在')
       restoreDraft()
       return
     }
@@ -687,7 +723,7 @@ const loadAndApplySnapshot = async (snapshotId, targetLanguage) => {
       }
     }
 
-    ElMessage.success('已恢复历史代码')
+    message.success('已恢复历史代码')
 
     // 清除 URL 参数
     router.replace({
@@ -696,22 +732,22 @@ const loadAndApplySnapshot = async (snapshotId, targetLanguage) => {
     })
   } catch (err) {
     console.error('加载历史代码失败', err)
-    ElMessage.error('加载历史代码失败')
+    message.error('加载历史代码失败')
     restoreDraft()
   }
 }
 
 const handleGitIt = async () => {
   if (!answer.value || !String(answer.value).trim()) {
-    ElMessage.warning('请先编写代码再保存')
+    message.warning('请先编写代码再保存')
     return
   }
 
   try {
-    await ElMessageBox.confirm(
+    await confirmInfo(
       '确定将当前代码保存到历史记录？你可以随时在「历史代码」中回顾。',
       '保存代码',
-      { confirmButtonText: '保存', cancelButtonText: '取消', type: 'info' },
+      { confirmText: '保存', cancelText: '取消' }
     )
   } catch {
     return
@@ -740,10 +776,10 @@ const handleGitIt = async () => {
     }
 
     await api.saveCodeSnapshot(snapshot)
-    ElMessage.success('代码已保存到历史记录')
+    message.success('代码已保存到历史记录')
   } catch (err) {
     console.error('保存代码快照失败', err)
-    ElMessage.error('代码保存失败，请稍后重试')
+    message.error('代码保存失败，请稍后重试')
   } finally {
     loading.value = false
   }
@@ -755,7 +791,7 @@ const openEvaluationDialog = () => {
     return
   }
   if (!hasEvaluationResult.value) {
-    ElMessage.info('请先运行评测')
+    message.info('请先运行评测')
     return
   }
   isAiDockExpanded.value = !isAiDockExpanded.value
@@ -774,6 +810,57 @@ const handleOpenCodeHistory = () => {
 const handleOpenErrors = () => {
   persistDraft()
   router.push('/errors')
+}
+
+const checkHistoryCode = async () => {
+  try {
+    const res = await api.getCodeSnapshots({ levelId: currentLevelId.value })
+    hasHistoryCode.value = (res.data?.data || []).length > 0
+  } catch (err) {
+    console.error('检查历史代码失败', err)
+    hasHistoryCode.value = false
+  }
+}
+
+const openCompareHistory = () => {
+  persistDraft()
+  router.push({
+    path: '/code-history',
+    query: {
+      levelId: currentLevelId.value,
+      mode: 'compare'
+    }
+  })
+}
+
+const performCodeComparison = async (snapshotId) => {
+  if (!answer.value || !snapshotId) return
+
+  isComparing.value = true
+  message.info('正在对比代码，请稍候...')
+  isAiDockExpanded.value = true // 先展开面板，以便显示加载状态
+  try {
+    const res = await api.compareCode({
+      currentCode: answer.value,
+      currentLanguage: LANGUAGE_LABEL_MAP[language.value] || language.value,
+      historySnapshotId: snapshotId,
+      levelId: currentLevelId.value
+    })
+
+    comparisonResult.value = res.data?.data
+    selectedHistorySnapshot.value = res.data?.data?.historySnapshot
+    message.success('代码对比完成')
+  } catch (err) {
+    console.error('代码对比失败', err)
+    message.error('代码对比失败，请稍后重试')
+  } finally {
+    isComparing.value = false
+  }
+}
+
+const clearComparison = () => {
+  comparisonResult.value = null
+  selectedHistorySnapshot.value = null
 }
 
 onMounted(initializeChallenge)
@@ -890,12 +977,27 @@ watch(
             @click="openEvaluationDialog">
             展开评估详情
           </el-button>
+
+          <el-button v-if="hasHistoryCode" type="success" plain class="compare-history-btn" :loading="isComparing"
+            @click="openCompareHistory">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            与历史代码对比
+          </el-button>
         </template>
 
-        <!-- 展开状态：显示完整评估内容 -->
+        <!-- 展开状态：显示完整评估内容或对比结果 -->
         <template v-else>
           <div class="ai-dock-full-content">
-            <ChallengeEvaluationPanel v-if="hasEvaluationResult || isEvaluatingStream" :result="evaluationResult"
+            <div v-if="isComparing" class="comparison-loading">
+              <div class="loading-spinner"></div>
+              <span>正在对比代码...</span>
+            </div>
+            <CodeComparisonPanel v-else-if="comparisonResult" :result="comparisonResult"
+              :history-snapshot="selectedHistorySnapshot" :current-score="evaluationResult?.score || 0"
+              @clear="clearComparison" />
+            <ChallengeEvaluationPanel v-else-if="hasEvaluationResult || isEvaluatingStream" :result="evaluationResult"
               :pass-score="CODE_PASS_SCORE" :loading="isEvaluatingStream" :streaming-text="evaluationStreamingText" />
           </div>
           <el-button type="primary" plain class="open-eval-btn" @click="openEvaluationDialog">
@@ -905,13 +1007,6 @@ watch(
       </aside>
     </div>
 
-    <div class="action-row">
-      <el-button class="action-pill-btn" @click="goBack">返回关卡</el-button>
-      <el-button v-if="isCodeChallenge" plain class="action-pill-btn" :loading="loading"
-        @click="runCodeOnly">仅运行</el-button>
-      <el-button type="primary" class="action-pill-btn" :loading="loading" @click="handleSubmit">{{ submitButtonText
-      }}</el-button>
-    </div>
   </div>
 </template>
 
@@ -1113,6 +1208,40 @@ watch(
 
 .open-eval-btn {
   width: 100%;
+}
+
+.compare-history-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.comparison-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  gap: 16px;
+  color: var(--text-sub);
+  font-size: 14px;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--line-soft);
+  border-top-color: #22c55e;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* AI Dock 展开状态样式 */

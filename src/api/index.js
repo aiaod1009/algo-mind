@@ -90,6 +90,9 @@ api.getBestCodeSnapshot = userApi.getBestCodeSnapshot
 api.getCodeSnapshotStats = userApi.getCodeSnapshotStats
 api.saveCodeSnapshot = userApi.saveCodeSnapshot
 api.deleteCodeSnapshot = userApi.deleteCodeSnapshot
+api.compareCode = userApi.compareCode
 api.uploadChatFile = userApi.uploadChatFile
+api.aiChatMultimodal = userApi.aiChatMultimodal
+api.aiChatMultimodalStream = userApi.aiChatMultimodalStream
 
 export default api

@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { confirmWarning } from '../composables/useConfirm.js'
 import { useForumStore } from '../stores/forum'
 import { useUserStore } from '../stores/user'
 import FlowerPagination from '../components/FlowerPagination.vue'
@@ -152,10 +153,9 @@ const handleDeletePost = async (post) => {
   }
 
   try {
-    await ElMessageBox.confirm('确定要删除这条帖子吗？删除后无法恢复。', '删除确认', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
+    await confirmWarning('确定要删除这条帖子吗？删除后无法恢复。', '删除确认', {
+      confirmText: '删除',
+      cancelText: '取消'
     })
 
     const result = await forumStore.deletePost(post.id)

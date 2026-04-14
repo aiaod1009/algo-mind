@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { confirmWarning } from '../composables/useConfirm.js'
 import api from '../api'
 
 const route = useRoute()
@@ -15,6 +16,7 @@ const levelInfo = ref({ id: null, name: '' })
 const activeLanguage = ref('all')
 
 const levelId = computed(() => route.query.levelId || route.params.levelId)
+const isCompareMode = computed(() => route.query.mode === 'compare')
 
 const groupedSnapshots = computed(() => {
   const groups = {}
@@ -40,6 +42,9 @@ const filteredSnapshots = computed(() => {
 })
 
 const pageTitle = computed(() => {
+  if (isCompareMode.value) {
+    return '选择历史代码进行对比'
+  }
   if (levelInfo.value.name) {
     return `${levelInfo.value.name} - 历史代码`
   }
@@ -136,21 +141,29 @@ const copyCode = async (code) => {
 }
 
 const applyCode = (snapshot) => {
-  router.push({
-    path: `/challenge/${levelId.value}`,
-    query: {
-      applySnapshot: snapshot.id,
-      language: snapshot.language,
-    },
-  })
+  if (isCompareMode.value) {
+    router.push({
+      path: `/challenge/${levelId.value}`,
+      query: {
+        compareSnapshot: snapshot.id,
+      },
+    })
+  } else {
+    router.push({
+      path: `/challenge/${levelId.value}`,
+      query: {
+        applySnapshot: snapshot.id,
+        language: snapshot.language,
+      },
+    })
+  }
 }
 
 const handleDelete = async (snapshot) => {
   try {
-    await ElMessageBox.confirm('确定删除这条历史代码？删除后无法恢复。', '删除确认', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
+    await confirmWarning('确定删除这条历史代码？删除后无法恢复。', '删除确认', {
+      confirmText: '删除',
+      cancelText: '取消'
     })
   } catch {
     return
@@ -256,7 +269,9 @@ onMounted(() => {
           </div>
 
           <div class="card-actions">
-            <el-button size="small" type="primary" plain @click.stop="applyCode(item)">应用此代码</el-button>
+            <el-button size="small" :type="isCompareMode ? 'success' : 'primary'" plain @click.stop="applyCode(item)">
+              {{ isCompareMode ? '选择对比' : '应用此代码' }}
+            </el-button>
             <el-button size="small" type="danger" plain @click.stop="handleDelete(item)">删除</el-button>
           </div>
         </article>
@@ -333,7 +348,9 @@ onMounted(() => {
 
       <template #footer>
         <el-button @click="codeDialogVisible = false">关闭</el-button>
-        <el-button type="primary" @click="applyCode(currentSnapshot); codeDialogVisible = false">应用此代码</el-button>
+        <el-button :type="isCompareMode ? 'success' : 'primary'" @click="applyCode(currentSnapshot); codeDialogVisible = false">
+          {{ isCompareMode ? '选择对比' : '应用此代码' }}
+        </el-button>
       </template>
     </el-dialog>
   </div>

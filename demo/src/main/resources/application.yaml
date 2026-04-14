@@ -58,12 +58,12 @@ app:
 
 doubao:
   api:
-    key: ${ARK_API_KEY:4d0e1258-05a6-45dd-aa71-36a6cdf8c832}
+    key: ${ARK_API_KEY:${DOUBAO_API_KEY:4d0e1258-05a6-45dd-aa71-36a6cdf8c832}}
     url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
     base-url: https://ark.cn-beijing.volces.com/api/v3
-    model: doubao-seed-1-8-251228
     multimodal-url: https://ark.cn-beijing.volces.com/api/v3/responses
-    multimodal-key: ${ARK_MULTIMODAL_API_KEY:${ARK_API_KEY:4d0e1258-05a6-45dd-aa71-36a6cdf8c832}}
+    model: ${DOUBAO_MODEL:doubao-seed-1-8-251228}
+    multimodal-key: ${ARK_MULTIMODAL_API_KEY:${DOUBAO_MULTIMODAL_KEY:${ARK_API_KEY:4d0e1258-05a6-45dd-aa71-36a6cdf8c832}}}
     timeout: 30000
     max-retries: 3
     temperature: 0.7

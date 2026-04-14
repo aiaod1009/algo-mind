@@ -105,9 +105,29 @@ const toolbarRightText = computed(() => {
     <div class="pane-head">
       <h3>{{ title }}</h3>
       <div class="pane-actions">
-        <el-button text :disabled="loading" @click="$emit('save-draft')">保存作答</el-button>
+        <el-button :disabled="loading" @click="$emit('save-draft')">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+            <polyline points="17 21 17 13 7 13 7 21" />
+            <polyline points="7 3 7 8 15 8" />
+          </svg>
+          保存作答
+        </el-button>
+        <el-button v-if="!isCodeChallenge" type="primary" :disabled="loading" @click="$emit('submit')">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14" />
+            <path d="M12 5l7 7-7 7" />
+          </svg>
+          提交答案
+        </el-button>
+        <el-button v-if="isCodeChallenge" type="primary" :disabled="loading" @click="$emit('quick-run')">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3" />
+          </svg>
+          开始测评
+        </el-button>
         <el-button v-if="isCodeChallenge" type="primary" :disabled="loading" @click="$emit('git-it')">
-          <svg class="git-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14" />
             <path d="M12 5l7 7-7 7" />
           </svg>
@@ -207,19 +227,39 @@ const toolbarRightText = computed(() => {
   flex-wrap: wrap;
 }
 
-.pane-actions :deep(.el-button.is-text) {
-  border: 1px solid #000;
-  border-radius: 6px;
-  padding: 8px 16px;
-}
-
-.pane-actions :deep(.el-button--primary) {
+.pane-actions :deep(.el-button) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 500;
 }
 
-.git-icon {
+.pane-actions :deep(.el-button:not(.el-button--primary)) {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #374151;
+}
+
+.pane-actions :deep(.el-button:not(.el-button--primary):hover:not(:disabled)) {
+  border-color: #0ea5e9;
+  color: #0ea5e9;
+  background: #f0f9ff;
+}
+
+.pane-actions :deep(.el-button--primary) {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border: none;
+  color: #ffffff;
+}
+
+.pane-actions :deep(.el-button--primary:hover:not(:disabled)) {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+}
+
+.btn-icon {
   width: 16px;
   height: 16px;
 }

@@ -190,9 +190,110 @@ const escapeHtml = (content) => normalizeMessageContent(content)
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#39;')
 
-const renderMessageContent = (content) => escapeHtml(content)
-  .replace(/\n/g, '<br>')
-  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+const renderMessageContent = (content) => {
+  if (!content) return ''
+  
+  // 1. 先提取代码块，避免内部内容被处理
+  const codeBlocks = []
+  let html = escapeHtml(content).replace(/```(?:([\w-]+)\n)?([\s\S]*?)```/g, (match, language, code) => {
+    const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`
+    codeBlocks.push({
+      language: language || '',
+      code: code.replace(/\n$/, ''),
+    })
+    return placeholder
+  })
+
+  // 2. 处理行内格式（粗体、行内代码）
+  const processInline = (text) => {
+    return text
+      .replace(/`([^`\n]+)`/g, '<code class="ai-code">$1</code>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong class="ai-highlight">$1</strong>')
+  }
+
+  // 3. 按行解析，构建结构化内容
+  const lines = html.split('\n')
+  const result = []
+  let currentParagraph = []
+
+  const flushParagraph = () => {
+    if (currentParagraph.length > 0) {
+      const text = currentParagraph.join(' ').trim()
+      if (text) {
+        result.push(`<p class="ai-paragraph">${processInline(text)}</p>`)
+      }
+      currentParagraph = []
+    }
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+
+    // 空行：结束当前段落
+    if (!line) {
+      flushParagraph()
+      continue
+    }
+
+    // 代码块占位符
+    if (/^__CODE_BLOCK_\d+__$/.test(line)) {
+      flushParagraph()
+      result.push(line)
+      continue
+    }
+
+    // 分隔线
+    if (line === '---') {
+      flushParagraph()
+      result.push('<div class="ai-divider"></div>')
+      continue
+    }
+
+    // ### 标题
+    const h3Match = line.match(/^###\s*(.+)$/)
+    if (h3Match) {
+      flushParagraph()
+      result.push(`<div class="ai-section-bubble ai-section-highlight"><span class="ai-section-icon">✦</span><span class="ai-section-title">${processInline(h3Match[1])}</span></div>`)
+      continue
+    }
+
+    // 数字标题（如 1. 2. 标题）
+    const numMatch = line.match(/^(\d+)\.\s*(.+)$/)
+    if (numMatch) {
+      flushParagraph()
+      result.push(`<div class="ai-section-bubble"><span class="ai-section-num">${numMatch[1]}</span><span class="ai-section-title">${processInline(numMatch[2])}</span></div>`)
+      continue
+    }
+
+    // - 列表项
+    const listMatch = line.match(/^[-*]\s*(.+)$/)
+    if (listMatch) {
+      flushParagraph()
+      result.push(`<div class="ai-point"><span class="ai-point-dot"></span><span class="ai-point-text">${processInline(listMatch[1])}</span></div>`)
+      continue
+    }
+
+    // 普通文本，加入当前段落
+    currentParagraph.push(line)
+  }
+
+  // 处理最后剩余的段落
+  flushParagraph()
+
+  // 4. 恢复代码块
+  html = result.join('')
+  codeBlocks.forEach((item, index) => {
+    const languageBadge = item.language
+      ? `<div class="ai-code-header"><span class="ai-code-lang">${item.language}</span></div>`
+      : ''
+    html = html.replace(
+      `__CODE_BLOCK_${index}__`,
+      `<div class="ai-code-block">${languageBadge}<pre><code>${item.code}</code></pre></div>`
+    )
+  })
+
+  return html
+}
 
 const extractAIResponseContent = (response, fallbackInput) => {
   const content = response?.data?.data?.content
@@ -1832,11 +1933,203 @@ watch(inputMessage, () => {
 }
 
 .message-text {
-  padding: 12px 16px;
-  border-radius: 14px;
+  padding: 14px 18px;
+  border-radius: 16px;
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.7;
   color: #334155;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.message-text > :first-child {
+  margin-top: 0;
+}
+
+.message-text > :last-child {
+  margin-bottom: 0;
+}
+
+/* ========== 智能体风格样式 ========== */
+
+/* 基础段落 */
+.ai-paragraph {
+  margin: 0 0 10px;
+  line-height: 1.7;
+  color: #334155;
+}
+
+.ai-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+/* 智能体高亮文字 */
+.ai-highlight {
+  color: #0ea5e9;
+  font-weight: 600;
+  background: linear-gradient(180deg, transparent 60%, rgba(14, 165, 233, 0.12) 60%);
+  padding: 0 2px;
+}
+
+/* 行内代码 */
+.ai-code {
+  display: inline;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  color: #0f172a;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  word-break: break-all;
+}
+
+/* 分隔线 */
+.ai-divider {
+  margin: 16px 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.3), transparent);
+  position: relative;
+}
+
+.ai-divider::after {
+  content: '◆';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #0ea5e9;
+  font-size: 8px;
+  background: white;
+  padding: 0 8px;
+}
+
+/* 智能体章节气泡 - 数字标题 */
+.ai-section-bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 8px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  border-radius: 20px;
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.06);
+}
+
+.ai-section-bubble.ai-section-highlight {
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  border-color: rgba(139, 92, 246, 0.2);
+}
+
+.ai-section-num {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(14, 165, 233, 0.25);
+}
+
+.ai-section-icon {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+  font-size: 12px;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(139, 92, 246, 0.25);
+}
+
+.ai-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* 智能体要点 */
+.ai-point {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+  padding: 8px 12px;
+  background: rgba(241, 245, 249, 0.6);
+  border-radius: 10px;
+  border-left: 3px solid #0ea5e9;
+}
+
+.ai-point-dot {
+  width: 6px;
+  height: 6px;
+  background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ai-point-text {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #475569;
+}
+
+/* 代码块 */
+.ai-code-block {
+  margin: 12px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0f172a;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.3);
+  max-width: 100%;
+}
+
+.ai-code-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  background: linear-gradient(90deg, #1e293b 0%, #334155 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ai-code-lang {
+  padding: 4px 10px;
+  background: rgba(14, 165, 233, 0.15);
+  color: #7dd3fc;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 6px;
+}
+
+.ai-code-block pre {
+  margin: 0;
+  padding: 12px 16px;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.ai-code-block code {
+  display: block;
+  color: #e2e8f0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: break-word;
 }
 
 .chat-message.assistant .message-text {

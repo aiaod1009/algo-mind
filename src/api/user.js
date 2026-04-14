@@ -275,6 +275,10 @@ export const userApi = {
     return api.delete(`/code-snapshots/${id}`)
   },
 
+  compareCode(data) {
+    return api.post('/code-comparison', data, { timeout: AI_TIMEOUT })
+  },
+
   // 聊天文件上传
   uploadChatFile(formData) {
     return api.post('/ai/chat/upload', formData, {

@@ -1,4 +1,4 @@
-package com.example.demo.ai;
+package com.example.demo.ai_more;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,8 +11,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-@RestController
-@RequestMapping("/ai/chat/legacy")
+@RestController("aiMoreDouBaoAiController")
+@RequestMapping("/ai/chat")
 @RequiredArgsConstructor
 public class DouBaoAiController {
 
@@ -35,7 +35,7 @@ public class DouBaoAiController {
             try {
                 for (int i = 1; i <= 5; i++) {
                     Thread.sleep(1000);
-                    emitter.send("第 " + i + " 条消息：SSE 流式推送功能正常\n");
+                    emitter.send("chunk " + i + " from ai_more multimodal controller\n");
                 }
                 emitter.complete();
             } catch (Exception e) {

@@ -1,5 +1,6 @@
-package com.example.demo.ai;
+package com.example.demo.ai_more;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -29,7 +30,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-@Service
+@Service("aiMoreDouBaoMultimodalService")
 @RequiredArgsConstructor
 public class DouBaoMultimodalService {
 
@@ -41,7 +42,7 @@ public class DouBaoMultimodalService {
             60L,
             TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(100),
-            r -> new Thread(r, "multimodal-pool-" + r.hashCode())
+            r -> new Thread(r, "ai-more-multimodal-" + r.hashCode())
     );
 
     private final DouBaoProperties properties;
@@ -53,15 +54,18 @@ public class DouBaoMultimodalService {
 
     @PostConstruct
     void init() {
-        this.apiKey = properties.getMultimodalApiKey();
-        if (apiKey == null || apiKey.isBlank()) {
-            log.warn("多模态 API KEY 未配置，多模态功能将不可用");
+        apiKey = properties.getMultimodalApiKey();
+        if (!hasText(apiKey)) {
+            log.warn("Multimodal API key is not configured");
         }
     }
 
     public String chatWithImages(String text, List<ImageFile> images) {
-        if (apiKey == null || apiKey.isBlank()) {
-            return "多模态服务未配置，请检查 API KEY";
+        if (!hasText(apiKey)) {
+            return "Multimodal service is not configured";
+        }
+        if (!hasText(text) && (images == null || images.isEmpty())) {
+            return "Please provide text or upload at least one image";
         }
 
         try {
@@ -69,15 +73,19 @@ public class DouBaoMultimodalService {
             String response = sendRequest(requestBody);
             return extractContent(response);
         } catch (Exception e) {
-            log.error("多模态对话失败", e);
-            return "调用失败：" + e.getMessage();
+            log.error("Multimodal request failed", e);
+            return "Multimodal request failed: " + e.getMessage();
         }
     }
 
     public SseEmitter chatWithImagesStream(String text, List<ImageFile> images) {
         SseEmitter emitter = createEmitter();
-        if (apiKey == null || apiKey.isBlank()) {
-            completeWithError(emitter, "多模态服务未配置，请检查 API KEY");
+        if (!hasText(apiKey)) {
+            completeWithError(emitter, "Multimodal service is not configured");
+            return emitter;
+        }
+        if (!hasText(text) && (images == null || images.isEmpty())) {
+            completeWithError(emitter, "Please provide text or upload at least one image");
             return emitter;
         }
 
@@ -86,14 +94,14 @@ public class DouBaoMultimodalService {
                 String requestBody = buildRequestBody(text, images, true);
                 streamRequest(requestBody, emitter);
             } catch (Exception e) {
-                log.error("多模态流式对话失败", e);
-                completeWithError(emitter, "调用失败：" + e.getMessage());
+                log.error("Multimodal streaming request failed", e);
+                completeWithError(emitter, "Multimodal request failed: " + e.getMessage());
             }
         });
         return emitter;
     }
 
-    private String buildRequestBody(String text, List<ImageFile> images, boolean stream) throws Exception {
+    private String buildRequestBody(String text, List<ImageFile> images, boolean stream) throws IOException {
         ObjectNode root = OBJECT_MAPPER.createObjectNode();
         root.put("model", properties.getModel());
         if (stream) {
@@ -111,38 +119,55 @@ public class DouBaoMultimodalService {
                     continue;
                 }
 
-                if (image.isImage()) {
+                if (isImagePayload(image)) {
+                    String pureBase64 = resolveImageBase64(image);
+                    if (!hasText(pureBase64)) {
+                        continue;
+                    }
+
                     ObjectNode imageContent = content.addObject();
                     imageContent.put("type", "image_url");
                     ObjectNode imageUrlNode = imageContent.putObject("image_url");
-                    imageUrlNode.put("url", resolveImageUrl(image));
-                } else {
-                    ObjectNode textContent = content.addObject();
-                    textContent.put("type", "text");
-                    textContent.put("text", "[文件: " + safeText(image.getName()) + ", 大小: " + formatFileSize(image.getSize()) + "]");
+                    imageUrlNode.put("url", buildDataUrl(pureBase64, resolveMimeType(image)));
+                    continue;
                 }
+
+                ObjectNode fileContent = content.addObject();
+                fileContent.put("type", "text");
+                fileContent.put(
+                        "text",
+                        "[file: " + safeText(image.getName()) + ", size: " + formatFileSize(image.getSize()) + "]"
+                );
             }
         }
 
-        if (text != null && !text.isBlank()) {
+        if (hasText(text)) {
             ObjectNode textContent = content.addObject();
             textContent.put("type", "text");
             textContent.put("text", text.trim());
         }
 
+        if (content.isEmpty()) {
+            throw new IllegalArgumentException("No valid multimodal input was found");
+        }
+
         return OBJECT_MAPPER.writeValueAsString(root);
     }
 
-    private String resolveImageUrl(ImageFile image) {
-        String pureBase64 = resolveImageBase64(image);
-        if (pureBase64 != null && !pureBase64.isBlank()) {
-            return buildDataUrl(pureBase64, image.getType());
+    private boolean isImagePayload(ImageFile image) {
+        if (image == null) {
+            return false;
         }
-
-        if (image == null || image.getUrl() == null || image.getUrl().isBlank()) {
-            throw new IllegalArgumentException("图片 URL 不能为空");
+        if (image.isImage()) {
+            return true;
         }
-        return image.getUrl().trim();
+        if (hasText(image.getType()) && image.getType().startsWith("image/")) {
+            return true;
+        }
+        if (hasText(image.getBase64())) {
+            return true;
+        }
+        return hasText(image.getUrl()) && image.getUrl().startsWith("data:image/");
     }
 
     private String resolveImageBase64(ImageFile image) {
@@ -150,28 +175,28 @@ public class DouBaoMultimodalService {
             return null;
         }
 
-        if (image.getBase64() != null && !image.getBase64().isBlank()) {
-            return stripBase64Prefix(image.getBase64());
+        if (hasText(image.getBase64())) {
+            return extractPureBase64(image.getBase64());
         }
 
-        if (image.getUrl() == null || image.getUrl().isBlank()) {
+        if (!hasText(image.getUrl())) {
             return null;
         }
 
         String imageUrl = image.getUrl().trim();
         if (imageUrl.startsWith("data:")) {
-            return stripBase64Prefix(imageUrl);
+            return extractPureBase64(imageUrl);
         }
 
         Path localFilePath = resolveLocalUploadPath(imageUrl);
         if (localFilePath != null && Files.exists(localFilePath)) {
-            return fileToBase64(localFilePath);
+            return encodeFileToBase64(localFilePath);
         }
 
         return null;
     }
 
-    private String stripBase64Prefix(String rawValue) {
+    public static String extractPureBase64(String rawValue) {
         if (rawValue == null) {
             return null;
         }
@@ -182,19 +207,26 @@ public class DouBaoMultimodalService {
         }
 
         int commaIndex = normalized.indexOf(',');
-        if (commaIndex < 0 || commaIndex == normalized.length() - 1) {
-            throw new IllegalArgumentException("Base64 数据格式不正确");
+        if (commaIndex < 0 || commaIndex >= normalized.length() - 1) {
+            throw new IllegalArgumentException("Invalid data URL base64 value");
         }
 
         return normalized.substring(commaIndex + 1).trim();
     }
 
-    private String buildDataUrl(String pureBase64, String fallbackMimeType) {
-        String mimeType = fallbackMimeType;
-        if (mimeType == null || mimeType.isBlank()) {
-            mimeType = "image/jpeg";
+    private String resolveMimeType(ImageFile image) {
+        if (hasText(image.getType())) {
+            return image.getType().trim();
         }
-        return "data:" + mimeType + ";base64," + stripBase64Prefix(pureBase64);
+        if (hasText(image.getName())) {
+            return detectMimeTypeByName(image.getName());
+        }
+        return "image/jpeg";
+    }
+
+    private String buildDataUrl(String pureBase64, String mimeType) {
+        String safeMimeType = hasText(mimeType) ? mimeType.trim() : "image/jpeg";
+        return "data:" + safeMimeType + ";base64," + extractPureBase64(pureBase64);
     }
 
     private Path resolveLocalUploadPath(String imageUrl) {
@@ -204,25 +236,45 @@ public class DouBaoMultimodalService {
         }
 
         String filename = imageUrl.substring(markerIndex + "/chat-files/".length()).trim();
-        if (filename.isEmpty() || filename.contains("/") || filename.contains("\\") || filename.contains("..")) {
+        if (!hasText(filename) || filename.contains("/") || filename.contains("\\") || filename.contains("..")) {
             return null;
         }
 
-        Path uploadPath = Paths.get(chatFilesDir).toAbsolutePath().normalize();
-        Path localFilePath = uploadPath.resolve(filename).normalize();
-        if (!localFilePath.startsWith(uploadPath)) {
+        Path uploadRoot = Paths.get(chatFilesDir).toAbsolutePath().normalize();
+        Path localFilePath = uploadRoot.resolve(filename).normalize();
+        if (!localFilePath.startsWith(uploadRoot)) {
             return null;
         }
         return localFilePath;
     }
 
-    private String fileToBase64(Path filePath) {
+    private String encodeFileToBase64(Path filePath) {
         try {
             byte[] bytes = Files.readAllBytes(filePath);
             return Base64.getEncoder().encodeToString(bytes);
         } catch (IOException e) {
-            throw new RuntimeException("读取本地图片失败: " + filePath, e);
+            throw new RuntimeException("Failed to read uploaded image: " + filePath, e);
         }
+    }
+
+    private String detectMimeTypeByName(String fileName) {
+        String lower = safeText(fileName).toLowerCase();
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (lower.endsWith(".png")) {
+            return "image/png";
+        }
+        if (lower.endsWith(".gif")) {
+            return "image/gif";
+        }
+        if (lower.endsWith(".webp")) {
+            return "image/webp";
+        }
+        if (lower.endsWith(".bmp")) {
+            return "image/bmp";
+        }
+        return "image/jpeg";
     }
 
     private String sendRequest(String requestBody) throws IOException {
@@ -249,10 +301,14 @@ public class DouBaoMultimodalService {
             conn = openConnection(true);
             conn.getOutputStream().write(requestBody.getBytes(StandardCharsets.UTF_8));
 
-            try (InputStream stream = getResponseStream(conn);
+            int responseCode = conn.getResponseCode();
+            try (InputStream stream = getResponseStream(conn, responseCode);
                  BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                StringBuilder rawResponse = new StringBuilder();
+                boolean deliveredContent = false;
                 String line;
                 while ((line = reader.readLine()) != null) {
+                    rawResponse.append(line).append('\n');
                     if (!line.startsWith("data:")) {
                         continue;
                     }
@@ -263,16 +319,24 @@ public class DouBaoMultimodalService {
                     }
 
                     String content = extractStreamContent(data);
-                    if (content != null && !content.isEmpty()) {
+                    if (hasText(content)) {
                         emitter.send(content);
+                        deliveredContent = true;
+                    }
+                }
+
+                if (!deliveredContent) {
+                    String fallbackContent = extractContent(rawResponse.toString());
+                    if (hasText(fallbackContent)) {
+                        emitter.send(fallbackContent);
                     }
                 }
             }
 
             emitter.complete();
         } catch (Exception e) {
-            log.error("多模态流式请求失败", e);
-            completeWithError(emitter, "调用失败：" + e.getMessage());
+            log.error("Streaming multimodal request failed", e);
+            completeWithError(emitter, "Multimodal request failed: " + e.getMessage());
         } finally {
             if (conn != null) {
                 conn.disconnect();
@@ -298,22 +362,30 @@ public class DouBaoMultimodalService {
     }
 
     private InputStream getResponseStream(HttpURLConnection conn) throws IOException {
-        int responseCode = conn.getResponseCode();
+        return getResponseStream(conn, conn.getResponseCode());
+    }
+
+    private InputStream getResponseStream(HttpURLConnection conn, int responseCode) throws IOException {
         InputStream stream = responseCode >= 200 && responseCode < 300
                 ? conn.getInputStream()
                 : conn.getErrorStream();
 
         if (stream == null) {
-            throw new IOException("远程模型返回空响应，状态码: " + responseCode);
+            throw new IOException("Remote model returned an empty response. HTTP status: " + responseCode);
         }
         return stream;
     }
 
     private String extractContent(String response) {
         try {
-            JsonNode root = OBJECT_MAPPER.readTree(response);
+            String normalizedResponse = response == null ? "" : response.trim();
+            if (!hasText(normalizedResponse)) {
+                return "Model did not return any text content";
+            }
+
+            JsonNode root = OBJECT_MAPPER.readTree(normalizedResponse);
             if (root.has("error")) {
-                return "错误: " + root.path("error").path("message").asText("未知错误");
+                return "Model error: " + root.path("error").path("message").asText("Unknown error");
             }
 
             JsonNode choices = root.path("choices");
@@ -331,14 +403,19 @@ public class DouBaoMultimodalService {
                             builder.append(text);
                         }
                     }
-                    return builder.toString();
+                    if (builder.length() > 0) {
+                        return builder.toString();
+                    }
                 }
             }
 
-            return "模型未返回有效内容";
+            return "Model did not return any text content";
         } catch (Exception e) {
-            log.error("解析响应失败: {}", response, e);
-            return "解析响应失败";
+            log.error("Failed to parse multimodal response: {}", response, e);
+            if (hasText(response)) {
+                return response.trim();
+            }
+            return "Failed to parse multimodal response";
         }
     }
 
@@ -366,10 +443,9 @@ public class DouBaoMultimodalService {
                 }
                 return builder.length() == 0 ? null : builder.toString();
             }
-
             return null;
         } catch (Exception e) {
-            log.debug("解析流式数据失败: {}", data, e);
+            log.debug("Failed to parse streaming chunk: {}", data, e);
             return null;
         }
     }
@@ -377,16 +453,16 @@ public class DouBaoMultimodalService {
     private SseEmitter createEmitter() {
         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
         emitter.onTimeout(() -> {
-            log.warn("多模态请求超时");
+            log.warn("Multimodal stream timed out");
             emitter.complete();
         });
-        emitter.onError(error -> log.warn("多模态 emitter 错误", error));
+        emitter.onError(error -> log.warn("Multimodal emitter error", error));
         return emitter;
     }
 
     private void completeWithError(SseEmitter emitter, String errorMsg) {
         try {
-            emitter.send(errorMsg == null || errorMsg.isBlank() ? "调用失败，请稍后重试" : errorMsg);
+            emitter.send(hasText(errorMsg) ? errorMsg : "Multimodal request failed");
             emitter.complete();
         } catch (IOException e) {
             emitter.completeWithError(e);
@@ -403,16 +479,22 @@ public class DouBaoMultimodalService {
         return String.format("%.2f MB", size / (1024.0 * 1024));
     }
 
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
     private String safeText(String value) {
         return value == null ? "" : value;
     }
 
     public static class ImageFile {
+        @JsonAlias({"fileName", "filename"})
         private String name;
         private long size;
         private String type;
         private String url;
         private String base64;
+        @JsonAlias("isImage")
         private boolean image;
 
         public ImageFile() {

@@ -117,7 +117,7 @@ const toggleTheme = () => {
           <span class="brand-text"><span class="brand-algo">Algo</span><span class="brand-mind">Mind</span></span>
         </div>
         <el-menu class="main-menu" :default-active="activePath" mode="horizontal" @select="handleMenuSelect">
-          <el-menu-item index="/home">学习计划</el-menu-item>
+          <el-menu-item index="/home">首页</el-menu-item>
           <el-menu-item index="/courses">网课</el-menu-item>
           <el-menu-item index="/projects">项目实战</el-menu-item>
           <el-menu-item index="/forum">论坛</el-menu-item>
