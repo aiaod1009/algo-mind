@@ -45,11 +45,6 @@ public class CodeSnapshotService {
     }
 
     private void updateBestFlag(CodeSnapshot snapshot) {
-        if (!Boolean.TRUE.equals(snapshot.getAiEvalPassed())) {
-            snapshot.setIsBest(false);
-            return;
-        }
-
         Optional<CodeSnapshot> currentBest = codeSnapshotRepository
                 .findByUserIdAndLevelIdAndIsBestTrue(snapshot.getUserId(), snapshot.getLevelId());
 

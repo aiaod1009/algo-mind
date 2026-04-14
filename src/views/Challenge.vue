@@ -577,6 +577,53 @@ const handleResetTemplate = () => {
   ElMessage.success('已恢复当前语言的默认模板')
 }
 
+const handleGitIt = async () => {
+  if (!answer.value || !String(answer.value).trim()) {
+    ElMessage.warning('请先编写代码再保存')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      '确定将当前代码保存到历史记录？你可以随时在「历史代码」中回顾。',
+      '保存代码',
+      { confirmButtonText: '保存', cancelButtonText: '取消', type: 'info' },
+    )
+  } catch {
+    return
+  }
+
+  loading.value = true
+  try {
+    const snapshot = {
+      levelId: currentLevelId.value,
+      levelName: currentLevel.value?.name || currentLevel.value?.title || '',
+      language: LANGUAGE_LABEL_MAP[language.value] || language.value,
+      code: String(answer.value || ''),
+      stdinInput: stdinInput.value || null,
+      score: evaluationResult.value?.score ?? 0,
+      stars: evaluationResult.value?.stars ?? 0,
+      compilePassed: Boolean(runResult.value && !runResult.value.error),
+      aiAnalysis: evaluationResult.value?.analysis || null,
+      aiCorrectness: evaluationResult.value?.correctness || null,
+      aiQuality: evaluationResult.value?.quality || null,
+      aiEfficiency: evaluationResult.value?.efficiency || null,
+      aiSuggestionsJson: evaluationResult.value?.suggestions?.length
+        ? JSON.stringify(evaluationResult.value.suggestions)
+        : null,
+      runOutput: runResult.value?.output || null,
+    }
+
+    await api.saveCodeSnapshot(snapshot)
+    ElMessage.success('代码已保存到历史记录')
+  } catch (err) {
+    console.error('保存代码快照失败', err)
+    ElMessage.error('代码保存失败，请稍后重试')
+  } finally {
+    loading.value = false
+  }
+}
+
 const openEvaluationDialog = () => {
   if (isEvaluatingStream.value) {
     isAiDockExpanded.value = true
@@ -659,7 +706,7 @@ watch(
         <ChallengeAnswerPane v-model:answer="answer" v-model:language="language" v-model:stdin-input="stdinInput"
           :level="currentLevel" :is-code-challenge="isCodeChallenge" :loading="loading" :max-attempts="maxAttempts"
           :attempts-in-run="attemptsInRun" :pass-score="CODE_PASS_SCORE" :type-label="typeLabelMap[currentLevel.type]"
-          @save-draft="handleSaveDraft" @quick-run="handleQuickRun" @reset-template="handleResetTemplate" />
+          @save-draft="handleSaveDraft" @quick-run="handleQuickRun" @reset-template="handleResetTemplate" @git-it="handleGitIt" />
 
         <section v-if="showRunPanel" class="surface-card run-result-panel">
           <div class="run-result-head">
