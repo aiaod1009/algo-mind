@@ -3,20 +3,20 @@ package com.example.demo.ai;
 import com.example.demo.dto.ai.ChatMessage;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 public class DouBaoAiService {
 
     private static final Logger logger = LoggerFactory.getLogger(DouBaoAiService.class);
+    private static final long STREAM_TIMEOUT_MS = 180_000L;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final ExecutorService AI_STREAM_POOL = new ThreadPoolExecutor(
             Math.max(4, Runtime.getRuntime().availableProcessors() * 2),
@@ -40,7 +41,6 @@ public class DouBaoAiService {
             r -> new Thread(r, "ai-stream-pool-" + r.hashCode())
     );
 
-    private final RestTemplate restTemplate;
     private final DouBaoProperties properties;
 
     public String sendToAi(String userText) {
@@ -79,7 +79,7 @@ public class DouBaoAiService {
     }
 
     public SseEmitter sendToAiStreamFast(String userText) {
-        SseEmitter emitter = new SseEmitter(60000L);
+        SseEmitter emitter = createEmitter();
         sendToAiStreamFast(buildSingleUserMessages(userText), emitter, null);
         return emitter;
     }
@@ -89,13 +89,13 @@ public class DouBaoAiService {
     }
 
     public SseEmitter sendToAiStreamFast(List<ChatMessage> messages) {
-        SseEmitter emitter = new SseEmitter(60000L);
+        SseEmitter emitter = createEmitter();
         sendToAiStreamFast(messages, emitter, null);
         return emitter;
     }
 
     public SseEmitter sendToAiStreamFast(List<ChatMessage> messages, String fallbackContent) {
-        SseEmitter emitter = new SseEmitter(60000L);
+        SseEmitter emitter = createEmitter();
         sendToAiStreamFast(messages, emitter, fallbackContent);
         return emitter;
     }
@@ -111,60 +111,65 @@ public class DouBaoAiService {
             return;
         }
 
-        AI_STREAM_POOL.execute(() -> streamToEmitter(sanitizedMessages, emitter, fallbackContent, true));
+        AI_STREAM_POOL.execute(() -> streamToEmitter(sanitizedMessages, emitter, fallbackContent));
     }
 
     public SseEmitter sendToAiStream(List<ChatMessage> messages, String fallbackContent) {
-        SseEmitter emitter = new SseEmitter(60000L);
+        SseEmitter emitter = createEmitter();
         List<ChatMessage> sanitizedMessages = sanitizeMessages(messages);
         if (sanitizedMessages.isEmpty()) {
             completeWithError(emitter, fallbackContent != null ? fallbackContent : "请输入有效内容后重试");
             return emitter;
         }
 
-        AI_STREAM_POOL.execute(() -> streamToEmitter(sanitizedMessages, emitter, fallbackContent, false));
+        AI_STREAM_POOL.execute(() -> streamToEmitter(sanitizedMessages, emitter, fallbackContent));
         return emitter;
     }
 
-    private void streamToEmitter(
-            List<ChatMessage> messages,
-            SseEmitter emitter,
-            String fallbackContent,
-            boolean fastMode
-    ) {
+    private SseEmitter createEmitter() {
+        SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
+        emitter.onTimeout(() -> {
+            logger.warn("AI streaming request timed out after {} ms", STREAM_TIMEOUT_MS);
+            emitter.complete();
+        });
+        emitter.onError(error -> logger.warn("AI streaming emitter error", error));
+        return emitter;
+    }
+
+    private void streamToEmitter(List<ChatMessage> messages, SseEmitter emitter, String fallbackContent) {
+        HttpURLConnection conn = null;
         try {
-            HttpHeaders headers = buildHeaders();
-            headers.set("Accept", "text/event-stream");
-
             String requestBody = buildRequestBody(messages, true);
-            restTemplate.execute(
-                    properties.getUrl(),
-                    HttpMethod.POST,
-                    clientHttpRequest -> {
-                        clientHttpRequest.getHeaders().putAll(headers);
-                        clientHttpRequest.getBody().write(requestBody.getBytes(StandardCharsets.UTF_8));
-                    },
-                    clientHttpResponse -> {
-                        try (BufferedReader reader = new BufferedReader(
-                                new InputStreamReader(clientHttpResponse.getBody(), StandardCharsets.UTF_8)
-                        )) {
-                            String line;
-                            while ((line = reader.readLine()) != null) {
-                                if (fastMode) {
-                                    fastProcessStreamLine(line, emitter);
-                                } else {
-                                    processAiStreamLine(line, emitter);
-                                }
-                            }
-                        }
-                        return null;
-                    }
-            );
+            conn = openConnection(true);
+            conn.getOutputStream().write(requestBody.getBytes(StandardCharsets.UTF_8));
 
+            try (InputStream stream = getResponseStream(conn);
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.startsWith("data:")) {
+                        continue;
+                    }
+
+                    String data = line.substring(5).trim();
+                    if (data.isEmpty() || "[DONE]".equals(data)) {
+                        continue;
+                    }
+
+                    String content = extractStreamContent(data);
+                    if (content != null && !content.isEmpty()) {
+                        emitter.send(content);
+                    }
+                }
+            }
             emitter.complete();
         } catch (Exception e) {
             logger.error("DouBao streaming request failed", e);
             completeWithError(emitter, fallbackContent != null ? fallbackContent : "调用失败：" + e.getMessage());
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
     }
 
@@ -174,33 +179,116 @@ public class DouBaoAiService {
             throw new IllegalArgumentException("请输入有效内容后重试");
         }
 
-        HttpHeaders headers = buildHeaders();
-        HttpEntity<String> request = new HttpEntity<>(buildRequestBody(sanitizedMessages, false), headers);
-        String response = restTemplate.postForObject(properties.getUrl(), request, String.class);
+        HttpURLConnection conn = null;
+        try {
+            String requestBody = buildRequestBody(sanitizedMessages, false);
+            conn = openConnection(false);
+            conn.getOutputStream().write(requestBody.getBytes(StandardCharsets.UTF_8));
 
-        logger.info("DouBao normal request completed");
-        return extractContentFromResponse(response);
+            try (InputStream stream = getResponseStream(conn);
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+                logger.info("DouBao request completed");
+                return extractContent(response.toString());
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("请求失败", e);
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
     }
 
     private String requestTextFast(List<ChatMessage> messages) {
-        List<ChatMessage> sanitizedMessages = sanitizeMessages(messages);
-        if (sanitizedMessages.isEmpty()) {
-            throw new IllegalArgumentException("请输入有效内容后重试");
-        }
-
-        HttpHeaders headers = buildHeaders();
-        HttpEntity<String> request = new HttpEntity<>(buildRequestBody(sanitizedMessages, false), headers);
-        String response = restTemplate.postForObject(properties.getUrl(), request, String.class);
-
-        logger.info("DouBao fast request completed");
-        return extractContentFromResponse(response);
+        return requestText(messages);
     }
 
-    private HttpHeaders buildHeaders() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("Authorization", "Bearer " + properties.getKey());
-        return headers;
+    private HttpURLConnection openConnection(boolean stream) throws IOException {
+        URL url = new URL(properties.getUrl());
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setRequestProperty("Authorization", "Bearer " + properties.getKey());
+        if (stream) {
+            conn.setRequestProperty("Accept", "text/event-stream");
+            conn.setReadTimeout(180_000);
+        } else {
+            conn.setReadTimeout(120_000);
+        }
+        conn.setDoOutput(true);
+        conn.setConnectTimeout(30_000);
+        return conn;
+    }
+
+    private InputStream getResponseStream(HttpURLConnection conn) throws IOException {
+        int responseCode = conn.getResponseCode();
+        InputStream stream = responseCode >= 200 && responseCode < 300
+                ? conn.getInputStream()
+                : conn.getErrorStream();
+
+        if (stream == null) {
+            throw new IOException("远程模型返回空响应，状态码: " + responseCode);
+        }
+        return stream;
+    }
+
+    private String buildRequestBody(List<ChatMessage> messages, boolean stream) throws IOException {
+        ObjectNode root = OBJECT_MAPPER.createObjectNode();
+        root.put("model", properties.getModel());
+        
+        if (stream) {
+            root.put("stream", true);
+        }
+
+        ArrayNode messagesArray = root.putArray("messages");
+        for (ChatMessage message : messages) {
+            ObjectNode msgNode = messagesArray.addObject();
+            msgNode.put("role", message.getRole());
+            msgNode.put("content", message.getContent());
+        }
+
+        return OBJECT_MAPPER.writeValueAsString(root);
+    }
+
+    private String extractContent(String response) {
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(response);
+            if (root.has("error")) {
+                return "错误: " + root.path("error").path("message").asText("未知错误");
+            }
+
+            JsonNode choices = root.path("choices");
+            if (choices.isArray() && !choices.isEmpty()) {
+                JsonNode message = choices.get(0).path("message");
+                return message.path("content").asText("模型未返回有效内容");
+            }
+
+            return "模型未返回有效内容";
+        } catch (Exception e) {
+            logger.error("解析响应失败: {}", response, e);
+            return "解析响应失败";
+        }
+    }
+
+    private String extractStreamContent(String data) {
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(data);
+            JsonNode choices = root.path("choices");
+            if (!choices.isArray() || choices.isEmpty()) {
+                return null;
+            }
+
+            JsonNode delta = choices.get(0).path("delta");
+            return delta.path("content").asText(null);
+        } catch (Exception e) {
+            logger.debug("解析流式数据失败: {}", data, e);
+            return null;
+        }
     }
 
     private List<ChatMessage> buildSingleUserMessages(String userText) {
@@ -239,216 +327,6 @@ public class DouBaoAiService {
             return "assistant";
         }
         return "user";
-    }
-
-    private String buildRequestBody(List<ChatMessage> messages, boolean stream) {
-        StringBuilder builder = new StringBuilder(256 + messages.size() * 128);
-        builder.append("{\"model\":\"")
-                .append(escapeJson(properties.getModel()))
-                .append("\"");
-
-        if (stream) {
-            builder.append(",\"stream\":true");
-        }
-
-        builder.append(",\"messages\":[");
-        for (int i = 0; i < messages.size(); i++) {
-            ChatMessage message = messages.get(i);
-            if (i > 0) {
-                builder.append(',');
-            }
-            builder.append("{\"role\":\"")
-                    .append(escapeJson(message.getRole()))
-                    .append("\",\"content\":[{\"type\":\"text\",\"text\":\"")
-                    .append(escapeJson(message.getContent()))
-                    .append("\"}]}");
-        }
-        builder.append("]}");
-        return builder.toString();
-    }
-
-    private String escapeJson(String value) {
-        if (value == null) {
-            return "";
-        }
-
-        StringBuilder escaped = new StringBuilder(value.length() + 16);
-        for (int i = 0; i < value.length(); i++) {
-            char current = value.charAt(i);
-            switch (current) {
-                case '\\':
-                    escaped.append("\\\\");
-                    break;
-                case '"':
-                    escaped.append("\\\"");
-                    break;
-                case '\n':
-                    escaped.append("\\n");
-                    break;
-                case '\r':
-                    escaped.append("\\r");
-                    break;
-                case '\t':
-                    escaped.append("\\t");
-                    break;
-                default:
-                    escaped.append(current);
-            }
-        }
-        return escaped.toString();
-    }
-
-    private String extractContentFromResponse(String response) {
-        if (response == null || response.isBlank()) {
-            throw new IllegalStateException("AI响应为空");
-        }
-
-        try {
-            JsonNode root = OBJECT_MAPPER.readTree(response);
-            JsonNode choices = root.get("choices");
-            if (choices == null || !choices.isArray() || choices.isEmpty()) {
-                throw new IllegalStateException("AI没有返回结果");
-            }
-
-            JsonNode message = choices.get(0).get("message");
-            if (message == null) {
-                throw new IllegalStateException("AI响应格式异常");
-            }
-
-            String content = readTextContent(message.get("content"));
-            if (content == null || content.isBlank()) {
-                throw new IllegalStateException("AI返回内容为空");
-            }
-
-            return content;
-        } catch (Exception parseError) {
-            logger.warn("Failed to parse normal AI response as JSON, falling back to substring extraction", parseError);
-            String content = extractContentBySubstring(response);
-            if (content == null || content.isBlank()) {
-                throw new IllegalStateException("AI没有返回结果", parseError);
-            }
-            return content;
-        }
-    }
-
-    private void processAiStreamLine(String line, SseEmitter emitter) {
-        pushStreamContent(line, emitter, true);
-    }
-
-    private void fastProcessStreamLine(String line, SseEmitter emitter) {
-        pushStreamContent(line, emitter, false);
-    }
-
-    private void pushStreamContent(String line, SseEmitter emitter, boolean logFailure) {
-        String content = extractStreamContent(line);
-        if (content == null || content.isEmpty()) {
-            return;
-        }
-
-        try {
-            emitter.send(content);
-        } catch (IOException e) {
-            if (logFailure) {
-                logger.error("Normal AI streaming push failed", e);
-            }
-            emitter.completeWithError(e);
-        }
-    }
-
-    private String extractStreamContent(String line) {
-        if (line == null || line.isBlank() || !line.startsWith("data:")) {
-            return null;
-        }
-
-        String data = line.substring(5).stripLeading();
-        if (data.isBlank() || "[DONE]".equals(data)) {
-            return null;
-        }
-
-        try {
-            JsonNode root = OBJECT_MAPPER.readTree(data);
-            JsonNode choices = root.path("choices");
-            if (!choices.isArray() || choices.isEmpty()) {
-                return null;
-            }
-
-            JsonNode choice = choices.get(0);
-            return firstNonEmptyText(
-                    choice.path("delta").path("content"),
-                    choice.path("message").path("content"),
-                    choice.path("content")
-            );
-        } catch (Exception parseError) {
-            logger.debug("Failed to parse AI streaming JSON chunk, falling back to substring extraction: {}", data, parseError);
-            return extractContentBySubstring(data);
-        }
-    }
-
-    private String firstNonEmptyText(JsonNode... candidates) {
-        for (JsonNode candidate : candidates) {
-            String text = readTextContent(candidate);
-            if (text != null && !text.isEmpty()) {
-                return text;
-            }
-        }
-        return null;
-    }
-
-    private String readTextContent(JsonNode node) {
-        if (node == null || node.isMissingNode() || node.isNull()) {
-            return null;
-        }
-
-        if (node.isTextual()) {
-            return node.asText();
-        }
-
-        if (node.isArray()) {
-            StringBuilder builder = new StringBuilder();
-            for (JsonNode item : node) {
-                String text = readTextContent(item);
-                if (text != null) {
-                    builder.append(text);
-                }
-            }
-            return builder.length() == 0 ? null : builder.toString();
-        }
-
-        if (node.isObject()) {
-            if (node.has("text")) {
-                return readTextContent(node.get("text"));
-            }
-            if (node.has("content")) {
-                return readTextContent(node.get("content"));
-            }
-        }
-
-        return null;
-    }
-
-    private String extractContentBySubstring(String data) {
-        int contentIdx = data.indexOf("\"content\":\"");
-        if (contentIdx == -1) {
-            return null;
-        }
-
-        int start = contentIdx + 11;
-        int end = data.indexOf('"', start);
-        while (end > start && data.charAt(end - 1) == '\\') {
-            end = data.indexOf('"', end + 1);
-        }
-        if (end == -1) {
-            return null;
-        }
-
-        String content = data.substring(start, end);
-        if (content.indexOf('\\') != -1) {
-            content = content.replace("\\n", "\n")
-                    .replace("\\\"", "\"")
-                    .replace("\\\\", "\\");
-        }
-
-        return content.isEmpty() ? null : content;
     }
 
     private void completeWithError(SseEmitter emitter, String errorMsg) {

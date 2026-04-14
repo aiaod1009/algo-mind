@@ -1,9 +1,9 @@
 import api from './index'
 import { withNonBlockingAuth } from './requestOptions'
 
-const AI_TIMEOUT = 60000
-const LONG_TIMEOUT = 30000
-const VERY_LONG_TIMEOUT = 120000
+const AI_TIMEOUT = 120000
+const LONG_TIMEOUT = 60000
+const VERY_LONG_TIMEOUT = 180000
 
 const getStreamHeaders = () => {
   const headers = {
@@ -273,6 +273,26 @@ export const userApi = {
 
   deleteCodeSnapshot(id) {
     return api.delete(`/code-snapshots/${id}`)
+  },
+
+  // 聊天文件上传
+  uploadChatFile(formData) {
+    return api.post('/ai/chat/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: LONG_TIMEOUT,
+    })
+  },
+
+  // 多模态 AI 对话（支持图片）
+  aiChatMultimodal(data) {
+    return api.post('/ai/chat/multimodal', data, {
+      timeout: AI_TIMEOUT,
+    })
+  },
+
+  // 多模态 AI 对话流式（支持图片）
+  aiChatMultimodalStream(data, onMessage, onComplete, onError) {
+    return streamRequest('/api/ai/chat/multimodal/stream', data, onMessage, onComplete, onError)
   },
 }
 

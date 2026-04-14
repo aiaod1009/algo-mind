@@ -32,12 +32,31 @@ const visible = computed({
 })
 
 const activeTab = ref('analysis')
+const contentReady = ref(false)
+const bufferTimer = ref(null)
+
+// 5秒缓冲加载
+const startBufferLoading = () => {
+  contentReady.value = false
+  if (bufferTimer.value) {
+    clearTimeout(bufferTimer.value)
+  }
+  bufferTimer.value = setTimeout(() => {
+    contentReady.value = true
+  }, 5000)
+}
 
 watch(
   () => props.modelValue,
   (isVisible) => {
     if (isVisible) {
       activeTab.value = 'analysis'
+      startBufferLoading()
+    } else {
+      contentReady.value = false
+      if (bufferTimer.value) {
+        clearTimeout(bufferTimer.value)
+      }
     }
   }
 )
@@ -207,6 +226,144 @@ const getPriorityLabel = (priority) => {
   }
   return labels[priority] || priority
 }
+
+// ========== 假数据：同类型强化 ==========
+const reinforcementData = ref({
+  currentLevel: {
+    title: '动态规划入门',
+    description: '掌握动态规划的基本思想和解题步骤',
+    progress: 65,
+    totalProblems: 20,
+    solvedProblems: 13,
+  },
+  similarProblems: [
+    {
+      id: 1,
+      title: '爬楼梯问题',
+      difficulty: 'easy',
+      type: '经典例题',
+      relevance: 95,
+      estimatedTime: '10分钟',
+      isRecommended: true,
+    },
+    {
+      id: 2,
+      title: '斐波那契数列',
+      difficulty: 'easy',
+      type: '基础练习',
+      relevance: 90,
+      estimatedTime: '8分钟',
+      isRecommended: false,
+    },
+    {
+      id: 3,
+      title: '不同路径',
+      difficulty: 'medium',
+      type: '进阶挑战',
+      relevance: 85,
+      estimatedTime: '15分钟',
+      isRecommended: true,
+    },
+    {
+      id: 4,
+      title: '最长递增子序列',
+      difficulty: 'medium',
+      type: '进阶挑战',
+      relevance: 80,
+      estimatedTime: '20分钟',
+      isRecommended: false,
+    },
+  ],
+  weakPoints: [
+    { name: '状态转移方程', mastery: 45, suggestion: '多练习经典例题，理解递推关系' },
+    { name: '初始条件设置', mastery: 60, suggestion: '注意边界条件的处理' },
+    { name: '空间优化', mastery: 30, suggestion: '尝试滚动数组优化' },
+  ],
+})
+
+// ========== 假数据：持续追踪 ==========
+const trackingData = ref({
+  learningPath: {
+    currentStage: '基础巩固期',
+    nextStage: '进阶提升期',
+    stageProgress: 68,
+    daysActive: 15,
+    streakDays: 5,
+  },
+  recentMistakes: [
+    {
+      id: 101,
+      title: '两数之和',
+      mistakeType: '时间复杂度超标',
+      date: '2024-01-15',
+      isResolved: true,
+      reviewCount: 3,
+    },
+    {
+      id: 102,
+      title: '合并两个有序数组',
+      mistakeType: '边界条件错误',
+      date: '2024-01-14',
+      isResolved: false,
+      reviewCount: 1,
+    },
+    {
+      id: 103,
+      title: '最长回文子串',
+      mistakeType: '算法选择不当',
+      date: '2024-01-12',
+      isResolved: true,
+      reviewCount: 2,
+    },
+  ],
+  adaptiveRecommendations: [
+    {
+      id: 'r1',
+      title: '针对性练习：数组遍历',
+      reason: '基于你最近3次数组类错题分析',
+      priority: 'high',
+      linkedReinforcement: [1, 3], // 关联的同类型强化题目ID
+    },
+    {
+      id: 'r2',
+      title: '算法思维训练：双指针',
+      reason: '检测到你在双指针类题目上反复出错',
+      priority: 'medium',
+      linkedReinforcement: [2, 4],
+    },
+  ],
+  weeklyStats: {
+    problemsSolved: 23,
+    accuracy: 78,
+    improvement: '+12%',
+    weakTopics: ['动态规划', '二分查找'],
+  },
+})
+
+// 获取难度标签颜色
+const getDifficultyColor = (difficulty) => {
+  const colors = {
+    easy: '#22c55e',
+    medium: '#f59e0b',
+    hard: '#ef4444',
+  }
+  return colors[difficulty] || '#6b7280'
+}
+
+// 获取难度中文标签
+const getDifficultyLabel = (difficulty) => {
+  const labels = {
+    easy: '简单',
+    medium: '中等',
+    hard: '困难',
+  }
+  return labels[difficulty] || difficulty
+}
+
+// 获取关联的强化题目
+const getLinkedReinforcementProblems = (linkedIds) => {
+  return reinforcementData.value.similarProblems.filter(p => linkedIds.includes(p.id))
+}
 </script>
 
 <template>
@@ -241,6 +398,16 @@ const getPriorityLabel = (priority) => {
               <p>AI 正在分析中...</p>
             </div>
 
+            <!-- 缓冲加载状态 -->
+            <div v-else-if="!contentReady" class="ai-loading ai-buffer-loading">
+              <div class="ai-loading-spinner"></div>
+              <p>正在准备分析内容...</p>
+              <div class="buffer-progress">
+                <div class="buffer-progress-bar"></div>
+              </div>
+              <span class="buffer-hint">预计等待 5 秒</span>
+            </div>
+
             <!-- 内容区域 -->
             <div v-else class="ai-content">
               <!-- 标签页 -->
@@ -256,24 +423,22 @@ const getPriorityLabel = (priority) => {
                   <span>错误分析</span>
                 </button>
                 <button 
-                  :class="['ai-tab', { active: activeTab === 'knowledge' }]"
-                  @click="activeTab = 'knowledge'"
+                  :class="['ai-tab', { active: activeTab === 'reinforcement' }]"
+                  @click="activeTab = 'reinforcement'"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
-                    <path d="M6.5 17H20V4H6.5A2.5 2.5 0 004 6.5v13"/>
-                    <path d="M8 8h8M8 12h8"/>
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                   </svg>
-                  <span>&#x77E5;&#x8BC6;&#x70B9;</span>
+                  <span>同类型强化</span>
                 </button>
                 <button 
-                  :class="['ai-tab', { active: activeTab === 'suggestions' }]"
-                  @click="activeTab = 'suggestions'"
+                  :class="['ai-tab', { active: activeTab === 'tracking' }]"
+                  @click="activeTab = 'tracking'"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 20h9M12 20l-4-4m4 4l-4 4M12 4v12M5 12l7-7 7 7"/>
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                   </svg>
-                  <span>改进建议</span>
+                  <span>持续追踪</span>
                 </button>
               </div>
 
@@ -345,101 +510,211 @@ const getPriorityLabel = (priority) => {
                 </div>
               </div>
 
-              <!-- 改进建议面板 -->
-              <div v-if="activeTab === 'knowledge'" class="ai-panel">
-                <div v-if="hasKnowledgeContent">
-                  <div class="ai-summary-box ai-summary-box--knowledge">
-                    <div class="ai-summary-icon">
+              <!-- 同类型强化面板 -->
+              <div v-if="activeTab === 'reinforcement'" class="ai-panel">
+                <!-- 当前学习进度 -->
+                <div class="ai-summary-box ai-summary-box--reinforcement">
+                  <div class="ai-summary-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                    </svg>
+                  </div>
+                  <div class="ai-summary-content">
+                    <h3>{{ reinforcementData.currentLevel.title }}</h3>
+                    <p>{{ reinforcementData.currentLevel.description }}</p>
+                    <div class="progress-bar">
+                      <div class="progress-fill" :style="{ width: reinforcementData.currentLevel.progress + '%' }"></div>
+                      <span class="progress-text">{{ reinforcementData.currentLevel.solvedProblems }}/{{ reinforcementData.currentLevel.totalProblems }} 题</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 薄弱环节 -->
+                <div class="ai-section">
+                  <div class="ai-section-header">
+                    <div class="ai-section-icon weak">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
-                        <path d="M6.5 17H20V4H6.5A2.5 2.5 0 004 6.5v13"/>
-                        <path d="M8 8h8M8 12h8"/>
+                        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                       </svg>
                     </div>
-                    <div class="ai-summary-content">
-                      <h3>&#x77E5;&#x8BC6;&#x70B9;&#x68B3;&#x7406;</h3>
-                      <p>
-                        &#x5DF2;&#x6574;&#x7406; {{ normalizedKnowledgePoints.length }} &#x4E2A;&#x6838;&#x5FC3;&#x77E5;&#x8BC6;&#x70B9;
-                        <template v-if="normalizedRelatedTopics.length">
-                          &#xFF0C;&#x5E76;&#x5173;&#x8054; {{ normalizedRelatedTopics.length }} &#x4E2A;&#x76F8;&#x5173;&#x4E3B;&#x9898;
-                        </template>
-                      </p>
+                    <h4>薄弱环节分析</h4>
+                  </div>
+                  <div class="ai-section-body">
+                    <div class="weak-points-list">
+                      <div v-for="(point, index) in reinforcementData.weakPoints" :key="index" class="weak-point-item">
+                        <div class="weak-point-header">
+                          <span class="weak-point-name">{{ point.name }}</span>
+                          <div class="mastery-bar">
+                            <div class="mastery-fill" :style="{ width: point.mastery + '%', backgroundColor: point.mastery < 40 ? '#ef4444' : point.mastery < 70 ? '#f59e0b' : '#22c55e' }"></div>
+                          </div>
+                          <span class="mastery-text">{{ point.mastery }}%</span>
+                        </div>
+                        <p class="weak-point-suggestion">{{ point.suggestion }}</p>
+                      </div>
                     </div>
                   </div>
+                </div>
 
-                  <div v-if="normalizedKnowledgePoints.length" class="ai-knowledge-grid">
-                    <article
-                      v-for="(point, index) in normalizedKnowledgePoints"
-                      :key="`${point.title}-${index}`"
-                      class="ai-knowledge-card"
-                    >
-                      <div class="ai-knowledge-card-head">
-                        <span class="ai-knowledge-index">{{ index + 1 }}</span>
-                        <h4>{{ point.title }}</h4>
-                      </div>
-                      <p v-if="point.description" class="ai-knowledge-description">{{ point.description }}</p>
-                    </article>
-                  </div>
-
-                  <div v-if="normalizedRelatedTopics.length" class="ai-section">
-                    <div class="ai-section-header">
-                      <div class="ai-section-icon topic">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M7 7h10v10H7z"/>
-                          <path d="M3 12h4M17 12h4M12 3v4M12 17v4"/>
-                        </svg>
-                      </div>
-                      <h4>&#x5173;&#x8054;&#x4E3B;&#x9898;</h4>
+                <!-- 相似题目推荐 -->
+                <div class="ai-section">
+                  <div class="ai-section-header">
+                    <div class="ai-section-icon practice">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                      </svg>
                     </div>
-                    <div class="ai-section-body ai-section-body--stack">
-                      <p class="ai-section-text">&#x8FD9;&#x4E9B;&#x4E3B;&#x9898;&#x53EF;&#x4EE5;&#x548C;&#x5F53;&#x524D;&#x9519;&#x9898;&#x4E00;&#x8D77;&#x590D;&#x4E60;&#x3002;</p>
-                      <div class="knowledge-tags secondary">
-                        <span class="knowledge-tag related" v-for="(topic, index) in normalizedRelatedTopics" :key="`${topic.title}-${index}`">
-                          {{ topic.title }}
+                    <h4>同类型强化练习</h4>
+                  </div>
+                  <div class="ai-section-body">
+                    <div class="similar-problems-list">
+                      <div v-for="problem in reinforcementData.similarProblems" :key="problem.id" 
+                           class="similar-problem-card" :class="{ recommended: problem.isRecommended }">
+                        <div class="problem-header">
+                          <h5 class="problem-title">{{ problem.title }}</h5>
+                          <span v-if="problem.isRecommended" class="recommend-badge">推荐</span>
+                        </div>
+                        <div class="problem-meta">
+                          <span class="difficulty-badge" :style="{ backgroundColor: getDifficultyColor(problem.difficulty) + '20', color: getDifficultyColor(problem.difficulty) }">
+                            {{ getDifficultyLabel(problem.difficulty) }}
+                          </span>
+                          <span class="problem-type">{{ problem.type }}</span>
+                          <span class="relevance-score">相关度 {{ problem.relevance }}%</span>
+                        </div>
+                        <div class="problem-footer">
+                          <span class="estimated-time">预计用时 {{ problem.estimatedTime }}</span>
+                          <button class="practice-btn">去练习</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 持续追踪面板 -->
+              <div v-if="activeTab === 'tracking'" class="ai-panel">
+                <!-- 学习路径进度 -->
+                <div class="ai-summary-box ai-summary-box--tracking">
+                  <div class="ai-summary-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                    </svg>
+                  </div>
+                  <div class="ai-summary-content">
+                    <h3>{{ trackingData.learningPath.currentStage }}</h3>
+                    <p>下一阶段：{{ trackingData.learningPath.nextStage }}</p>
+                    <div class="stats-row">
+                      <div class="stat-item">
+                        <span class="stat-value">{{ trackingData.learningPath.daysActive }}</span>
+                        <span class="stat-label">活跃天数</span>
+                      </div>
+                      <div class="stat-item">
+                        <span class="stat-value">{{ trackingData.learningPath.streakDays }}</span>
+                        <span class="stat-label">连续打卡</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 本周统计 -->
+                <div class="ai-section">
+                  <div class="ai-section-header">
+                    <div class="ai-section-icon stats">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                      </svg>
+                    </div>
+                    <h4>本周学习统计</h4>
+                  </div>
+                  <div class="ai-section-body">
+                    <div class="weekly-stats-grid">
+                      <div class="weekly-stat-card">
+                        <span class="weekly-stat-value">{{ trackingData.weeklyStats.problemsSolved }}</span>
+                        <span class="weekly-stat-label">解题数量</span>
+                      </div>
+                      <div class="weekly-stat-card">
+                        <span class="weekly-stat-value">{{ trackingData.weeklyStats.accuracy }}%</span>
+                        <span class="weekly-stat-label">正确率</span>
+                      </div>
+                      <div class="weekly-stat-card highlight">
+                        <span class="weekly-stat-value">{{ trackingData.weeklyStats.improvement }}</span>
+                        <span class="weekly-stat-label">较上周</span>
+                      </div>
+                    </div>
+                    <div class="weak-topics-section">
+                      <span class="weak-topics-label">需加强：</span>
+                      <div class="weak-topics-tags">
+                        <span v-for="(topic, index) in trackingData.weeklyStats.weakTopics" :key="index" class="weak-topic-tag">
+                          {{ topic }}
                         </span>
                       </div>
                     </div>
                   </div>
                 </div>
-                <div v-else class="ai-empty">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
-                    <path d="M6.5 17H20V4H6.5A2.5 2.5 0 004 6.5v13"/>
-                    <path d="M8 8h8M8 12h8"/>
-                  </svg>
-                  <p>&#x6682;&#x65E0;&#x77E5;&#x8BC6;&#x70B9;&#x6570;&#x636E;</p>
-                </div>
-              </div>
 
-              <div v-if="activeTab === 'suggestions'" class="ai-panel">
-                <div v-if="parsedData.suggestions.length > 0" class="ai-suggestions-list">
-                  <div 
-                    v-for="(suggestion, index) in parsedData.suggestions" 
-                    :key="index"
-                    class="ai-suggestion-item"
-                  >
-                    <div class="ai-suggestion-header">
-                      <div class="ai-suggestion-number">{{ index + 1 }}</div>
-                      <h4>{{ suggestion.title }}</h4>
-                      <span 
-                        class="ai-priority-badge"
-                        :style="{ 
-                          backgroundColor: getPriorityColor(suggestion.priority) + '20',
-                          color: getPriorityColor(suggestion.priority)
-                        }"
-                      >
-                        {{ getPriorityLabel(suggestion.priority) }}
-                      </span>
+                <!-- 近期错题追踪 -->
+                <div class="ai-section">
+                  <div class="ai-section-header">
+                    <div class="ai-section-icon history">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                      </svg>
                     </div>
-                    <p class="ai-suggestion-text">{{ suggestion.description }}</p>
+                    <h4>近期错题追踪</h4>
+                  </div>
+                  <div class="ai-section-body">
+                    <div class="recent-mistakes-list">
+                      <div v-for="mistake in trackingData.recentMistakes" :key="mistake.id" class="mistake-item">
+                        <div class="mistake-status" :class="{ resolved: mistake.isResolved }">
+                          <svg v-if="mistake.isResolved" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 13l4 4L19 7"/>
+                          </svg>
+                          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 6v6l4 2"/>
+                          </svg>
+                        </div>
+                        <div class="mistake-info">
+                          <h5 class="mistake-title">{{ mistake.title }}</h5>
+                          <p class="mistake-type">{{ mistake.mistakeType }}</p>
+                        </div>
+                        <div class="mistake-meta">
+                          <span class="review-count">已复习 {{ mistake.reviewCount }} 次</span>
+                          <span class="mistake-date">{{ mistake.date }}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div v-else class="ai-empty">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M12 16v-4M12 8h.01"/>
-                  </svg>
-                  <p>暂无改进建议</p>
+
+                <!-- 智能推荐（联动同类型强化） -->
+                <div class="ai-section">
+                  <div class="ai-section-header">
+                    <div class="ai-section-icon smart">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                      </svg>
+                    </div>
+                    <h4>智能推荐</h4>
+                  </div>
+                  <div class="ai-section-body">
+                    <div class="adaptive-recommendations">
+                      <div v-for="rec in trackingData.adaptiveRecommendations" :key="rec.id" class="adaptive-rec-card">
+                        <div class="rec-header">
+                          <h5 class="rec-title">{{ rec.title }}</h5>
+                          <span class="rec-priority" :class="rec.priority">{{ getPriorityLabel(rec.priority) }}</span>
+                        </div>
+                        <p class="rec-reason">{{ rec.reason }}</p>
+                        <div class="linked-problems">
+                          <span class="linked-label">关联强化题目：</span>
+                          <div class="linked-tags">
+                            <span v-for="problem in getLinkedReinforcementProblems(rec.linkedReinforcement)" :key="problem.id" class="linked-tag">
+                              {{ problem.title }}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1190,6 +1465,631 @@ const getPriorityLabel = (priority) => {
   .ai-btn-primary {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* ================================
+   同类型强化 & 持续追踪 样式
+   ================================ */
+
+/* 同类型强化 - 总结卡片 */
+.ai-summary-box--reinforcement {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.ai-summary-box--reinforcement .ai-summary-icon {
+  color: #d97706;
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.25);
+}
+
+.ai-summary-box--reinforcement .ai-summary-content h3 {
+  color: #92400e;
+}
+
+.ai-summary-box--reinforcement .ai-summary-content p {
+  color: #78350f;
+}
+
+/* 进度条 */
+.progress-bar {
+  margin-top: 12px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.progress-text {
+  position: absolute;
+  right: 0;
+  top: -20px;
+  font-size: 12px;
+  color: #92400e;
+  font-weight: 600;
+}
+
+/* 薄弱环节 */
+.ai-section-icon.weak {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  color: #ef4444;
+}
+
+.ai-section-icon.practice {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  color: #22c55e;
+}
+
+.weak-points-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.weak-point-item {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.weak-point-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.weak-point-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  min-width: 100px;
+}
+
+.mastery-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(226, 232, 240, 0.8);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.mastery-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.mastery-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  min-width: 36px;
+  text-align: right;
+}
+
+.weak-point-suggestion {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  padding-left: 112px;
+}
+
+/* 相似题目卡片 */
+.similar-problems-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.similar-problem-card {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  transition: all 0.3s ease;
+}
+
+.similar-problem-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.similar-problem-card.recommended {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 20%, rgba(255, 255, 255, 0.6) 100%);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+.problem-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.problem-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.recommend-badge {
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.problem-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.difficulty-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.problem-type {
+  font-size: 12px;
+  color: #64748b;
+  padding: 4px 10px;
+  background: rgba(241, 245, 249, 0.8);
+  border-radius: 12px;
+}
+
+.relevance-score {
+  font-size: 12px;
+  color: #0891b2;
+  font-weight: 600;
+}
+
+.problem-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.estimated-time {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.practice-btn {
+  padding: 6px 16px;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.practice-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+/* ================================
+   持续追踪 样式
+   ================================ */
+
+/* 持续追踪 - 总结卡片 */
+.ai-summary-box--tracking {
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.ai-summary-box--tracking .ai-summary-icon {
+  color: #7c3aed;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+}
+
+.ai-summary-box--tracking .ai-summary-content h3 {
+  color: #5b21b6;
+}
+
+.ai-summary-box--tracking .ai-summary-content p {
+  color: #6d28d9;
+}
+
+.stats-row {
+  display: flex;
+  gap: 24px;
+  margin-top: 12px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #5b21b6;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #7c3aed;
+}
+
+/* 统计图标 */
+.ai-section-icon.stats {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #3b82f6;
+}
+
+.ai-section-icon.history {
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  color: #8b5cf6;
+}
+
+.ai-section-icon.smart {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #d97706;
+}
+
+/* 本周统计网格 */
+.weekly-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.weekly-stat-card {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.weekly-stat-card.highlight {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.weekly-stat-value {
+  display: block;
+  font-size: 24px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.weekly-stat-card.highlight .weekly-stat-value {
+  color: #166534;
+}
+
+.weekly-stat-label {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+/* 薄弱主题标签 */
+.weak-topics-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.weak-topics-label {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.weak-topics-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.weak-topic-tag {
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  color: #991b1b;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid #fecaca;
+}
+
+/* 近期错题列表 */
+.recent-mistakes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mistake-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.mistake-status {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #fef3c7;
+  color: #d97706;
+  flex-shrink: 0;
+}
+
+.mistake-status.resolved {
+  background: #dcfce7;
+  color: #22c55e;
+}
+
+.mistake-status svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mistake-info {
+  flex: 1;
+}
+
+.mistake-title {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.mistake-type {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.mistake-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.review-count {
+  font-size: 11px;
+  color: #0891b2;
+  font-weight: 600;
+  padding: 2px 8px;
+  background: rgba(8, 145, 178, 0.1);
+  border-radius: 10px;
+}
+
+.mistake-date {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* 智能推荐卡片 */
+.adaptive-recommendations {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.adaptive-rec-card {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  border-left: 4px solid #8b5cf6;
+}
+
+.rec-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.rec-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.rec-priority {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.rec-priority.high {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.rec-priority.medium {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.rec-reason {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.linked-problems {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.linked-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.linked-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.linked-tag {
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  color: #5b21b6;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.linked-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+}
+
+/* ================================
+   缓冲加载样式
+   ================================ */
+
+.ai-buffer-loading {
+  gap: 16px;
+}
+
+.ai-buffer-loading .ai-loading-spinner {
+  width: 56px;
+  height: 56px;
+  border-width: 4px;
+}
+
+.buffer-progress {
+  width: 200px;
+  height: 4px;
+  background: rgba(226, 232, 240, 0.6);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.buffer-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4f46e5, #7c3aed, #4f46e5);
+  background-size: 200% 100%;
+  border-radius: 2px;
+  animation: bufferProgress 5s ease-in-out forwards,
+             shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes bufferProgress {
+  0% {
+    width: 0%;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.buffer-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 8px;
+}
+
+/* 内容区域淡入动画 */
+.ai-content {
+  animation: contentFadeIn 0.5s ease;
+}
+
+@keyframes contentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 响应式适配 */
+@media (max-width: 640px) {
+  .weekly-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .weak-point-header {
+    flex-wrap: wrap;
+  }
+  
+  .weak-point-suggestion {
+    padding-left: 0;
+    margin-top: 8px;
+  }
+  
+  .problem-meta {
+    flex-wrap: wrap;
+  }
+  
+  .stats-row {
+    gap: 16px;
+  }
+  
+  .mistake-item {
+    flex-wrap: wrap;
+  }
+  
+  .mistake-meta {
+    flex-direction: row;
+    width: 100%;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+  
+  .buffer-progress {
+    width: 160px;
   }
 }
 </style>

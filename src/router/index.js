@@ -10,6 +10,7 @@ import Courses from '../views/Courses.vue'
 import Forum from '../views/Forum.vue'
 import ForumPost from '../views/ForumPost.vue'
 import Register from '../views/Register.vue'
+import CodeHistory from '../views/CodeHistory.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -82,6 +83,12 @@ const router = createRouter({
       path: '/profile',
       name: 'profile',
       component: Profile,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/code-history',
+      name: 'code-history',
+      component: CodeHistory,
       meta: { requiresAuth: true },
     },
   ],

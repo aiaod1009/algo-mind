@@ -26,16 +26,20 @@ public class ErrorItem {
     @Column(length = 50)
     private String levelType;
 
-    @Column(length = 1000)
+    @Lob
+    @Column(columnDefinition = "LONGTEXT")
     private String question;
 
-    @Column(length = 500)
+    @Lob
+    @Column(name = "user_answer", columnDefinition = "LONGTEXT")
     private String userAnswer;
 
-    @Column(length = 500)
+    @Lob
+    @Column(columnDefinition = "LONGTEXT")
     private String description;
 
-    @Column(length = 500)
+    @Lob
+    @Column(name = "correct_answer", columnDefinition = "LONGTEXT")
     private String correctAnswer;
 
     private LocalDateTime createdAt;

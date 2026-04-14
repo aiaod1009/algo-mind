@@ -28,7 +28,8 @@ public class QuestionAttempt {
     @Column(length = 200)
     private String questionTitle;
 
-    @Column(length = 1000)
+    @Lob
+    @Column(columnDefinition = "LONGTEXT")
     private String questionContent;
 
     @Column(length = 50)
@@ -37,7 +38,8 @@ public class QuestionAttempt {
     @Column(length = 20, nullable = false)
     private String latestStatus;
 
-    @Column(length = 1000)
+    @Lob
+    @Column(name = "latest_user_answer", columnDefinition = "LONGTEXT")
     private String latestUserAnswer;
 
     private Integer submitCount;

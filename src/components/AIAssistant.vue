@@ -38,6 +38,29 @@ const isGenerated = ref(false)
 const chatContainerRef = ref(null)
 const textareaRef = ref(null)
 
+// 多模态文件上传相关
+const fileInputRef = ref(null)
+const selectedFiles = ref([])
+const isUploading = ref(false)
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp']
+const ALLOWED_FILE_TYPES = [
+  ...ALLOWED_IMAGE_TYPES,
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'application/json',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/zip',
+  'application/x-zip-compressed'
+]
+
 const errorAnalysis = ref({
   totalErrors: 0,
   categories: [],
@@ -680,19 +703,182 @@ const scheduleScrollToBottom = () => {
   })
 }
 
+// 文件上传相关函数
+const isImageFile = (file) => ALLOWED_IMAGE_TYPES.includes(file.type)
+
+const getFileIcon = (fileType) => {
+  if (ALLOWED_IMAGE_TYPES.includes(fileType)) return '🖼️'
+  if (fileType.includes('pdf')) return '📄'
+  if (fileType.includes('word') || fileType.includes('document')) return '📝'
+  if (fileType.includes('excel') || fileType.includes('sheet')) return '📊'
+  if (fileType.includes('powerpoint') || fileType.includes('presentation')) return '📽️'
+  if (fileType.includes('zip') || fileType.includes('compressed')) return '📦'
+  if (fileType.includes('json')) return '🔧'
+  if (fileType.includes('csv')) return '📈'
+  if (fileType.includes('text') || fileType.includes('markdown')) return '📃'
+  return '📎'
+}
+
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+const triggerFileInput = () => {
+  fileInputRef.value?.click()
+}
+
+const handleFileSelect = (event) => {
+  const files = Array.from(event.target.files || [])
+  validateAndAddFiles(files)
+  // 重置input，允许重复选择相同文件
+  event.target.value = ''
+}
+
+const validateAndAddFiles = (files) => {
+  for (const file of files) {
+    // 检查文件大小
+    if (file.size > MAX_FILE_SIZE) {
+      ElMessage.warning(`文件 "${file.name}" 超过10MB限制`)
+      continue
+    }
+    
+    // 检查文件类型
+    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+      ElMessage.warning(`不支持的文件类型: ${file.name}`)
+      continue
+    }
+    
+    // 检查是否已存在
+    const exists = selectedFiles.value.some(f => f.name === file.name && f.size === file.size)
+    if (exists) {
+      ElMessage.warning(`文件 "${file.name}" 已添加`)
+      continue
+    }
+    
+    // 限制最多5个文件
+    if (selectedFiles.value.length >= 5) {
+      ElMessage.warning('最多只能上传5个文件')
+      break
+    }
+    
+    // 创建预览URL
+    const fileWithPreview = {
+      file,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      previewUrl: isImageFile(file) ? URL.createObjectURL(file) : null,
+      icon: getFileIcon(file.type)
+    }
+    
+    selectedFiles.value.push(fileWithPreview)
+  }
+}
+
+const removeFile = (index) => {
+  const file = selectedFiles.value[index]
+  if (file.previewUrl) {
+    URL.revokeObjectURL(file.previewUrl)
+  }
+  selectedFiles.value.splice(index, 1)
+}
+
+const clearAllFiles = () => {
+  selectedFiles.value.forEach(file => {
+    if (file.previewUrl) {
+      URL.revokeObjectURL(file.previewUrl)
+    }
+  })
+  selectedFiles.value = []
+}
+
+// 上传文件到服务器
+const uploadFiles = async () => {
+  if (selectedFiles.value.length === 0) return []
+  
+  isUploading.value = true
+  const uploadedFiles = []
+  
+  try {
+    for (const fileInfo of selectedFiles.value) {
+      const formData = new FormData()
+      formData.append('file', fileInfo.file)
+      
+      // 调用实际上传API
+      const response = await api.uploadChatFile(formData)
+      
+      if (response.data?.code === 0 && response.data?.data) {
+        uploadedFiles.push({
+          name: fileInfo.name,
+          size: fileInfo.size,
+          type: fileInfo.type,
+          url: response.data.data.url,
+          isImage: isImageFile(fileInfo.file)
+        })
+      } else {
+        throw new Error(response.data?.message || '上传失败')
+      }
+    }
+  } catch (error) {
+    ElMessage.error('文件上传失败，请重试')
+    console.error('File upload error:', error)
+    return []
+  } finally {
+    isUploading.value = false
+  }
+  
+  return uploadedFiles
+}
+
+// 图片预览
+const previewImageUrl = ref('')
+const showImagePreview = ref(false)
+
+const openImagePreview = (url) => {
+  previewImageUrl.value = url
+  showImagePreview.value = true
+}
+
+const closeImagePreview = () => {
+  showImagePreview.value = false
+  previewImageUrl.value = ''
+}
+
 const sendMessage = async () => {
   const message = inputMessage.value.trim()
-  if (!message || isTyping.value) return
+  const hasFiles = selectedFiles.value.length > 0
+  
+  // 如果没有文字且没有文件，不发送
+  if ((!message && !hasFiles) || isTyping.value) return
 
   const historyMessages = buildChatHistory()
+  
+  // 上传文件
+  let uploadedFiles = []
+  if (hasFiles) {
+    uploadedFiles = await uploadFiles()
+    if (selectedFiles.value.length > 0 && uploadedFiles.length === 0) {
+      // 上传失败，不继续发送消息
+      return
+    }
+  }
+
+  // 构建用户消息内容
+  const userMessageContent = message || (hasFiles ? '请分析我上传的文件' : '')
 
   chatMessages.value.push({
     role: 'user',
-    content: message,
+    content: userMessageContent,
+    files: uploadedFiles,
     time: getCurrentTimeLabel(),
   })
 
   inputMessage.value = ''
+  clearAllFiles()
   isTyping.value = true
   await autoResizeTextarea()
 
@@ -709,43 +895,89 @@ const sendMessage = async () => {
   await scrollToBottom()
 
   try {
-    await api.aiChatStream({
-      message,
-      messages: historyMessages,
-      context: buildChatContext(),
-    }, (chunk) => {
-      streamedContent += chunk
-      if (chatMessages.value[assistantMessageIndex]) {
-        chatMessages.value[assistantMessageIndex].content = streamedContent
-      }
-      scheduleScrollToBottom()
-    }, async () => {
-      await finalizeStreamingMessage(assistantMessageIndex, streamedContent)
-    }, async () => {
-      if (streamedContent) {
+    // 如果有文件，使用多模态接口
+    const hasUploadedFiles = uploadedFiles.length > 0
+    
+    if (hasUploadedFiles) {
+      // 使用多模态流式接口
+      await api.aiChatMultimodalStream({
+        content: userMessageContent,
+        files: uploadedFiles.map(f => ({
+          name: f.name,
+          size: f.size,
+          type: f.type,
+          url: f.url,
+          image: f.isImage
+        }))
+      }, (chunk) => {
+        streamedContent += chunk
+        if (chatMessages.value[assistantMessageIndex]) {
+          chatMessages.value[assistantMessageIndex].content = streamedContent
+        }
+        scheduleScrollToBottom()
+      }, async () => {
         await finalizeStreamingMessage(assistantMessageIndex, streamedContent)
-        return
-      }
+      }, async () => {
+        // 流式失败，尝试非流式
+        try {
+          const response = await api.aiChatMultimodal({
+            content: userMessageContent,
+            files: uploadedFiles.map(f => ({
+              name: f.name,
+              size: f.size,
+              type: f.type,
+              url: f.url,
+              image: f.isImage
+            }))
+          })
+          await finalizeStreamingMessage(assistantMessageIndex, response.data || '抱歉，我现在无法回答，请稍后再试。')
+        } catch (error) {
+          await finalizeStreamingMessage(
+            assistantMessageIndex,
+            streamedContent || '抱歉，服务暂时不可用，请稍后再试。',
+          )
+        }
+      })
+    } else {
+      // 无文件，使用普通接口
+      await api.aiChatStream({
+        message: userMessageContent,
+        messages: historyMessages,
+        context: buildChatContext(),
+      }, (chunk) => {
+        streamedContent += chunk
+        if (chatMessages.value[assistantMessageIndex]) {
+          chatMessages.value[assistantMessageIndex].content = streamedContent
+        }
+        scheduleScrollToBottom()
+      }, async () => {
+        await finalizeStreamingMessage(assistantMessageIndex, streamedContent)
+      }, async () => {
+        if (streamedContent) {
+          await finalizeStreamingMessage(assistantMessageIndex, streamedContent)
+          return
+        }
 
-      try {
-        const response = await api.aiChat({
-          message,
-          messages: historyMessages,
-          context: buildChatContext(),
-        })
+        try {
+          const response = await api.aiChat({
+            message: userMessageContent,
+            messages: historyMessages,
+            context: buildChatContext(),
+          })
 
-        const fallbackContent = extractAIResponseContent(
-          response,
-          '抱歉，我现在无法回答，请稍后再试。',
-        )
-        await finalizeStreamingMessage(assistantMessageIndex, fallbackContent)
-      } catch (error) {
-        await finalizeStreamingMessage(
-          assistantMessageIndex,
-          streamedContent || '抱歉，服务暂时不可用，请稍后再试。',
-        )
-      }
-    })
+          const fallbackContent = extractAIResponseContent(
+            response,
+            '抱歉，我现在无法回答，请稍后再试。',
+          )
+          await finalizeStreamingMessage(assistantMessageIndex, fallbackContent)
+        } catch (error) {
+          await finalizeStreamingMessage(
+            assistantMessageIndex,
+            streamedContent || '抱歉，服务暂时不可用，请稍后再试。',
+          )
+        }
+      })
+    }
 
     return
 
@@ -809,8 +1041,8 @@ watch(inputMessage, () => {
 </script>
 
 <template>
-  <section class="study-helper" @click="scrollToTop">
-    <div class="helper-header">
+  <section class="study-helper">
+    <div class="helper-header" @click="scrollToTop" style="cursor: pointer;">
       <div class="header-left">
         <div class="helper-icon">
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1052,7 +1284,27 @@ watch(inputMessage, () => {
                 <span></span>
                 <span></span>
               </div>
-              <div v-else class="message-text" v-html="msg.content ? renderMessageContent(msg.content) : ''"></div>
+              <div v-else class="message-content">
+                <!-- 消息文字内容 -->
+                <div class="message-text" v-html="msg.content ? renderMessageContent(msg.content) : ''"></div>
+                <!-- 文件附件展示 -->
+                <div v-if="msg.files && msg.files.length > 0" class="message-files">
+                  <div v-for="(file, fileIndex) in msg.files" :key="fileIndex" class="file-attachment">
+                    <!-- 图片预览 -->
+                    <div v-if="file.isImage" class="image-preview">
+                      <img :src="file.url" :alt="file.name" @click="openImagePreview(file.url)" />
+                    </div>
+                    <!-- 文件卡片 -->
+                    <div v-else class="file-card">
+                      <span class="file-icon">{{ getFileIcon(file.type) }}</span>
+                      <div class="file-info">
+                        <span class="file-name">{{ file.name }}</span>
+                        <span class="file-size">{{ formatFileSize(file.size) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <div class="message-time">{{ msg.time }}</div>
             </div>
           </div>
@@ -1066,14 +1318,68 @@ watch(inputMessage, () => {
           </button>
         </div>
 
+        <!-- 已选文件预览区域 -->
+        <div v-if="selectedFiles.length > 0" class="selected-files-area">
+          <div class="selected-files-header">
+            <span class="selected-files-title">已选择 {{ selectedFiles.length }} 个文件</span>
+            <button class="clear-files-btn" @click.stop="clearAllFiles">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <div class="selected-files-list">
+            <div v-for="(file, index) in selectedFiles" :key="index" class="selected-file-item">
+              <!-- 图片缩略图 -->
+              <div v-if="file.previewUrl" class="selected-file-thumb">
+                <img :src="file.previewUrl" :alt="file.name" />
+              </div>
+              <!-- 文件图标 -->
+              <div v-else class="selected-file-icon">{{ file.icon }}</div>
+              <div class="selected-file-info">
+                <span class="selected-file-name">{{ file.name }}</span>
+                <span class="selected-file-size">{{ formatFileSize(file.size) }}</span>
+              </div>
+              <button class="remove-file-btn" @click.stop="removeFile(index)">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="chat-input-area">
-          <textarea ref="textareaRef" v-model="inputMessage" rows="1" class="chat-input" placeholder="输入你的问题..."
+          <!-- 文件上传按钮 -->
+          <input
+            ref="fileInputRef"
+            type="file"
+            multiple
+            accept="image/*,.txt,.md,.csv,.json,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
+            style="display: none"
+            @change="handleFileSelect"
+          />
+          <button 
+            class="upload-btn" 
+            :disabled="isTyping || isUploading || selectedFiles.length >= 5"
+            @click.stop="triggerFileInput"
+            title="上传文件或图片"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            </svg>
+          </button>
+          
+          <textarea ref="textareaRef" v-model="inputMessage" rows="1" class="chat-input" placeholder="输入你的问题，或上传文件..."
             @keydown="handleInputKeyDown" @click.stop></textarea>
-          <button class="send-btn" :disabled="!inputMessage.trim() || isTyping" @click.stop="sendMessage">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+          <button class="send-btn" :disabled="(!inputMessage.trim() && selectedFiles.length === 0) || isTyping || isUploading" @click.stop="sendMessage">
+            <svg v-if="!isUploading" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="22" y1="2" x2="11" y2="13" />
               <polygon points="22 2 15 22 11 13 2 9 22 2" />
             </svg>
+            <span v-else class="uploading-spinner"></span>
           </button>
         </div>
       </div>
@@ -1096,6 +1402,19 @@ watch(inputMessage, () => {
           <button class="btn-cancel" @click="handleConfirmCancel">取消</button>
           <button class="btn-confirm" @click="handleConfirmGenerate">确认生成</button>
         </div>
+      </div>
+    </div>
+
+    <!-- 图片预览弹窗 -->
+    <div v-if="showImagePreview" class="image-preview-overlay" @click.stop="closeImagePreview">
+      <div class="image-preview-container" @click.stop>
+        <img :src="previewImageUrl" alt="预览图片" />
+        <button class="close-preview-btn" @click.stop="closeImagePreview">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
       </div>
     </div>
   </section>
@@ -1586,6 +1905,7 @@ watch(inputMessage, () => {
 .chat-input-area {
   display: flex;
   gap: 12px;
+  align-items: flex-end;
 }
 
 .chat-input {
@@ -1615,6 +1935,33 @@ watch(inputMessage, () => {
   box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
 }
 
+/* 上传按钮 */
+.upload-btn {
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  border-radius: 14px;
+  color: #0ea5e9;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.upload-btn:hover:not(:disabled) {
+  background: rgba(14, 165, 233, 0.1);
+  border-color: #0ea5e9;
+  transform: scale(1.05);
+}
+
+.upload-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .send-btn {
   width: 48px;
   height: 48px;
@@ -1627,6 +1974,7 @@ watch(inputMessage, () => {
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
+  flex-shrink: 0;
 }
 
 .send-btn:hover:not(:disabled) {
@@ -1637,6 +1985,220 @@ watch(inputMessage, () => {
 .send-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 上传中动画 */
+.uploading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 已选文件区域 */
+.selected-files-area {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(14, 165, 233, 0.15);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.selected-files-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.selected-files-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.clear-files-btn {
+  width: 24px;
+  height: 24px;
+  background: rgba(239, 68, 68, 0.1);
+  border: none;
+  border-radius: 6px;
+  color: #ef4444;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.clear-files-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.selected-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.selected-file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  border: 1px solid rgba(14, 165, 233, 0.1);
+}
+
+.selected-file-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.selected-file-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.selected-file-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  background: rgba(14, 165, 233, 0.1);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.selected-file-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.selected-file-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selected-file-size {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.remove-file-btn {
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.remove-file-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+/* 消息中的文件展示 */
+.message-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.message-files {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-attachment {
+  display: flex;
+  flex-direction: column;
+}
+
+.image-preview {
+  max-width: 200px;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.image-preview:hover {
+  transform: scale(1.02);
+}
+
+.image-preview img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 10px;
+}
+
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  border: 1px solid rgba(14, 165, 233, 0.15);
+  max-width: 250px;
+}
+
+.file-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-size {
+  font-size: 11px;
+  color: #94a3b8;
 }
 
 /* 快速提示 */
@@ -2187,5 +2749,60 @@ watch(inputMessage, () => {
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+/* 图片预览弹窗 */
+.image-preview-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(8px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+  padding: 20px;
+}
+
+.image-preview-container {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-preview-container img {
+  max-width: 100%;
+  max-height: 90vh;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.close-preview-btn {
+  position: absolute;
+  top: -50px;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.close-preview-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
 }
 </style>

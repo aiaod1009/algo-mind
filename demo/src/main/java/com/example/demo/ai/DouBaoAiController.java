@@ -1,53 +1,41 @@
 package com.example.demo.ai;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import org.springframework.web.bind.annotation.GetMapping;
+
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 @RestController
-@RequestMapping("/api/ai")
+@RequestMapping("/ai/chat")
 @RequiredArgsConstructor
 public class DouBaoAiController {
 
-    private final DouBaoAiService douBaoAiService;
+    private final DouBaoMultimodalService multimodalService;
 
-    // 原有普通接口（不动）
-    @PostMapping("/chat")
-    public String chat(@RequestParam String content) {
-        return douBaoAiService.sendToAi(content);
-    }
-
-    // ====================== 最终版：AI流式接口 ======================
-    @PostMapping("/chat/stream")
-    public SseEmitter chatStream(@RequestParam String content) {
-        return douBaoAiService.sendToAiStream(content);
-    }
-    // ====================== 【极致快速模式】普通输出接口 ======================
-    @PostMapping("/chat/fast")
-    public String chatFast(@RequestParam String content) {
-        return douBaoAiService.sendToAiFast(content);
+    @PostMapping("/multimodal")
+    public String chatMultimodal(@RequestBody MultimodalRequest request) {
+        return multimodalService.chatWithImages(request.getContent(), request.getFiles());
     }
 
-    // ====================== 【极致快速模式】流式输出接口 ======================
-    @PostMapping("/chat/stream-fast")
-    public SseEmitter chatStreamFast(@RequestParam String content) {
-        return douBaoAiService.sendToAiStreamFast(content);
+    @PostMapping("/multimodal/stream")
+    public SseEmitter chatMultimodalStream(@RequestBody MultimodalRequest request) {
+        return multimodalService.chatWithImagesStream(request.getContent(), request.getFiles());
     }
-    // 原有测试接口（不动）
+
     @GetMapping("/test-sse")
     public SseEmitter testSse() {
-        SseEmitter emitter = new SseEmitter(60000L);
+        SseEmitter emitter = new SseEmitter(60_000L);
         CompletableFuture.runAsync(() -> {
             try {
                 for (int i = 1; i <= 5; i++) {
                     Thread.sleep(1000);
-                    emitter.send("第" + i + "条消息：SSE流式推送功能正常！\n");
-                    System.out.println("已推送第" + i + "条消息");
+                    emitter.send("第 " + i + " 条消息：SSE 流式推送功能正常\n");
                 }
                 emitter.complete();
             } catch (Exception e) {
@@ -55,5 +43,26 @@ public class DouBaoAiController {
             }
         });
         return emitter;
+    }
+
+    public static class MultimodalRequest {
+        private String content;
+        private List<DouBaoMultimodalService.ImageFile> files;
+
+        public String getContent() {
+            return content;
+        }
+
+        public void setContent(String content) {
+            this.content = content;
+        }
+
+        public List<DouBaoMultimodalService.ImageFile> getFiles() {
+            return files;
+        }
+
+        public void setFiles(List<DouBaoMultimodalService.ImageFile> files) {
+            this.files = files;
+        }
     }
 }

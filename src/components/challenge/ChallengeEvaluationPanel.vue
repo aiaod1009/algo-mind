@@ -26,9 +26,31 @@ const starsDisplay = computed(() => {
   return '★'.repeat(stars) + '☆'.repeat(3 - stars)
 })
 
+const simpleMarkdownToHtml = (text) => {
+  if (!text) return ''
+  return text
+    // 代码块
+    .replace(/```([\s\S]*?)```/g, '<pre class="code-block"><code>$1</code></pre>')
+    // 行内代码
+    .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
+    // 粗体
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    // 斜体
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    // 标题
+    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+    // 列表项
+    .replace(/^- (.*$)/gim, '<li>$1</li>')
+    // 换行
+    .replace(/\n/g, '<br>')
+}
+
 const streamingPreview = computed(() => {
   const value = String(props.streamingText || '').trim()
-  return value || 'AI 正在分析你的代码，请稍候...'
+  const html = simpleMarkdownToHtml(value)
+  return html || 'AI 正在分析你的代码，请稍候...'
 })
 </script>
 
@@ -47,8 +69,14 @@ const streamingPreview = computed(() => {
         <span>正在接收 AI 流式评测结果</span>
       </div>
 
-      <div class="eval-section-title">实时输出</div>
-      <pre class="eval-pre streaming-pre">{{ streamingPreview }}</pre>
+      <div class="eval-section-title">实时分析</div>
+      <div class="stream-shell">
+        <div class="stream-shell-head">
+          <span class="stream-shell-title">AI 分析进行中</span>
+          <span class="stream-shell-meta">内容会在完成后自动汇总到正式评测结果</span>
+        </div>
+        <div class="eval-analysis streaming-analysis markdown-body" v-html="streamingPreview"></div>
+      </div>
     </template>
 
     <template v-else-if="result">
@@ -70,30 +98,19 @@ const streamingPreview = computed(() => {
       <div class="eval-meta" v-if="result.pointsEarned > 0">本次奖励：{{ result.pointsEarned }} 积分</div>
       <div class="eval-meta">评测时间：{{ result.updatedAt }}</div>
 
-      <div class="eval-section-title">程序输出</div>
-      <pre class="eval-pre">{{ result.output || '暂无输出' }}</pre>
-
-      <div class="eval-section-title">AI 分析</div>
-      <p class="eval-analysis">{{ result.analysis || '暂无分析内容' }}</p>
-
-      <template v-if="result.correctness || result.quality || result.efficiency">
-        <div class="eval-section-title">详细评价</div>
-        <div class="eval-detail" v-if="result.correctness">
-          <span class="detail-label">正确性：</span>{{ result.correctness }}
-        </div>
-        <div class="eval-detail" v-if="result.quality">
-          <span class="detail-label">代码质量：</span>{{ result.quality }}
-        </div>
-        <div class="eval-detail" v-if="result.efficiency">
-          <span class="detail-label">效率：</span>{{ result.efficiency }}
-        </div>
-      </template>
+      <div class="eval-section-title">中文分析</div>
+      <p class="eval-analysis">{{ result.shortComment || result.analysis || '暂无分析内容' }}</p>
 
       <template v-if="result.suggestions?.length">
         <div class="eval-section-title">改进建议</div>
         <ul class="eval-suggestions">
           <li v-for="(suggestion, index) in result.suggestions" :key="index">{{ suggestion }}</li>
         </ul>
+      </template>
+
+      <template v-if="result.recommendedCode">
+        <div class="eval-section-title">推荐代码</div>
+        <pre class="eval-pre recommended-code-block">{{ result.recommendedCode }}</pre>
       </template>
     </template>
 
@@ -164,6 +181,36 @@ const streamingPreview = computed(() => {
   border-radius: 999px;
   background: currentColor;
   animation: pulse 1.2s ease-in-out infinite;
+}
+
+.stream-shell {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02)),
+    #fff;
+  overflow: hidden;
+}
+
+.stream-shell-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(248, 250, 252, 0.85);
+}
+
+.stream-shell-title {
+  color: var(--text-title);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.stream-shell-meta {
+  color: var(--text-sub);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .eval-score-row {
@@ -248,36 +295,6 @@ const streamingPreview = computed(() => {
   background: rgba(0, 0, 0, 0.5);
 }
 
-.streaming-pre {
-  min-height: 180px;
-  max-height: 360px;
-  background: #0f172a;
-  color: #e2e8f0;
-  border-color: rgba(148, 163, 184, 0.3);
-  overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
-}
-
-.streaming-pre::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.streaming-pre::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 4px;
-}
-
-.streaming-pre::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.5);
-  border-radius: 4px;
-}
-
-.streaming-pre::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.7);
-}
-
 .eval-analysis {
   margin: 0;
   border: 1px solid var(--line-soft);
@@ -292,16 +309,24 @@ const streamingPreview = computed(() => {
   font-size: 13px;
 }
 
-.eval-detail {
-  font-size: 13px;
-  color: var(--text-main);
-  margin: 4px 0;
-  line-height: 1.5;
+.streaming-analysis {
+  min-height: 220px;
+  max-height: 380px;
+  border: none;
+  border-radius: 0;
+  background:
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.12), transparent 40%),
+    #fff;
+  padding: 14px 12px 16px;
 }
 
-.detail-label {
-  color: var(--text-sub);
-  font-weight: 500;
+.recommended-code-block {
+  min-height: 180px;
+  max-height: 320px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.3);
+  font-family: 'Fira Code', 'JetBrains Mono', monospace;
 }
 
 .eval-suggestions {
@@ -337,5 +362,84 @@ const streamingPreview = computed(() => {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* Markdown 样式 */
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  margin: 8px 0 4px;
+  color: var(--text-title);
+  font-weight: 600;
+}
+
+.markdown-body h1 {
+  font-size: 16px;
+}
+
+.markdown-body h2 {
+  font-size: 14px;
+}
+
+.markdown-body h3 {
+  font-size: 13px;
+}
+
+.markdown-body strong {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.markdown-body em {
+  color: #7c3aed;
+  font-style: italic;
+}
+
+.markdown-body code {
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+}
+
+.markdown-body .inline-code {
+  padding: 2px 6px;
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: 4px;
+  color: #1d4ed8;
+}
+
+.markdown-body .code-block {
+  margin: 8px 0;
+  padding: 12px;
+  background: #0f172a;
+  border-radius: 8px;
+  overflow-x: auto;
+  color: #e2e8f0;
+  line-height: 1.5;
+}
+
+.markdown-body .code-block code {
+  color: #e2e8f0;
+  background: transparent;
+  padding: 0;
+}
+
+.markdown-body li {
+  margin: 6px 0 6px 18px;
+  color: var(--text-main);
+}
+
+.markdown-body li {
+  margin: 4px 0;
+  color: #cbd5e1;
+}
+
+.markdown-body li::marker {
+  color: #60a5fa;
+}
+
+.markdown-body br {
+  display: block;
+  content: '';
+  margin: 4px 0;
 }
 </style>

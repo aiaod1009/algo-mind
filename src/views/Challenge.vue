@@ -37,6 +37,7 @@ const evaluationStreamingText = ref('')
 const isEvaluatingStream = ref(false)
 const runResult = ref(null)
 const isAiDockExpanded = ref(false)
+let isDraftSyncPaused = false
 
 const typeLabelMap = {
   single: '单选题',
@@ -125,18 +126,26 @@ const normalizeEvaluationResult = (result) => {
   const scoreNumber = Number(result.score)
   const starsNumber = Number(result.stars)
   const pointsEarnedNumber = Number(result.pointsEarned)
+  const shortComment = String(
+    result.shortComment ?? result.analysis ?? result.aiAnalysis ?? result.feedback ?? '',
+  ).trim()
+  const recommendedCode = String(
+    result.recommendedCode ?? result.aiRecommendedCode ?? '',
+  ).trim()
 
   return {
     score: Number.isFinite(scoreNumber) ? Math.max(0, Math.min(100, Math.round(scoreNumber))) : null,
     stars: Number.isFinite(starsNumber) ? Math.max(0, Math.min(3, Math.round(starsNumber))) : 0,
     output: String(result.output ?? result.stdout ?? result.runOutput ?? '').trim(),
-    analysis: String(result.analysis ?? result.aiAnalysis ?? result.feedback ?? '').trim(),
+    shortComment,
+    analysis: shortComment,
     correctness: String(result.correctness ?? '').trim(),
     quality: String(result.quality ?? '').trim(),
     efficiency: String(result.efficiency ?? '').trim(),
     suggestions: Array.isArray(result.suggestions) ? result.suggestions : [],
+    recommendedCode,
     pointsEarned: Number.isFinite(pointsEarnedNumber) ? Math.max(0, Math.round(pointsEarnedNumber)) : 0,
-    updatedAt: new Date().toLocaleString(),
+    updatedAt: String(result.updatedAt ?? new Date().toLocaleString()),
   }
 }
 
@@ -223,20 +232,33 @@ const requestStreamEvaluation = (payload) => new Promise((resolve, reject) => {
 })
 
 const normalizeRunResult = (result) => {
+  if (!result) {
+    return null
+  }
+
   return {
     output: String(result?.output ?? '').trim(),
     error: String(result?.error ?? '').trim(),
-    updatedAt: new Date().toLocaleString(),
+    updatedAt: String(result?.updatedAt ?? new Date().toLocaleString()),
   }
 }
 
 const persistDraft = () => {
+  if (isDraftSyncPaused || !currentLevel.value) {
+    return
+  }
+
   localStorage.setItem(
     getDraftKey(),
     JSON.stringify({
       answer: answer.value,
       stdinInput: stdinInput.value,
       language: language.value,
+      attemptsInRun: attemptsInRun.value,
+      startTimestamp: startTimestamp.value,
+      evaluationResult: evaluationResult.value,
+      runResult: runResult.value,
+      isAiDockExpanded: isAiDockExpanded.value,
       savedAt: Date.now(),
     }),
   )
@@ -277,6 +299,18 @@ const restoreDraft = () => {
       language.value = draft.language
     }
 
+    if (Number.isFinite(Number(draft.attemptsInRun))) {
+      attemptsInRun.value = Math.max(0, Number(draft.attemptsInRun))
+    }
+
+    if (Number.isFinite(Number(draft.startTimestamp)) && Number(draft.startTimestamp) > 0) {
+      startTimestamp.value = Number(draft.startTimestamp)
+    }
+
+    evaluationResult.value = normalizeEvaluationResult(draft.evaluationResult)
+    runResult.value = normalizeRunResult(draft.runResult)
+    isAiDockExpanded.value = Boolean(draft.isAiDockExpanded && isCodeChallenge.value)
+
     if (isCodeChallenge.value && !String(answer.value || '').trim()) {
       applyCodeTemplate(true)
     }
@@ -314,6 +348,10 @@ const initializeChallenge = async () => {
     return
   }
 
+  isDraftSyncPaused = true
+
+  try {
+
   attemptsInRun.value = 0
   startTimestamp.value = Date.now()
   evaluationResult.value = null
@@ -324,7 +362,20 @@ const initializeChallenge = async () => {
   answer.value = createEmptyAnswer()
   stdinInput.value = ''
   language.value = DEFAULT_EDITOR_LANGUAGE
-  restoreDraft()
+
+  // 检查是否从 URL 参数恢复历史代码
+  const applySnapshotId = route.query.applySnapshot
+  const targetLanguage = route.query.language
+
+  if (applySnapshotId) {
+    await loadAndApplySnapshot(Number(applySnapshotId), targetLanguage)
+  } else {
+    restoreDraft()
+  }
+  } finally {
+    isDraftSyncPaused = false
+    persistDraft()
+  }
 }
 
 const validateCurrentAnswer = () => {
@@ -398,6 +449,7 @@ const submitCodeChallenge = async () => {
 
   try {
     evaluationResult.value = await requestStreamEvaluation(payload)
+    persistDraft()
   } catch (error) {
     console.error('AI 代码评测失败。', error)
     ElMessage.error('代码评测失败，请稍后重试')
@@ -423,6 +475,7 @@ const submitCodeChallenge = async () => {
         language: language.value,
         stdinInput: stdinInput.value,
       })
+      persistDraft()
       await refreshErrorBook()
     } catch (syncError) {
       console.warn('编程题错题落库失败。', syncError)
@@ -431,20 +484,27 @@ const submitCodeChallenge = async () => {
     return
   }
 
-  const progressResult = await syncCodeProgress()
-  if (!progressResult?.correct) {
-    ElMessage.warning('代码评测已通过，但关卡进度同步失败，请再试一次')
-    return
-  }
+  try {
+    const progressResult = await syncCodeProgress()
+    if (!progressResult?.correct) {
+      ElMessage.warning('代码评测已通过，但关卡进度同步失败，请再试一次')
+      persistDraft()
+      return
+    }
 
-  if (progressResult.pointsEarned > 0) {
-    userStore.addPoints(progressResult.pointsEarned)
-  }
+    if (progressResult.pointsEarned > 0) {
+      userStore.addPoints(progressResult.pointsEarned)
+    }
 
-  await refreshErrorBook()
-  evaluationResult.value.pointsEarned = progressResult.pointsEarned || 0
-  removeDraft()
-  ElMessage.success('代码评测通过，关卡进度已同步')
+    await refreshErrorBook()
+    evaluationResult.value.pointsEarned = progressResult.pointsEarned || 0
+    persistDraft()
+    ElMessage.success('代码评测通过，关卡进度已同步')
+  } catch (error) {
+    console.error('代码评测结果同步失败。', error)
+    persistDraft()
+    ElMessage.error('代码评测已完成，但保存结果失败，请稍后重试')
+  }
 }
 
 const runCodeOnly = async () => {
@@ -471,6 +531,7 @@ const runCodeOnly = async () => {
     }
 
     runResult.value = normalizeRunResult(response.data.data)
+    persistDraft()
 
     if (runResult.value.error) {
       ElMessage.warning('代码已运行，存在错误输出')
@@ -577,6 +638,69 @@ const handleResetTemplate = () => {
   ElMessage.success('已恢复当前语言的默认模板')
 }
 
+const loadAndApplySnapshot = async (snapshotId, targetLanguage) => {
+  try {
+    const res = await api.getCodeSnapshots({ levelId: currentLevelId.value })
+    const list = res.data?.data || []
+    const snapshot = list.find(item => item.id === snapshotId)
+
+    if (!snapshot) {
+      ElMessage.warning('历史代码不存在')
+      restoreDraft()
+      return
+    }
+
+    // 设置语言
+    if (targetLanguage && LANGUAGE_LABEL_MAP[targetLanguage]) {
+      language.value = targetLanguage
+    } else if (snapshot.language) {
+      // 尝试匹配语言
+      const langKey = Object.keys(LANGUAGE_LABEL_MAP).find(
+        key => LANGUAGE_LABEL_MAP[key] === snapshot.language
+      )
+      if (langKey) {
+        language.value = langKey
+      }
+    }
+
+    // 设置代码
+    answer.value = snapshot.code || ''
+    stdinInput.value = snapshot.stdinInput || ''
+
+    // 恢复评测结果（如果有）
+    if (snapshot.score > 0 || snapshot.aiAnalysis || snapshot.aiRecommendedCode || snapshot.aiSuggestionsJson) {
+      evaluationResult.value = {
+        score: snapshot.score,
+        stars: snapshot.stars,
+        shortComment: snapshot.aiAnalysis,
+        analysis: snapshot.aiAnalysis,
+        suggestions: snapshot.aiSuggestionsJson ? JSON.parse(snapshot.aiSuggestionsJson) : [],
+        recommendedCode: snapshot.aiRecommendedCode || '',
+      }
+    }
+
+    // 恢复运行结果（如果有）
+    if (snapshot.runOutput || snapshot.compilePassed !== undefined) {
+      runResult.value = {
+        output: snapshot.runOutput,
+        error: snapshot.compilePassed ? '' : '编译失败',
+      }
+    }
+
+    ElMessage.success('已恢复历史代码')
+
+    // 清除 URL 参数
+    router.replace({
+      path: `/challenge/${currentLevelId.value}`,
+      query: projectQuery.value ? { project: projectQuery.value } : {},
+    })
+  } catch (err) {
+    console.error('加载历史代码失败', err)
+    ElMessage.error('加载历史代码失败')
+    restoreDraft()
+  }
+}
+
 const handleGitIt = async () => {
   if (!answer.value || !String(answer.value).trim()) {
     ElMessage.warning('请先编写代码再保存')
@@ -604,13 +728,14 @@ const handleGitIt = async () => {
       score: evaluationResult.value?.score ?? 0,
       stars: evaluationResult.value?.stars ?? 0,
       compilePassed: Boolean(runResult.value && !runResult.value.error),
-      aiAnalysis: evaluationResult.value?.analysis || null,
-      aiCorrectness: evaluationResult.value?.correctness || null,
-      aiQuality: evaluationResult.value?.quality || null,
-      aiEfficiency: evaluationResult.value?.efficiency || null,
+      aiAnalysis: evaluationResult.value?.shortComment || evaluationResult.value?.analysis || null,
+      aiCorrectness: null,
+      aiQuality: null,
+      aiEfficiency: null,
       aiSuggestionsJson: evaluationResult.value?.suggestions?.length
         ? JSON.stringify(evaluationResult.value.suggestions)
         : null,
+      aiRecommendedCode: evaluationResult.value?.recommendedCode || null,
       runOutput: runResult.value?.output || null,
     }
 
@@ -637,7 +762,18 @@ const openEvaluationDialog = () => {
 }
 
 const goBack = () => {
+  persistDraft()
   navigateBackToLevels()
+}
+
+const handleOpenCodeHistory = () => {
+  persistDraft()
+  router.push({ path: '/code-history', query: { levelId: currentLevelId.value } })
+}
+
+const handleOpenErrors = () => {
+  persistDraft()
+  router.push('/errors')
 }
 
 onMounted(initializeChallenge)
@@ -661,7 +797,7 @@ watch(language, (nextLanguage, previousLanguage) => {
 })
 
 watch(
-  [answer, stdinInput, language],
+  [answer, stdinInput, language, evaluationResult, runResult, attemptsInRun, isAiDockExpanded],
   () => {
     if (!currentLevel.value) {
       return
@@ -692,8 +828,8 @@ watch(
       </div>
 
       <div class="top-action-group">
-        <el-button plain class="action-pill-btn" @click="router.push('/profile')">历史代码</el-button>
-        <el-button plain class="action-pill-btn" @click="router.push('/errors')">错题本</el-button>
+        <el-button v-if="isCodeChallenge" plain class="action-pill-btn" @click="handleOpenCodeHistory">历史代码</el-button>
+        <el-button plain class="action-pill-btn" @click="handleOpenErrors">错题本</el-button>
       </div>
     </header>
 

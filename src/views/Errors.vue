@@ -104,23 +104,30 @@ const formatTime = (value) => {
   return `${year}-${month}-${day}`
 }
 
-const formatAnswer = (value) => {
+const formatAnswer = (value, maxLength = 50) => {
   if (!value) return '暂无记录'
 
+  let result = ''
   if (Array.isArray(value)) {
-    return value.map((item) => String(item).trim()).filter(Boolean).join('、') || '暂无记录'
-  }
-
-  try {
-    const parsed = JSON.parse(value)
-    if (Array.isArray(parsed)) {
-      return parsed.map((item) => String(item).trim()).filter(Boolean).join('、') || '暂无记录'
+    result = value.map((item) => String(item).trim()).filter(Boolean).join('、') || '暂无记录'
+  } else {
+    try {
+      const parsed = JSON.parse(value)
+      if (Array.isArray(parsed)) {
+        result = parsed.map((item) => String(item).trim()).filter(Boolean).join('、') || '暂无记录'
+      } else {
+        result = String(value)
+      }
+    } catch (error) {
+      result = String(value)
     }
-  } catch (error) {
-    // Ignore invalid JSON and use raw string.
   }
 
-  return String(value)
+  // 截断长文本
+  if (result.length > maxLength) {
+    return result.substring(0, maxLength) + '...'
+  }
+  return result
 }
 
 const getUrgency = (item) => {

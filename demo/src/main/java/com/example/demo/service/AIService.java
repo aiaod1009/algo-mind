@@ -132,17 +132,26 @@ public class AIService {
      */
     private String callAIWithTimeout(ChatRequest request) throws TimeoutException {
         ExecutorService executor = Executors.newSingleThreadExecutor();
+        long startTime = System.currentTimeMillis();
+        String modelName = request.getModel() != null ? request.getModel() : aiConfig.getModel();
         
         try {
             Future<String> future = executor.submit(() -> callAIOnce(request));
             
             try {
-                return future.get(AI_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                String result = future.get(AI_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                long duration = System.currentTimeMillis() - startTime;
+                log.info("AI call successful, model={}, duration={}ms", modelName, duration);
+                return result;
             } catch (TimeoutException e) {
                 future.cancel(true);
+                long duration = System.currentTimeMillis() - startTime;
+                log.warn("AI call timeout, model={}, timeout={}s, waited={}ms", modelName, AI_CALL_TIMEOUT_SECONDS, duration);
                 throw e;
             } catch (ExecutionException e) {
                 Throwable cause = e.getCause();
+                long duration = System.currentTimeMillis() - startTime;
+                log.error("AI call failed, model={}, duration={}ms, error={}", modelName, duration, cause.getMessage());
                 if (cause instanceof AIException) {
                     throw (AIException) cause;
                 }

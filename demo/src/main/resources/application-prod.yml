@@ -21,13 +21,24 @@ ai:
 # 豆包 AI 配置
 doubao:
   api:
-    key: 03a61838-4454-49e5-acca-c0d372f0207d
+    key: ${ARK_API_KEY:03a61838-4454-49e5-acca-c0d372f0207d}
+    # 普通对话 API
     url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
-    model: doubao-seed-1-8-251228
+    # 多模态 Responses API（支持图片）
+    multimodal-url: https://ark.cn-beijing.volces.com/api/v3/responses
+    model: ${DOUBAO_MODEL:doubao-seed-1-8-251228}
     timeout: 30000
     max-retries: 3
     temperature: 0.7
     max-tokens: 4096
+
+# 应用上传配置
+app:
+  upload:
+    # 聊天文件上传目录（本地开发环境）
+    chat-files: uploads/chat-files
+    # 文件访问基础 URL
+    base-url: http://localhost:8000/api/uploads
 
 # 数据库配置（生产环境，连接服务器MySQL）
 spring:

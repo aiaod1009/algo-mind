@@ -95,9 +95,25 @@
 			<artifactId>ip2region</artifactId>
 			<version>2.7.0</version>
 		</dependency>
+		<dependency>
+			<groupId>com.volcengine</groupId>
+			<artifactId>volcengine-java-sdk-ark-runtime</artifactId>
+			<version>1.0.20</version>
+		</dependency>
 	</dependencies>
 
 	<repositories>
+		<repository>
+			<id>volcengine</id>
+			<name>火山引擎 Maven 仓库</name>
+			<url>https://artifact.bytedance.com/repository/volcengine/</url>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+		</repository>
 		<repository>
 			<id>aliyun-public</id>
 			<name>阿里云公共仓库</name>

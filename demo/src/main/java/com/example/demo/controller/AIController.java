@@ -3,6 +3,7 @@ package com.example.demo.controller;
 import com.example.demo.Result;
 import com.example.demo.ai.DouBaoAiService;
 import com.example.demo.dto.ai.ChatMessage;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Resource;
 import lombok.Data;
@@ -23,28 +24,24 @@ import java.util.List;
 public class AIController {
 
     private static final String CODE_EVALUATION_SYSTEM_PROMPT = """
-            你是一位专业的算法代码评测助手，负责评估学生提交的代码，并给出严格、具体、可执行的反馈。
+            你是一位专业的算法代码评测助手，需要给出清晰、详细、可执行的中文评测。
 
-            请从以下维度评分：
-            1. 正确性：是否满足题目要求，是否覆盖关键边界条件
-            2. 代码质量：结构、命名、可读性、可维护性
-            3. 算法效率：时间复杂度、空间复杂度是否合理
-            4. 健壮性：异常情况、空输入、边界输入处理是否充分
-            5. 表达规范：注释、缩进、风格是否清晰
+            你的目标：
+            1. 给出 0-100 的总分
+            2. 输出一段详细中文分析，说明代码的正确性、主要问题、可读性或复杂度表现
+            3. 给出 2 条最重要的改进建议
+            4. 给出一份可以直接参考或替换的推荐代码
 
             输出格式要求：
-            1. 首先输出一段纯文本的代码分析（多段落，详细说明优缺点）
-            2. 然后输出一个分隔符：---JSON---
+            1. 先输出 3-6 行中文分析，内容要具体，避免空话
+            2. 然后输出分隔符：---JSON---
             3. 最后输出标准 JSON，结构如下：
             {
               "score": 0-100 的整数,
               "stars": 0-3 的整数,
-              "output": "程序输出或根据代码逻辑推断的输出",
-              "analysis": "整体分析，突出优点、问题和优化方向",
-              "correctness": "正确性评价",
-              "quality": "代码质量评价",
-              "efficiency": "效率评价",
-              "suggestions": ["建议1", "建议2", "建议3"]
+              "shortComment": "详细中文分析，建议 120-220 字，直接写分析内容，不要 Markdown 列表",
+              "suggestions": ["建议1", "建议2"],
+              "recommendedCode": "完整推荐代码，不要 Markdown 代码块"
             }
 
             评分要求：
@@ -57,8 +54,10 @@ public class AIController {
             - 必须使用中文
             - 纯文本分析在前，JSON 在后，用 ---JSON--- 分隔
             - JSON 必须合法，不能附加 Markdown 代码块
-            - analysis 要具体，避免空泛表述
-            - suggestions 至少给出 2 条可执行建议
+            - 只保留 score、stars、shortComment、suggestions、recommendedCode 这几个字段
+            - shortComment 字段名虽然叫 shortComment，但内容必须是详细中文分析
+            - suggestions 固定输出 2 条，每条尽量不超过 30 字
+            - recommendedCode 必须是完整代码，直接输出代码文本
             """;
 
     private static final String ASSISTANT_SYSTEM_PROMPT = """
@@ -212,25 +211,22 @@ public class AIController {
             userPrompt.append("【测试输入】\n").append(request.getStdinInput()).append("\n\n");
         }
 
-        userPrompt.append("请严格按照约定 JSON 结构输出，不要添加任何 JSON 之外的内容。");
+        userPrompt.append("请输出详细中文分析、建议和推荐代码，不要输出额外字段。");
         return userPrompt.toString();
     }
 
     private CodeEvaluationResponse parseCodeEvaluationResponse(String content) {
         try {
-            String jsonContent = stripMarkdownFence(content);
+            String jsonContent = extractEvaluationJson(content);
             return objectMapper.readValue(jsonContent, CodeEvaluationResponse.class);
         } catch (Exception e) {
             log.error("解析代码评测响应失败，原始内容：{}", content, e);
             CodeEvaluationResponse response = new CodeEvaluationResponse();
             response.setScore(60);
             response.setStars(1);
-            response.setOutput("解析评测结果失败");
-            response.setAnalysis("AI 返回的评测结果格式不正确，已使用默认评测。原始响应：" + content);
-            response.setCorrectness("需要重新评测以确认正确性");
-            response.setQuality("结构化结果解析失败");
-            response.setEfficiency("无法准确判断");
+            response.setShortComment("评测结果解析失败，已回退到基础中文分析。当前只能确认代码已成功提交，但 AI 返回内容没有按约定格式输出，建议重新发起一次评测，并重点检查边界条件、输入处理和核心逻辑是否完整。");
             response.setSuggestions(List.of("稍后重试一次 AI 评测", "检查代码是否完整提交"));
+            response.setRecommendedCode("");
             return response;
         }
     }
@@ -276,12 +272,9 @@ public class AIController {
 
         response.setScore(score);
         response.setStars(stars);
-        response.setOutput("AI 服务暂时不可用，当前为基础评测结果");
-        response.setAnalysis("已根据代码长度和基础结构进行了降级评测，建议稍后再次发起 AI 评测获取更细致反馈。");
-        response.setCorrectness("已提交代码，但暂未获得完整 AI 正确性分析");
-        response.setQuality("代码包含基础结构，可进一步优化可读性与命名");
-        response.setEfficiency("需要结合真实模型评测判断算法复杂度");
+        response.setShortComment("已使用本地快速评测。当前代码已经具备基础结构，但还无法像完整 AI 评测那样确认逻辑是否覆盖题目要求、边界条件和复杂度约束。建议先自查输入输出、循环分支和返回结果，再结合推荐代码继续完善。");
         response.setSuggestions(List.of("补充边界条件测试", "检查复杂度是否满足题目要求"));
+        response.setRecommendedCode(buildFallbackRecommendedCode(code, request.getLanguage()));
         return response;
     }
 
@@ -379,13 +372,60 @@ public class AIController {
         return jsonContent.trim();
     }
 
+    private String extractEvaluationJson(String content) {
+        String normalized = stripMarkdownFence(content);
+        int separatorIndex = normalized.indexOf("---JSON---");
+        if (separatorIndex == -1) {
+            return normalized;
+        }
+        return normalized.substring(separatorIndex + "---JSON---".length()).trim();
+    }
+
     private String toJson(CodeEvaluationResponse response) {
         try {
             return objectMapper.writeValueAsString(response);
         } catch (Exception e) {
             log.error("序列化降级评测结果失败", e);
-            return "{\"score\":60,\"stars\":1,\"output\":\"AI 服务暂时不可用\",\"analysis\":\"降级评测结果生成失败\",\"correctness\":\"待重试\",\"quality\":\"待重试\",\"efficiency\":\"待重试\",\"suggestions\":[\"稍后再试一次\"]}";
+            return "{\"score\":60,\"stars\":1,\"shortComment\":\"降级评测结果生成失败，当前无法给出完整 AI 中文分析。建议稍后重试，并优先检查代码是否完整、输入输出是否正确。\",\"suggestions\":[\"稍后再试一次\",\"检查代码是否完整\"],\"recommendedCode\":\"\"}";
         }
+    }
+
+    private String buildFallbackRecommendedCode(String code, String language) {
+        if (hasText(code)) {
+            return code.trim();
+        }
+
+        String normalizedLanguage = language == null ? "" : language.trim().toLowerCase();
+        return switch (normalizedLanguage) {
+            case "java" -> """
+                    public class Main {
+                        public static void main(String[] args) {
+                            System.out.println("TODO");
+                        }
+                    }
+                    """.trim();
+            case "cpp", "c++" -> """
+                    #include <iostream>
+
+                    int main() {
+                        std::cout << "TODO" << std::endl;
+                        return 0;
+                    }
+                    """.trim();
+            case "javascript", "js" -> """
+                    function solve() {
+                      console.log('TODO')
+                    }
+
+                    solve()
+                    """.trim();
+            default -> """
+                    def solve():
+                        print("TODO")
+
+                    solve()
+                    """.trim();
+        };
     }
 
     private boolean hasText(String value) {
@@ -430,14 +470,12 @@ public class AIController {
     }
 
     @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class CodeEvaluationResponse {
         private Integer score;
         private Integer stars;
-        private String output;
-        private String analysis;
-        private String correctness;
-        private String quality;
-        private String efficiency;
+        private String shortComment;
         private List<String> suggestions;
+        private String recommendedCode;
     }
 }

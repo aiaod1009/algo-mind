@@ -36,7 +36,7 @@ public class CodeSnapshot {
     private String code;
 
     @Lob
-    @Column(name = "stdin_input")
+    @Column(name = "stdin_input", columnDefinition = "LONGTEXT")
     private String stdinInput;
 
     @Column(nullable = false)
@@ -52,8 +52,12 @@ public class CodeSnapshot {
     private Boolean aiEvalPassed = false;
 
     @Lob
-    @Column(name = "ai_analysis")
+    @Column(name = "ai_analysis", columnDefinition = "LONGTEXT")
     private String aiAnalysis;
+
+    @Lob
+    @Column(name = "ai_recommended_code", columnDefinition = "LONGTEXT")
+    private String aiRecommendedCode;
 
     @Column(name = "ai_correctness", length = 500)
     private String aiCorrectness;
@@ -65,11 +69,11 @@ public class CodeSnapshot {
     private String aiEfficiency;
 
     @Lob
-    @Column(name = "ai_suggestions_json")
+    @Column(name = "ai_suggestions_json", columnDefinition = "LONGTEXT")
     private String aiSuggestionsJson;
 
     @Lob
-    @Column(name = "run_output")
+    @Column(name = "run_output", columnDefinition = "LONGTEXT")
     private String runOutput;
 
     @Column(name = "is_best", nullable = false)

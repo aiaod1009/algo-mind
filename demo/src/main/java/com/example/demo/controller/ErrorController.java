@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.*;
 
 @Slf4j
@@ -35,8 +36,50 @@ public class ErrorController {
     private static final String PROBLEM_ANALYSIS_PROMPT = """
             你是一位经验丰富的算法教练。
             请分析学习者的错误答案，并返回结构化的 JSON 报告。
-            重点关注错误根因、关键知识点、改进建议，以及题库优先的练习推荐。
             所有内容必须使用中文返回。
+
+            请严格按照以下 JSON 格式返回四个模块：
+
+            {
+              "summary": "分析总结（一句话概括核心问题）",
+              "errorAnalysis": {
+                "rootCause": "错误根因（分析导致错误的根本原因）",
+                "detailedExplanation": "详细解释（对错误原因的详细说明）",
+                "commonMistakes": ["常见错误1", "常见错误2", "常见错误3"]
+              },
+              "knowledgePoints": [
+                {
+                  "name": "关键知识点名称",
+                  "description": "知识点描述（简明扼要地解释该知识点）",
+                  "masteryLevel": "掌握程度（beginner/intermediate/advanced）"
+                }
+              ],
+              "suggestions": [
+                {
+                  "title": "改进建议标题",
+                  "description": "建议详细描述",
+                  "priority": "优先级（high/medium/low）",
+                  "actionItems": ["具体行动1", "具体行动2"]
+                }
+              ],
+              "recommendedProblems": [
+                {
+                  "title": "题目名称",
+                  "question": "题目内容",
+                  "type": "题目类型（practice/review/challenge）",
+                  "difficulty": "难度（easy/medium/hard）",
+                  "reason": "推荐理由（为什么推荐这道题）"
+                }
+              ]
+            }
+
+            四个核心模块说明：
+            1. errorAnalysis（错误根因）：深入分析用户答案错误的根本原因，包括概念误解、思路偏差、细节疏忽等
+            2. knowledgePoints（关键知识点）：列出与错题相关的核心知识点，帮助用户查漏补缺
+            3. suggestions（改进建议）：提供具体、可执行的改进措施，按优先级排序
+            4. recommendedProblems（题库优先的练习）：优先从题库角度推荐适合巩固的练习题，包含推荐理由
+
+            请确保返回的是有效的 JSON 格式，不要包含 markdown 代码块标记。
             """;
 
     @Resource
@@ -164,6 +207,7 @@ public class ErrorController {
     @PostMapping("/error-analysis")
     public Result<ProblemAnalysisResult> analyzeError(@RequestBody ProblemAnalysisRequest request) {
         Long userId = currentUserService.requireCurrentUserId();
+        long startTime = System.currentTimeMillis();
         log.info("Start error analysis, userId={}, errorId={}", userId, request.getErrorId());
 
         Optional<ErrorItem> optionalErrorItem = loadErrorItem(userId, request.getErrorId());
@@ -210,6 +254,10 @@ public class ErrorController {
                 errorRepository.save(errorItem);
             });
 
+            long endTime = System.currentTimeMillis();
+            long durationMs = endTime - startTime;
+            log.info("AI analysis completed, userId={}, errorId={}, duration={}ms", userId, request.getErrorId(), durationMs);
+
             ProblemAnalysisResult result = new ProblemAnalysisResult();
             result.setErrorId(request.getErrorId());
             result.setAnalysis(analysisText);
@@ -217,7 +265,7 @@ public class ErrorController {
             result.setAnalyzedAt(analyzedAt.toString());
             result.setReusedLastAnalysis(false);
             result.setLimitReached(false);
-            result.setMessage("分析生成成功");
+            result.setMessage("分析生成成功 (耗时 " + durationMs + "ms)");
             result.setQuota(reservation.quotaStatus());
             return Result.success(result);
         } catch (Exception exception) {
@@ -299,7 +347,7 @@ public class ErrorController {
 
     private String buildAnalysisPrompt(ProblemAnalysisRequest request) {
         StringBuilder prompt = new StringBuilder();
-        prompt.append("请分析以下错题，所有回复必须使用中文。\n\n");
+        prompt.append("请分析以下错题，所有回复必须使用中文，并严格按照系统提示词中定义的 JSON 格式返回。\n\n");
         prompt.append("题目: ").append(nullToText(request.getQuestion())).append('\n');
         prompt.append("用户答案: ").append(joinList(request.getUserAnswer())).append('\n');
 
@@ -316,9 +364,11 @@ public class ErrorController {
             prompt.append("相关知识点: ").append(String.join("、", request.getRelatedTopics())).append('\n');
         }
 
-        prompt.append("\n请返回 JSON，对应字段必须包含：\n");
-        prompt.append("summary, errorAnalysis, knowledgePoints, suggestions, recommendedProblems\n");
-        prompt.append("recommendedProblems 里优先给出适合继续练习的题目建议。\n");
+        prompt.append("\n请重点分析以下四个模块并返回对应 JSON 字段：\n");
+        prompt.append("1. errorAnalysis（错误根因）：分析用户答案错误的根本原因\n");
+        prompt.append("2. knowledgePoints（关键知识点）：列出与错题相关的核心知识点\n");
+        prompt.append("3. suggestions（改进建议）：提供具体、可执行的改进措施\n");
+        prompt.append("4. recommendedProblems（题库优先的练习）：优先从题库角度推荐适合巩固的练习题\n");
         return prompt.toString();
     }
 
@@ -536,7 +586,7 @@ public class ErrorController {
                     .findFirst()
                     .orElse(null);
             if (hasText(pointName)) {
-                return "题库中找到了和“" + pointName + "”相关的练习题，适合立刻巩固。";
+                return "题库中找到了和「" + pointName + "」相关的练习题，适合立刻巩固。";
             }
         }
 
@@ -595,7 +645,7 @@ public class ErrorController {
         }
 
         recommendedProblem.setTitle("AI 自适应练习题");
-        recommendedProblem.setQuestion("请围绕“" + focus + "”设计解题思路，并完成一道同类型练习。要求先写出关键步骤，再给出最终答案。");
+        recommendedProblem.setQuestion("请围绕「" + focus + "」设计解题思路，并完成一道同类型练习。要求先写出关键步骤，再给出最终答案。");
         recommendedProblem.setType("practice");
         recommendedProblem.setDifficulty(hasText(request.getDifficulty()) ? request.getDifficulty() : "medium");
         recommendedProblem.setReason("题库中暂时没有足够匹配的题目，已根据你的错题知识点自动生成一题。");

@@ -50,11 +50,20 @@ file:
   max-size: 5242880
   allowed-types: image/jpeg,image/png,image/gif,image/webp
 
+# 聊天文件上传配置
+app:
+  upload:
+    chat-files: uploads/chat-files
+    base-url: http://localhost:8000/api/uploads
+
 doubao:
   api:
-    key: 03a61838-4454-49e5-acca-c0d372f0207d
+    key: ${ARK_API_KEY:4d0e1258-05a6-45dd-aa71-36a6cdf8c832}
     url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+    base-url: https://ark.cn-beijing.volces.com/api/v3
     model: doubao-seed-1-8-251228
+    multimodal-url: https://ark.cn-beijing.volces.com/api/v3/responses
+    multimodal-key: ${ARK_MULTIMODAL_API_KEY:${ARK_API_KEY:4d0e1258-05a6-45dd-aa71-36a6cdf8c832}}
     timeout: 30000
     max-retries: 3
     temperature: 0.7
@@ -99,9 +108,12 @@ file:
 
 doubao:
   api:
-    key: ${DOUBAO_API_KEY:03a61838-4454-49e5-acca-c0d372f0207d}
+    key: ${ARK_API_KEY:${DOUBAO_API_KEY:4d0e1258-05a6-45dd-aa71-36a6cdf8c832}}
     url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+    base-url: https://ark.cn-beijing.volces.com/api/v3
+    multimodal-url: https://ark.cn-beijing.volces.com/api/v3/responses
     model: ${DOUBAO_MODEL:doubao-seed-1-8-251228}
+    multimodal-key: ${ARK_MULTIMODAL_API_KEY:${DOUBAO_MULTIMODAL_KEY:${ARK_API_KEY:4d0e1258-05a6-45dd-aa71-36a6cdf8c832}}}
     timeout: 30000
     max-retries: 3
     temperature: 0.7

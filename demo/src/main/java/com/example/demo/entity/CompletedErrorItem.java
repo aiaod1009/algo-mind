@@ -29,16 +29,20 @@ public class CompletedErrorItem {
     @Column(name = "level_type", length = 50)
     private String levelType;
 
-    @Column(length = 1000)
+    @Lob
+    @Column(columnDefinition = "LONGTEXT")
     private String question;
 
-    @Column(name = "user_answer", length = 500)
+    @Lob
+    @Column(name = "user_answer", columnDefinition = "LONGTEXT")
     private String userAnswer;
 
-    @Column(length = 500)
+    @Lob
+    @Column(columnDefinition = "LONGTEXT")
     private String description;
 
-    @Column(name = "correct_answer", length = 500)
+    @Lob
+    @Column(name = "correct_answer", columnDefinition = "LONGTEXT")
     private String correctAnswer;
 
     @Column(name = "analysis_status", length = 50)

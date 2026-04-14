@@ -14,10 +14,12 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
 @Component
@@ -25,10 +27,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final ObjectMapper objectMapper;
+    private final AntPathMatcher pathMatcher = new AntPathMatcher();
+    
+    private static final List<String> PUBLIC_PATHS = Arrays.asList(
+            "/login", "/register", "/uploads/**", "/api/uploads/**", 
+            "/api/ai/**", "/ai/**", "/h2-console/**",
+            "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
+            "/levels", "/ranking", "/hot-questions", "/bilibili/**", "/courses/**",
+            "/forum-posts/**"
+    );
 
     public JwtAuthenticationFilter(JwtService jwtService, ObjectMapper objectMapper) {
         this.jwtService = jwtService;
         this.objectMapper = objectMapper;
+    }
+    
+    private boolean isPublicPath(String requestPath) {
+        return PUBLIC_PATHS.stream()
+                .anyMatch(pattern -> pathMatcher.match(pattern, requestPath));
     }
 
     @Override
@@ -43,7 +59,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = authorization.substring(7).trim();
         if (!StringUtils.hasText(token)) {
-            writeUnauthorized(response, "登录凭证无效");
+            if (isPublicPath(request.getRequestURI())) {
+                filterChain.doFilter(request, response);
+            } else {
+                writeUnauthorized(response, "登录凭证无效");
+            }
             return;
         }
 
@@ -59,10 +79,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } catch (JwtException | IllegalArgumentException ex) {
             SecurityContextHolder.clearContext();
-            // 记录详细错误到日志
             System.err.println("[JWT Error] " + ex.getClass().getSimpleName() + ": " + ex.getMessage());
             ex.printStackTrace();
-            writeUnauthorized(response, "登录凭证无效或已过期");
+            if (isPublicPath(request.getRequestURI())) {
+                filterChain.doFilter(request, response);
+            } else {
+                writeUnauthorized(response, "登录凭证无效或已过期");
+            }
         }
     }
 
