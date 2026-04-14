@@ -215,10 +215,14 @@ onUnmounted(() => {
 
 <template>
   <div class="page-container levels-page">
-    <h2 class="section-title">{{ projectDisplayName }} · 项目闯关路线</h2>
-    <p class="track-tip">本项目共 11 关：前 10 关训练题，第 11 关为终极实战关卡。</p>
-    <div v-if="activeTrackMeta?.goal" class="track-goal">
-      目标：{{ activeTrackMeta.goal }}
+    <div class="intro-panel">
+      <h2 class="section-title">
+        <span class="project-name">{{ projectDisplayName }}</span>
+      </h2>
+      <p class="track-tip">本项目共 11 关：前 10 关训练题，最后一关为终极项目实战。</p>
+      <div v-if="activeTrackMeta?.goal" class="track-goal">
+        目标：{{ activeTrackMeta.goal }}
+      </div>
     </div>
 
     <el-skeleton :loading="loading" animated :rows="6">
@@ -331,14 +335,53 @@ onUnmounted(() => {
   padding-bottom: 26px;
 }
 
+.intro-panel {
+  width: 100%;
+  max-width: 760px;
+  padding: 0;
+  margin-bottom: 20px;
+}
+
+.intro-panel .section-title {
+  margin: 0;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.project-name {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 10px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 2px solid #2f5f1e;
+  background: linear-gradient(180deg, #d9ff84 0%, #b9ef57 55%, #8fd03a 100%);
+  color: #1d4210;
+  font-weight: 800;
+  font-size: 32px;
+  line-height: 1.25;
+  letter-spacing: 0.2px;
+  text-shadow: 0 2px 0 rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.5) inset,
+    0 4px 0 #6ea92c;
+}
+
 .track-tip {
   margin: 0;
-  color: var(--text-sub);
+  color: #3d5474;
   font-size: 13px;
+  line-height: 2;
 }
 
 .track-goal {
-  color: var(--text-sub);
+  margin-top: 4px;
+  margin-bottom: -6px;
+  color: #2f4666;
+  font-weight: 600;
 }
 
 .pixel-stage {
@@ -900,6 +943,18 @@ onUnmounted(() => {
 }
 
 @media (max-width: 900px) {
+  .intro-panel {
+    margin-bottom: 18px;
+  }
+
+  .project-name {
+    font-size: 28px;
+  }
+
+  .route-label {
+    font-size: 20px;
+  }
+
   .pixel-stage {
     padding: 8px;
   }
@@ -963,5 +1018,15 @@ onUnmounted(() => {
 .map-world.reduced-motion .progress-truck,
 .map-world.reduced-motion .truck-wheel {
   animation: none !important;
+}
+
+@media (max-width: 600px) {
+  .intro-panel {
+    margin-bottom: 16px;
+  }
+
+  .project-name {
+    font-size: 24px;
+  }
 }
 </style>

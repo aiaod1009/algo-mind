@@ -605,6 +605,13 @@ onMounted(async () => {
   font-size: 18px;
   font-weight: 600;
   color: #1e293b;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border: 1px solid #cddcf0;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  box-shadow: 0 2px 8px rgba(74, 111, 157, 0.08);
   margin: 0;
 }
 

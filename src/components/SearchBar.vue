@@ -201,10 +201,15 @@ onUnmounted(() => {
 
 <style scoped>
 .search-bar-container {
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.62) 0%, rgba(246, 251, 255, 0.52) 100%);
   border-radius: 12px;
   padding: 12px 16px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow:
+    0 8px 24px rgba(31, 58, 97, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
   transition: all 0.3s ease;
   margin: 4px 0;
 }
@@ -213,7 +218,9 @@ onUnmounted(() => {
   position: sticky;
   top: 80px;
   z-index: 100;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 10px 30px rgba(20, 45, 84, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 .search-bar-wrapper {
