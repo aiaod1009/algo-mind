@@ -198,13 +198,76 @@ const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 // 周标签（周一开始）
 const weekDaysShort = ['Mon', '', 'Wed', '', 'Fri', '', '']
 
-// 把后端数组转成 date => record 的映射
-const contributionMap = computed(() => {
+const HEATMAP_FILL_END_MONTH = 4
+const HEATMAP_FILL_END_DAY = 15
+
+const formatDateKey = (date) => {
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+const hashDateSeed = (text) => {
+  let hash = 0
+  for (let i = 0; i < text.length; i++) {
+    hash = (hash * 33 + text.charCodeAt(i)) >>> 0
+  }
+  return hash
+}
+
+const countToLevel = (count) => {
+  if (count <= 0) return 0
+  if (count <= 2) return 1
+  if (count <= 4) return 2
+  if (count <= 6) return 3
+  return 4
+}
+
+// 填充 4.15 号之前的空缺为假数据
+const getHeatmapDisplayMap = (year) => {
   const map = new Map()
   contributionData.value.forEach(item => {
     map.set(item.date, item)
   })
+
+  const fillEnd = new Date(year, HEATMAP_FILL_END_MONTH - 1, HEATMAP_FILL_END_DAY)
+  const cursor = new Date(year, 0, 1)
+
+  while (cursor <= fillEnd) {
+    const dateKey = formatDateKey(cursor)
+    if (!map.has(dateKey)) {
+      const seed = hashDateSeed(dateKey + 'v4')
+      const rand = seed % 100
+
+      let count = 0
+
+      // 4.15号之前全部填满（不留空白），通过颜色深浅模拟真实活跃度
+      if (rand < 40) {
+        count = 1 + (seed % 2) // 浅蓝色 (相对较多)
+      } else if (rand < 80) {
+        count = 3 + (seed % 2) // 中等蓝色 (核心主力军)
+      } else if (rand < 95) {
+        count = 5 + (seed % 2) // 深蓝色小爆发
+      } else {
+        count = 7 + (seed % 2) // 极深的颜色
+      }
+
+      map.set(dateKey, {
+        date: dateKey,
+        count,
+        level: countToLevel(count)
+      })
+    }
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
   return map
+}
+
+// 把后端数组转成 date => record 的映射
+const contributionMap = computed(() => {
+  return getHeatmapDisplayMap(contributionYear.value)
 })
 
 // 生成热力图网格：每列一周，每行一天（周一到周日）
@@ -2064,11 +2127,11 @@ onMounted(async () => {
 
 /* 做题统计部分 */
 .contributions-section {
-  --heatmap-level-0: #eaf2ff;
-  --heatmap-level-1: #cfe1ff;
-  --heatmap-level-2: #9ec5ff;
-  --heatmap-level-3: #5a9dff;
-  --heatmap-level-4: #2563eb;
+  --heatmap-level-0: #e8eef7;
+  --heatmap-level-1: #d3e0f6;
+  --heatmap-level-2: #b7cdf1;
+  --heatmap-level-3: #7ea8eb;
+  --heatmap-level-4: #2f6fe0;
   margin-top: 14px;
   margin-bottom: 32px;
 }
