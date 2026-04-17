@@ -1,7 +1,6 @@
 package com.example.demo.ai_more;
 
 import com.example.demo.Result;
-import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,7 +9,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -29,8 +27,7 @@ public class ChatFileUploadController {
 
     @PostMapping("/upload")
     public Result<UploadResponse> uploadChatFile(
-            @RequestParam("file") MultipartFile file,
-            HttpServletRequest request
+            @RequestParam("file") MultipartFile file
     ) {
         if (file == null || file.isEmpty()) {
             return Result.fail(400, "Uploaded file cannot be empty");
@@ -57,10 +54,7 @@ public class ChatFileUploadController {
 
             file.transferTo(targetPath);
 
-            String fileUrl = ServletUriComponentsBuilder.fromContextPath(request)
-                    .path("/uploads/chat-files/")
-                    .path(newFilename)
-                    .toUriString();
+            String fileUrl = "/api/uploads/chat-files/" + newFilename;
 
             log.info("Uploaded chat file: {}", targetPath);
             return Result.success(new UploadResponse(
