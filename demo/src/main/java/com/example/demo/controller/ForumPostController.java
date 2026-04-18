@@ -11,6 +11,7 @@ import com.example.demo.repository.ForumPostRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.repository.UserPostLikeRepository;
 import com.example.demo.service.AuthorLevelService;
+import com.example.demo.service.ProhibitedWordService;
 import com.example.demo.util.IpLocation;
 import com.example.demo.util.IpLocationUtil;
 import jakarta.servlet.http.HttpServletRequest;
@@ -45,6 +46,7 @@ public class ForumPostController {
     private final CurrentUserService currentUserService;
     private final IpLocationUtil ipLocationUtil;
     private final AuthorLevelService authorLevelService;
+    private final ProhibitedWordService prohibitedWordService;
 
     public ForumPostController(ForumPostRepository forumPostRepository,
             ForumCommentRepository forumCommentRepository,
@@ -52,7 +54,8 @@ public class ForumPostController {
             UserRepository userRepository,
             CurrentUserService currentUserService,
             IpLocationUtil ipLocationUtil,
-            AuthorLevelService authorLevelService) {
+            AuthorLevelService authorLevelService,
+            ProhibitedWordService prohibitedWordService) {
         this.forumPostRepository = forumPostRepository;
         this.forumCommentRepository = forumCommentRepository;
         this.userPostLikeRepository = userPostLikeRepository;
@@ -60,6 +63,7 @@ public class ForumPostController {
         this.currentUserService = currentUserService;
         this.ipLocationUtil = ipLocationUtil;
         this.authorLevelService = authorLevelService;
+        this.prohibitedWordService = prohibitedWordService;
     }
 
     @GetMapping("/forum-posts")
@@ -124,6 +128,15 @@ public class ForumPostController {
         }
         if (!StringUtils.hasText(forumPost.getContent())) {
             return Result.fail(40001, "帖子内容不能为空");
+        }
+
+        var topicCheck = prohibitedWordService.check(forumPost.getTopic());
+        if (topicCheck.hasViolation()) {
+            return Result.fail(40002, "帖子标题包含违禁词：" + String.join("、", topicCheck.getMatchedWords()));
+        }
+        var contentCheck = prohibitedWordService.check(forumPost.getContent());
+        if (contentCheck.hasViolation()) {
+            return Result.fail(40002, "帖子内容包含违禁词：" + String.join("、", contentCheck.getMatchedWords()));
         }
         if (forumPost.getLikes() == null) {
             forumPost.setLikes(0);
@@ -285,6 +298,11 @@ public class ForumPostController {
         }
         if (!StringUtils.hasText(comment.getContent())) {
             return Result.fail(40001, "评论内容不能为空");
+        }
+
+        var commentCheck = prohibitedWordService.check(comment.getContent());
+        if (commentCheck.hasViolation()) {
+            return Result.fail(40002, "评论内容包含违禁词：" + String.join("、", commentCheck.getMatchedWords()));
         }
 
         User currentUser = currentUserService.requireCurrentUserEntity();

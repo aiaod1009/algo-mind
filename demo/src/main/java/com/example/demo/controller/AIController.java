@@ -373,12 +373,70 @@ public class AIController {
     }
 
     private String extractEvaluationJson(String content) {
-        String normalized = stripMarkdownFence(content);
-        int separatorIndex = normalized.indexOf("---JSON---");
-        if (separatorIndex == -1) {
-            return normalized;
+        if (content == null || content.isBlank()) {
+            return "{}";
         }
-        return normalized.substring(separatorIndex + "---JSON---".length()).trim();
+
+        String normalized = stripMarkdownFence(content);
+
+        int separatorIndex = normalized.indexOf("---JSON---");
+        String afterSeparator = separatorIndex >= 0
+                ? normalized.substring(separatorIndex + "---JSON---".length()).trim()
+                : normalized.trim();
+
+        int braceStart = afterSeparator.indexOf('{');
+        if (braceStart < 0) {
+            return afterSeparator;
+        }
+
+        int depth = 0;
+        int braceEnd = -1;
+        boolean inString = false;
+        char stringDelim = 0;
+        boolean escape = false;
+
+        for (int i = braceStart; i < afterSeparator.length(); i++) {
+            char c = afterSeparator.charAt(i);
+
+            if (escape) {
+                escape = false;
+                continue;
+            }
+
+            if (c == '\\' && inString) {
+                escape = true;
+                continue;
+            }
+
+            if (inString) {
+                if (c == stringDelim) {
+                    inString = false;
+                }
+                continue;
+            }
+
+            if (c == '"' || c == '\'') {
+                inString = true;
+                stringDelim = c;
+                continue;
+            }
+
+            if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    braceEnd = i;
+                    break;
+                }
+            }
+        }
+
+        if (braceEnd >= 0) {
+            return afterSeparator.substring(braceStart, braceEnd + 1);
+        }
+
+        return afterSeparator.substring(braceStart);
     }
 
     private String toJson(CodeEvaluationResponse response) {

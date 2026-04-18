@@ -1,15 +1,43 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/user'
 import { useLevelStore } from '../stores/level'
 import AIAssistant from '../components/AIAssistant.vue'
 import DailyTasks from '../components/DailyTasks.vue'
+import OnboardingGuide from '../components/OnboardingGuide.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
 const levelStore = useLevelStore()
+
+const showOnboarding = ref(false)
+
+onMounted(() => {
+  const visited = localStorage.getItem('algo-mind-visited')
+  if (!visited) {
+    showOnboarding.value = true
+  }
+})
+
+const closeOnboarding = () => {
+  showOnboarding.value = false
+  localStorage.setItem('algo-mind-visited', '1')
+}
+
+const handleOnboardingComplete = (result) => {
+  showOnboarding.value = false
+  localStorage.setItem('algo-mind-visited', '1')
+
+  selectedTrack.value = result.track
+  weeklyGoal.value = result.weeklyGoal
+  userStore.updateProfile({
+    targetTrack: result.track,
+    weeklyGoal: result.weeklyGoal,
+  })
+  userStore.setTrack(result.track)
+}
 
 const selectedTrack = ref(userStore.userInfo?.targetTrack || userStore.selectedTrack)
 const weeklyGoal = ref(Number(userStore.userInfo?.weeklyGoal || 10))
@@ -65,6 +93,8 @@ if (!levelStore.levels.length) {
 
 <template>
   <div class="page-container home-page">
+    <OnboardingGuide v-if="showOnboarding" @complete="handleOnboardingComplete" />
+
     <section class="hero surface-card">
       <div>
         <h2>欢迎回来，{{ userStore.userInfo?.name || '同学' }}</h2>

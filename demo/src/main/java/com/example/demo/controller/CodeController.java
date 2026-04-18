@@ -6,6 +6,7 @@ import com.example.demo.service.MockJudge0Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,6 +28,10 @@ public class CodeController {
         this.mockJudge0Service = mockJudge0Service;
     }
 
+    private static final int MAX_OUTPUT_LENGTH = 65536;
+    private static final int TRUNCATE_THRESHOLD = 60000;
+    private static final int MAX_CODE_LENGTH = 65536;
+
     @PostMapping("/run-code")
     public Result<RunResult> runCode(@RequestBody CodeRequest req) {
         log.info("=== runCode request === language: {}, code length: {}, useMock: {}", req.getLanguage(), req.getCode() != null ? req.getCode().length() : 0, useMock);
@@ -36,6 +41,9 @@ public class CodeController {
         }
         if (req.getCode() == null || req.getCode().isBlank()) {
             return Result.fail(40001, "Missing code");
+        }
+        if (req.getCode().length() > MAX_CODE_LENGTH) {
+            return Result.fail(40001, "代码过长，最大支持 " + MAX_CODE_LENGTH + " 个字符");
         }
 
         try {
@@ -64,18 +72,26 @@ public class CodeController {
             Object stdoutObj = judgeResult.get("stdout");
             Object compileOutputObj = judgeResult.get("compile_output");
             
-            String stderr = stderrObj != null ? stderrObj.toString() : "";
-            String stdout = stdoutObj != null ? stdoutObj.toString() : "";
+            String stderr = truncateOutput(stderrObj != null ? stderrObj.toString() : "");
+            String stdout = truncateOutput(stdoutObj != null ? stdoutObj.toString() : "");
             String compileOutput = compileOutputObj != null ? compileOutputObj.toString() : "";
 
-            log.info("=== Parsed output === stdout: '{}', stderr: '{}', compileOutput: '{}', statusId: {}", stdout, stderr, compileOutput, statusId);
+            log.info("=== Parsed output === stdout length: {}, stderr length: {}, compileOutput length: {}, statusId: {}", stdout.length(), stderr.length(), compileOutput.length(), statusId);
 
-            if (compileOutput != null && !compileOutput.isBlank()) {
-                return Result.fail(40002, "Compilation failed:\n" + compileOutput);
+            if (statusId == 5) {
+                return Result.fail(50002, "运行超时（Time Limit Exceeded），请检查代码是否存在死循环或低效操作");
             }
 
             if (statusId == 6) {
-                return Result.fail(40002, "Compilation failed:\n" + (compileOutput != null ? compileOutput : "Unknown compilation error"));
+                return Result.fail(40002, "编译失败:\n" + remapCompileErrors(compileOutput, req.getLanguage()));
+            }
+
+            if (compileOutput != null && !compileOutput.isBlank()) {
+                return Result.fail(40002, "编译失败:\n" + remapCompileErrors(compileOutput, req.getLanguage()));
+            }
+
+            if (statusId == 7) {
+                return Result.success(new RunResult("", "运行时错误（Runtime Error），请检查数组越界、空指针等问题"));
             }
 
             return Result.success(new RunResult(stdout, stderr));
@@ -84,6 +100,36 @@ public class CodeController {
         } catch (Exception e) {
             return Result.fail(50001, "Execution failed: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/judge0/cluster-status")
+    public Result<Map<String, Object>> clusterStatus() {
+        return Result.success(judge0Service.getClusterStatus());
+    }
+
+    private String truncateOutput(String output) {
+        if (output == null || output.isEmpty()) {
+            return "";
+        }
+        if (output.length() > MAX_OUTPUT_LENGTH) {
+            return output.substring(0, TRUNCATE_THRESHOLD) + "\n\n... [输出超过限制，已截断，共 " + output.length() + " 字符]";
+        }
+        return output;
+    }
+
+    private String remapCompileErrors(String compileOutput, String language) {
+        if (compileOutput == null || compileOutput.isEmpty()) {
+            return "Unknown compilation error";
+        }
+        String result = compileOutput;
+        if ("c".equalsIgnoreCase(language) || "cpp".equalsIgnoreCase(language)) {
+            result = result.replaceAll("line\\s*(\\d+)", m -> {
+                int originalLine = Integer.parseInt(m.group(1));
+                int shiftedLine = Math.max(1, originalLine - 3);
+                return "line " + shiftedLine;
+            });
+        }
+        return result;
     }
 
     public static class CodeRequest {

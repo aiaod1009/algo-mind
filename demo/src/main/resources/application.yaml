@@ -18,6 +18,10 @@ ip:
     db-path: classpath:ipdb/ip2region.xdb
     fail-fast: false
 
+prohibited-word:
+  enabled: true
+  file-path: classpath:prohibited-words.txt
+
 spring:
   profiles:
     active: prod
@@ -61,6 +65,8 @@ app:
 judge0:
   api:
     url: http://43.139.148.97:2358
+    urls: http://43.139.148.97:2358
+    health-check-enabled: true
   use-mock: true
 
 doubao:
@@ -124,6 +130,8 @@ app:
 judge0:
   api:
     url: ${JUDGE0_API_URL:http://localhost:2358}
+    urls: ${JUDGE0_API_URLS:http://localhost:2358}
+    health-check-enabled: ${JUDGE0_HEALTH_CHECK:true}
   use-mock: ${JUDGE0_USE_MOCK:false}
 
 doubao:

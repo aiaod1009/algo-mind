@@ -3,8 +3,10 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '../api'
+import { useUserStore } from '../stores/user'
 
 const router = useRouter()
+const userStore = useUserStore()
 const loading = ref(false)
 
 const form = reactive({
@@ -46,8 +48,19 @@ const handleRegister = async () => {
       return
     }
 
-    ElMessage.success('注册成功，请登录')
-    router.push('/')
+    try {
+      const loginSuccess = await userStore.login(email, password, true)
+      if (loginSuccess) {
+        ElMessage.success('注册成功，欢迎加入！')
+        router.push('/home')
+      } else {
+        ElMessage.success('注册成功，请登录')
+        router.push('/')
+      }
+    } catch {
+      ElMessage.success('注册成功，请登录')
+      router.push('/')
+    }
   } catch (error) {
     const serverMessage = error?.response?.data?.message || error?.message || '注册失败，请稍后重试'
     ElMessage.error(serverMessage)

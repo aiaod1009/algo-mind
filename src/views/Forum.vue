@@ -287,13 +287,20 @@ const searchFilters = ref({
   keyword: '',
   sort: 'latest',
   category: 'all',
-  time: 'all'
+  time: 'all',
+  tag: ''
 })
 
 const normalizedKeyword = computed(() => searchFilters.value.keyword.trim().toLowerCase())
 
 const filteredSource = computed(() => {
   let result = posts.value
+  const activeTag = searchFilters.value.tag
+  if (activeTag) {
+    result = result.filter(post =>
+      post.tag && post.tag.toLowerCase() === activeTag.toLowerCase()
+    )
+  }
   if (normalizedKeyword.value) {
     const keyword = normalizedKeyword.value
     result = result.filter(post =>
@@ -315,7 +322,27 @@ const paginatedPosts = computed(() => {
 })
 
 const handleSearch = (filters) => {
-  searchFilters.value = filters
+  searchFilters.value = { ...filters, tag: searchFilters.value.tag }
+  currentPage.value = 1
+}
+
+const filterByTag = (tag) => {
+  if (searchFilters.value.tag === tag) {
+    searchFilters.value.tag = ''
+  } else {
+    searchFilters.value.tag = tag
+  }
+  currentPage.value = 1
+  nextTick(() => {
+    const feedList = document.querySelector('.feed-list')
+    if (feedList) {
+      feedList.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  })
+}
+
+const clearTagFilter = () => {
+  searchFilters.value.tag = ''
   currentPage.value = 1
 }
 
@@ -424,6 +451,66 @@ const goToPost = (postId) => {
   router.push({ name: 'forum-post', params: { id: postId } })
 }
 
+const quickReplyPostId = ref(null)
+const quickReplyContent = ref('')
+const quickReplySubmitting = ref(false)
+
+const closeQuickReply = () => {
+  quickReplyPostId.value = null
+  quickReplyContent.value = ''
+}
+
+const handleQuickReplyOutsideClick = (e) => {
+  if (!quickReplyPostId.value) return
+  const el = e.target.closest('.quick-reply')
+  const btn = e.target.closest('.comment-btn')
+  if (!el && !btn) {
+    closeQuickReply()
+  }
+}
+
+const toggleQuickReply = (postId) => {
+  if (quickReplyPostId.value === postId) {
+    quickReplyPostId.value = null
+    quickReplyContent.value = ''
+  } else {
+    quickReplyPostId.value = postId
+    quickReplyContent.value = ''
+    nextTick(() => {
+      const input = document.querySelector('.quick-reply-input')
+      if (input) input.focus()
+    })
+  }
+}
+
+const submitQuickReply = async (postId) => {
+  const content = quickReplyContent.value.trim()
+  if (!content) {
+    ElMessage.warning('请输入评论内容')
+    return
+  }
+  if (!userStore.isLoggedIn) {
+    ElMessage.warning('请先登录')
+    return
+  }
+
+  quickReplySubmitting.value = true
+  try {
+    const res = await api.post(`/forum-posts/${postId}/comments`, { content })
+    if (res.data?.code === 0) {
+      ElMessage.success('评论成功')
+      quickReplyContent.value = ''
+      quickReplyPostId.value = null
+      forumStore.addCommentCount(postId)
+    }
+  } catch (e) {
+    console.error('快速回复失败:', e)
+    ElMessage.error('评论失败，请稍后重试')
+  } finally {
+    quickReplySubmitting.value = false
+  }
+}
+
 const goToPostComments = (postId) => {
   router.push({ name: 'forum-post', params: { id: postId }, hash: '#comments' })
 }
@@ -515,6 +602,7 @@ const goToChallenge = (questionId) => {
 onMounted(async () => {
   fetchHotQuestions()
   window.addEventListener('scroll', handleScroll, { passive: true })
+  document.addEventListener('click', handleQuickReplyOutsideClick, true)
   forumStore.hydratePostsFromLocal()
   updateSearchBarPosition()
   await forumStore.fetchPosts({ skipIfLoaded: false })
@@ -536,6 +624,7 @@ watch(currentPage, async () => {
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
+  document.removeEventListener('click', handleQuickReplyOutsideClick, true)
   if (scrollRafId) {
     window.cancelAnimationFrame(scrollRafId)
     scrollRafId = 0
@@ -761,6 +850,12 @@ onUnmounted(() => {
 
     <div class="forum-layout">
       <section class="feed-list">
+        <div v-if="searchFilters.tag" class="tag-filter-bar">
+          <span class="tag-filter-label">筛选标签：</span>
+          <span class="tag-filter-value">{{ searchFilters.tag }}</span>
+          <span class="tag-filter-count">{{ filteredSource.length }} 篇帖子</span>
+          <span class="tag-filter-clear" @click="clearTagFilter">✕ 清除筛选</span>
+        </div>
         <div v-if="forumStore.isFromCache" class="cache-warning">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10" />
@@ -810,7 +905,7 @@ onUnmounted(() => {
           </div>
 
           <div class="quote" v-if="item.quote">{{ item.quote }}</div>
-          <div class="hash" @click.stop>{{ item.tag }}</div>
+          <div class="hash" :class="{ 'is-active': searchFilters.tag && item.tag && item.tag.toLowerCase() === searchFilters.tag.toLowerCase() }" @click.stop="filterByTag(item.tag)">{{ item.tag }}</div>
 
           <div v-if="item.comments > 0" class="hot-comments-section">
             <div v-if="postHotComments[item.id]?.length > 0" class="hot-comments-carousel">
@@ -847,11 +942,27 @@ onUnmounted(() => {
               <img class="btn-icon like-icon" :src="likeIcon" alt="点赞" />
               <span class="btn-count">{{ item.likes }}</span>
             </button>
-            <button class="action-btn comment-btn" @click.stop="goToPostComments(item.id)">
+            <button class="action-btn comment-btn" :class="{ 'is-active': quickReplyPostId === item.id }"
+              @click.stop="toggleQuickReply(item.id)">
               <span class="btn-icon">💬</span>
               <span class="btn-count">{{ item.comments }}</span>
             </button>
           </div>
+
+          <Transition name="quick-reply">
+            <div v-if="quickReplyPostId === item.id" class="quick-reply" @click.stop>
+              <el-avatar :size="28" :src="resolveAvatar(userStore.userInfo?.avatar) || ''">
+                {{ (userStore.userInfo?.name || '匿').slice(0, 1) }}
+              </el-avatar>
+              <input v-model="quickReplyContent" class="quick-reply-input" type="text"
+                placeholder="写下你的评论..." maxlength="500"
+                @keyup.enter="submitQuickReply(item.id)" />
+              <button class="quick-reply-btn" :disabled="quickReplySubmitting || !quickReplyContent.trim()"
+                @click.stop="submitQuickReply(item.id)">
+                {{ quickReplySubmitting ? '发送中...' : '发送' }}
+              </button>
+            </div>
+          </Transition>
         </el-card>
 
         <Transition name="search-slide">
@@ -1652,6 +1763,45 @@ onUnmounted(() => {
   gap: 10px;
 }
 
+.tag-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 12px;
+  border: 1px solid rgba(74, 144, 217, 0.3);
+  font-size: 14px;
+}
+
+.tag-filter-label {
+  color: var(--text-muted);
+}
+
+.tag-filter-value {
+  color: #4a90d9;
+  font-weight: 600;
+}
+
+.tag-filter-count {
+  color: var(--text-sub);
+  font-size: 13px;
+}
+
+.tag-filter-clear {
+  margin-left: auto;
+  color: #4a90d9;
+  cursor: pointer;
+  font-size: 13px;
+  transition: color 0.2s;
+}
+
+.tag-filter-clear:hover {
+  color: #f5222d;
+}
+
 .feed-card {
   background: var(--card-bg) !important;
   backdrop-filter: blur(16px) !important;
@@ -1785,7 +1935,8 @@ onUnmounted(() => {
   transition: all 0.2s;
 }
 
-.hash:hover {
+.hash:hover,
+.hash.is-active {
   background: linear-gradient(135deg, #4a90d9 0%, #3a7bc8 100%);
   color: white;
   border-color: transparent;
@@ -1916,6 +2067,132 @@ onUnmounted(() => {
 .action-btn.is-liked {
   background: linear-gradient(135deg, #4a90d9 0%, #3a7bc8 100%);
   color: white;
+}
+
+.action-btn.comment-btn.is-active {
+  background: linear-gradient(135deg, #4a90d9 0%, #3a7bc8 100%);
+  color: white;
+}
+
+.quick-reply {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: rgba(74, 144, 217, 0.06);
+  border-radius: 12px;
+  border: 1px solid rgba(74, 144, 217, 0.15);
+  transform-origin: top center;
+}
+
+.quick-reply .el-avatar,
+.quick-reply-input,
+.quick-reply-btn {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.quick-reply-enter-active {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.quick-reply-enter-active .el-avatar {
+  transition: opacity 0.3s ease 0.05s, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) 0.05s;
+}
+
+.quick-reply-enter-active .quick-reply-input {
+  transition: opacity 0.3s ease 0.1s, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s;
+}
+
+.quick-reply-enter-active .quick-reply-btn {
+  transition: opacity 0.3s ease 0.15s, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s;
+}
+
+.quick-reply-leave-active {
+  transition: all 0.2s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.quick-reply-leave-active .el-avatar,
+.quick-reply-leave-active .quick-reply-input,
+.quick-reply-leave-active .quick-reply-btn {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.quick-reply-enter-from {
+  opacity: 0;
+  transform: translateY(-12px) scaleY(0.8);
+}
+
+.quick-reply-enter-from .el-avatar {
+  opacity: 0;
+  transform: scale(0.5);
+}
+
+.quick-reply-enter-from .quick-reply-input {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+.quick-reply-enter-from .quick-reply-btn {
+  opacity: 0;
+  transform: translateX(12px) scale(0.8);
+}
+
+.quick-reply-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scaleY(0.9);
+}
+
+.quick-reply-leave-to .el-avatar,
+.quick-reply-leave-to .quick-reply-input,
+.quick-reply-leave-to .quick-reply-btn {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.quick-reply-input {
+  flex: 1;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: white;
+  font-size: 14px;
+  color: var(--text-main);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.quick-reply-input:focus {
+  border-color: #4a90d9;
+}
+
+.quick-reply-input::placeholder {
+  color: var(--text-muted);
+}
+
+.quick-reply-btn {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #4a90d9 0%, #3a7bc8 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-reply-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.quick-reply-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn-icon {
