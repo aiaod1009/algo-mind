@@ -45,16 +45,22 @@ spring:
       max-file-size: 5MB
       max-request-size: 10MB
 
+cors:
+  allowed-origins: "https://www.usloa.cn,https://usloa.cn,http://localhost:5173,http://localhost:5174,http://localhost:5175"
+
 file:
-  upload-dir: ./uploads/avatars
+  upload-dir: /www/algo-mind/uploads/avatars
   max-size: 5242880
   allowed-types: image/jpeg,image/png,image/gif,image/webp
 
-# 聊天文件上传配置
 app:
   upload:
-    chat-files: uploads/chat-files
-    base-url: http://localhost:8000/api/uploads
+    chat-files: /www/algo-mind/uploads/chat-files
+    base-url: https://www.usloa.cn/api/uploads
+
+judge0:
+  api:
+    url: http://43.139.148.97:2358
 
 doubao:
   api:
