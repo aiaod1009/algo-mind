@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+*.md
+.vscode
+.idea
+target
+*.log
+judge0-local
+piston-local
+demo/temp_code
+demo/*.json
+demo/*.err
+demo/*.png

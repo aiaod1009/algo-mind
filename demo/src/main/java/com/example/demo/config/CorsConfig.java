@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 全局跨域配置 - 支持宝塔面板部署
+ * 全局跨域配置 - Docker 部署
  *
  * 开发环境：application-dev.yml 中配置，或使用默认值
  * 生产环境：application-prod.yml 中配置，或通过环境变量 CORS_ALLOWED_ORIGINS 指定
@@ -74,7 +74,7 @@ public class CorsConfig {
 
     private List<String> getAllowedOrigins() {
 
-        // 优先级1：环境变量（宝塔面板 / Docker / 云服务器部署）
+        // 优先级1：环境变量（Docker / 云服务器部署）
         String envOrigins = System.getenv("CORS_ALLOWED_ORIGINS");
         if (envOrigins != null && !envOrigins.trim().isEmpty()) {
             log.info("CORS 来源: 环境变量");

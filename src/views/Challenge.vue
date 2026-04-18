@@ -542,12 +542,18 @@ const runCodeOnly = async () => {
       stdinInput: stdinInput.value,
     })
 
+    console.log('=== runCode API response ===')
+    console.log('response:', response)
+    console.log('response.data:', response.data)
+    console.log('response.data.data:', response.data?.data)
+
     if (response.data?.code !== 0 || !response.data?.data) {
       message.error(response.data?.message || '代码运行失败，请稍后重试')
       return
     }
 
     runResult.value = normalizeRunResult(response.data.data)
+    console.log('runResult.value:', runResult.value)
     persistDraft()
 
     if (runResult.value.error) {
@@ -929,7 +935,7 @@ watch(
         <ChallengeAnswerPane v-model:answer="answer" v-model:language="language" v-model:stdin-input="stdinInput"
           :level="currentLevel" :is-code-challenge="isCodeChallenge" :loading="loading" :max-attempts="maxAttempts"
           :attempts-in-run="attemptsInRun" :pass-score="CODE_PASS_SCORE" :type-label="typeLabelMap[currentLevel.type]"
-          @save-draft="handleSaveDraft" @quick-run="handleQuickRun" @reset-template="handleResetTemplate" @git-it="handleGitIt" />
+          @save-draft="handleSaveDraft" @quick-run="handleQuickRun" @run-only="runCodeOnly" @reset-template="handleResetTemplate" @git-it="handleGitIt" />
 
         <section v-if="showRunPanel" class="surface-card run-result-panel">
           <div class="run-result-head">

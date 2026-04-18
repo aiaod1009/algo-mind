@@ -52,7 +52,9 @@ const emit = defineEmits([
   'submit',
   'save-draft',
   'quick-run',
+  'run-only',
   'reset-template',
+  'git-it',
 ])
 
 const answerModel = computed({
@@ -179,7 +181,7 @@ const toolbarRightText = computed(() => {
       <div class="answer-wrap code-answer-wrap" v-else-if="isCodeChallenge">
         <CodeEditor v-model="answerModel" v-model:language="languageModel" class="challenge-code-editor"
           :disabled="loading" :prompt="level.question || level.name" placeholder="在这里输入你的代码" :min-height="420"
-          :show-submit-button="true" submit-text="仅运行" @submit="$emit('quick-run')"
+          :show-submit-button="true" submit-text="仅运行" @submit="$emit('run-only')"
           @reset-template="$emit('reset-template')" />
 
         <div class="editor-help">

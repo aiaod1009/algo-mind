@@ -27,7 +27,7 @@ public class Judge0Service {
     private static final int MAX_POLL_ATTEMPTS = 30;
     private static final int POLL_INTERVAL_MS = 500;
 
-    @Value("${judge0.api.url:http://43.139.148.97:2358}")
+    @Value("${judge0.api.url:http://localhost:2358}")
     private String judge0BaseUrl;
 
     public Map<String, Object> execute(String language, String sourceCode, String stdinInput) {
@@ -77,6 +77,7 @@ public class Judge0Service {
     private Map<String, Object> pollForResult(String token) throws Exception {
         for (int attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
             Map<String, Object> result = getResult(token);
+            log.info("Judge0 poll result (attempt {}): {}", attempt, result);
             int statusId = (int) result.getOrDefault("status_id", 1);
 
             if (statusId > 2) {
