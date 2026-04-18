@@ -752,7 +752,7 @@ const handleLogin = async () => {
 
   loading.value = true
   try {
-    const success = await userStore.login(account, form.password)
+    const success = await userStore.login(account, form.password, form.remember)
     if (!success) {
       ElMessage.error('邮箱或密码错误')
       return

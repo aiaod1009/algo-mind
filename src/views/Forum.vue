@@ -347,12 +347,11 @@ const handleScroll = () => {
   })
 }
 
-const expandedPosts = ref(new Set())
+const expandedPosts = ref({})
 const toggleExpand = (postId) => {
-  if (expandedPosts.value.has(postId)) {
-    expandedPosts.value.delete(postId)
-  } else {
-    expandedPosts.value.add(postId)
+  expandedPosts.value = {
+    ...expandedPosts.value,
+    [postId]: !expandedPosts.value[postId]
   }
 }
 
@@ -799,12 +798,16 @@ onUnmounted(() => {
 
           <h3 class="topic topic-link" @click="goToPost(item.id)">{{ item.topic }}</h3>
 
-          <p class="content" :class="{ 'is-expanded': expandedPosts.has(item.id) }">
-            {{ item.content }}
-            <span v-if="!expandedPosts.has(item.id) && item.content.length > 80" class="full"
-              @click.stop="toggleExpand(item.id)">...全文</span>
-            <span v-if="expandedPosts.has(item.id)" class="collapse" @click.stop="toggleExpand(item.id)">收起</span>
-          </p>
+          <div class="content-wrap">
+            <p class="content" :class="{ 'is-expanded': expandedPosts[item.id] }">
+              <span v-if="!expandedPosts[item.id] && item.content.length > 80" class="content-spacer"></span>
+              <span v-if="!expandedPosts[item.id] && item.content.length > 80" class="full"
+                @click.stop="toggleExpand(item.id)">...全文</span>
+              {{ item.content }}
+            </p>
+            <span v-if="expandedPosts[item.id]" class="collapse"
+              @click.stop="toggleExpand(item.id)">收起</span>
+          </div>
 
           <div class="quote" v-if="item.quote">{{ item.quote }}</div>
           <div class="hash" @click.stop>{{ item.tag }}</div>
@@ -1715,25 +1718,46 @@ onUnmounted(() => {
   color: #4a90d9;
 }
 
-.content {
+.content-wrap {
+  position: relative;
   margin-top: 10px;
+}
+
+.content {
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 24px;
   color: var(--text-main);
-  max-height: 80px;
+  max-height: 72px;
   overflow: hidden;
   transition: max-height 0.3s ease;
 }
 
 .content.is-expanded {
-  max-height: 500px;
+  max-height: 2000px;
 }
 
-.full,
+.content-spacer {
+  float: right;
+  width: 0;
+  height: 48px;
+}
+
+.full {
+  float: right;
+  clear: right;
+  margin-left: 6px;
+  color: #4a90d9;
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 24px;
+  cursor: pointer;
+}
+
 .collapse {
   color: #4a90d9;
   font-weight: 600;
   cursor: pointer;
+  font-size: 14px;
 }
 
 .full:hover,

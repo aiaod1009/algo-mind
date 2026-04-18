@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.Result;
+import com.example.demo.auth.AuthProperties;
 import com.example.demo.auth.JwtService;
 import com.example.demo.entity.User;
 import com.example.demo.repository.UserRepository;
@@ -23,16 +24,21 @@ public class LoginController {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthorLevelService authorLevelService;
+    private final AuthProperties authProperties;
 
     public LoginController(UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            AuthorLevelService authorLevelService) {
+            AuthorLevelService authorLevelService,
+            AuthProperties authProperties) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authorLevelService = authorLevelService;
+        this.authProperties = authProperties;
     }
+
+    private static final long REMEMBER_EXPIRATION_MINUTES = 60L * 24 * 30;
 
     @PostMapping("/login")
     public Result<Map<String, Object>> login(@RequestBody LoginRequest req) {
@@ -54,6 +60,10 @@ public class LoginController {
         }
 
         user.setAuthorLevelProfile(authorLevelService.refreshAuthorLevel(user.getId(), "LOGIN", null, "登录刷新作者等级"));
+
+        long expirationMinutes = Boolean.TRUE.equals(req.getRemember())
+                ? REMEMBER_EXPIRATION_MINUTES
+                : authProperties.getExpirationMinutes();
 
         Map<String, Object> result = new HashMap<>();
         Map<String, Object> userInfo = new HashMap<>();
@@ -79,7 +89,7 @@ public class LoginController {
         userInfo.put("authorLevelCode", user.getAuthorLevelCode());
         userInfo.put("authorLevelProfile", user.getAuthorLevelProfile());
 
-        result.put("token", jwtService.generateToken(user));
+        result.put("token", jwtService.generateToken(user, expirationMinutes));
         result.put("user", userInfo);
         result.put("points", user.getPoints() != null ? user.getPoints() : 0);
         result.put("authorScore", user.getAuthorScore() != null ? user.getAuthorScore() : 0);
@@ -195,6 +205,7 @@ public class LoginController {
     public static class LoginRequest {
         private String username;
         private String password;
+        private Boolean remember;
 
         public String getUsername() {
             return username;
@@ -210,6 +221,14 @@ public class LoginController {
 
         public void setPassword(String password) {
             this.password = password;
+        }
+
+        public Boolean getRemember() {
+            return remember;
+        }
+
+        public void setRemember(Boolean remember) {
+            this.remember = remember;
         }
     }
 

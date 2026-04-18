@@ -90,8 +90,8 @@ export const useUserStore = defineStore('user', () => {
     syncLeaderboard(mergedUser, score)
   }
 
-  const login = async (username, password) => {
-    const res = await api.post('/login', { username, password })
+  const login = async (username, password, remember = false) => {
+    const res = await api.post('/login', { username, password, remember })
     if (res.data?.code === 0) {
       const nextUser = {
         ...res.data.data.user,
