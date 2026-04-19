@@ -49,7 +49,11 @@ const streamRequest = async (url, data, onMessage, onComplete, onError) => {
   let hasDeliveredContent = false
 
   try {
-    const response = await fetch(url, {
+    // 构建完整的HTTPS URL
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+    const fullUrl = url.startsWith('/') ? baseUrl + url.replace(/^\/api/, '') : url
+    
+    const response = await fetch(fullUrl, {
       method: 'POST',
       headers: getStreamHeaders(),
       body: JSON.stringify(data),

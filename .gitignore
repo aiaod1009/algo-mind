@@ -46,3 +46,10 @@ mysql-data/
 
 # Uploads
 uploads/
+
+# SSL certificates
+keystore.p12
+
+# Environment files
+.env*
+!.env.example
