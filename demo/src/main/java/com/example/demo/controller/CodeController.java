@@ -127,11 +127,16 @@ public class CodeController {
         }
         String result = compileOutput;
         if ("c".equalsIgnoreCase(language) || "cpp".equalsIgnoreCase(language)) {
-            result = result.replaceAll("line\\s*(\\d+)", m -> {
-                int originalLine = Integer.parseInt(m.group(1));
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("line\\s*(\\d+)");
+            java.util.regex.Matcher matcher = pattern.matcher(result);
+            java.lang.StringBuffer sb = new java.lang.StringBuffer();
+            while (matcher.find()) {
+                int originalLine = Integer.parseInt(matcher.group(1));
                 int shiftedLine = Math.max(1, originalLine - 3);
-                return "line " + shiftedLine;
-            });
+                matcher.appendReplacement(sb, "line " + shiftedLine);
+            }
+            matcher.appendTail(sb);
+            result = sb.toString();
         }
         return result;
     }

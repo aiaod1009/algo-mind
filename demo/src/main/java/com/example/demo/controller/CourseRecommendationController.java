@@ -53,32 +53,7 @@ public class CourseRecommendationController {
     @Resource
     private ObjectMapper objectMapper;
 
-    private static final String RECOMMENDATION_PROMPT = """
-        你是一位专业的算法学习顾问，负责根据学生的学习数据推荐最适合的课程。
-        
-        请分析学生的以下数据：
-        1. 错题记录：找出学生的薄弱知识点
-        2. 学习计划：了解学生的学习目标和方向
-        3. 做题记录：了解学生的学习进度和状态分布
-        
-        请根据分析结果，推荐2门最适合该学生的课程。
-        
-        输出格式必须是标准JSON数组，每个推荐包含：
-        {
-          "title": "课程标题",
-          "reason": "推荐理由（根据学生数据分析得出，30-50字）",
-          "matchScore": 匹配度(70-99的整数),
-          "teacher": "授课老师",
-          "duration": "课时数",
-          "tags": ["标签1", "标签2"]
-        }
-        
-        注意事项：
-        1. 推荐理由必须具体，要结合学生的错题类型或学习计划
-        2. 匹配度要合理，根据学生与课程的契合程度给出
-        3. 必须严格按照JSON数组格式输出，不要添加任何其他文字
-        4. 只输出2个推荐
-        """;
+    private static final String RECOMMENDATION_PROMPT = "算法学习顾问，快速推荐课程。分析：1. 错题→薄弱点 2. 学习计划→目标方向 3. 做题记录→进度状态。推荐2门课程，输出JSON数组：[{\"title\":\"课程标题\",\"reason\":\"30-50字理由\",\"matchScore\":70-99,\"teacher\":\"老师\",\"duration\":\"课时\",\"tags\":[\"标签\"]}]。要求：1. 仅JSON，无其他文字 2. 理由具体，结合错题/计划 3. 匹配度合理 4. 仅2个推荐";
 
     @GetMapping
     public Result<List<CourseRecommendation>> getRecommendations() {

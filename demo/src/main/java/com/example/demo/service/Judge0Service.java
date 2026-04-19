@@ -332,12 +332,17 @@ public class Judge0Service {
     }
 
     private String shiftLineNumbers(String text, int offset) {
-        return text.replaceAll("(line|行)\\s*(\\d+)", m -> {
-            String prefix = m.group(1);
-            int originalLine = Integer.parseInt(m.group(2));
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(line|行)\\s*(\\d+)");
+        java.util.regex.Matcher matcher = pattern.matcher(text);
+        java.lang.StringBuffer sb = new java.lang.StringBuffer();
+        while (matcher.find()) {
+            String prefix = matcher.group(1);
+            int originalLine = Integer.parseInt(matcher.group(2));
             int shiftedLine = Math.max(1, originalLine - offset);
-            return prefix + shiftedLine;
-        });
+            matcher.appendReplacement(sb, prefix + shiftedLine);
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
     }
 
     static class WorkerNode {

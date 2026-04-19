@@ -1,9 +1,11 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from './stores/user'
 import { getTrackLabel } from './constants'
 import AppFooter from './components/AppFooter.vue'
+import AIAssistant from './components/AIAssistant.vue'
+import FloatingAIAssistant from './components/FloatingAIAssistant.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -89,6 +91,72 @@ const themeIndex = ref(parseInt(localStorage.getItem('themeIndex') || '2', 10))
 if (themeIndex.value < 2 || themeIndex.value > 6) {
   themeIndex.value = 2
 }
+
+const selectedText = ref('')
+const showTextAnalysisMenu = ref(false)
+const textAnalysisMenuPosition = ref({ x: 0, y: 0 })
+
+// 文本选择监听器
+const handleSelectionChange = () => {
+  const selection = window.getSelection()
+  const selectedTextValue = selection.toString().trim()
+  
+  if (selectedTextValue && selectedTextValue.length > 0) {
+    selectedText.value = selectedTextValue
+    const range = selection.getRangeAt(0)
+    const rect = range.getBoundingClientRect()
+    
+    // 计算菜单位置 - 放在选中文字下方
+    textAnalysisMenuPosition.value = {
+      x: rect.left + rect.width / 2,
+      y: rect.bottom + 10
+    }
+    
+    showTextAnalysisMenu.value = true
+  } else {
+    showTextAnalysisMenu.value = false
+  }
+}
+
+const aiAssistantRef = ref(null)
+
+// 分析选中文本
+const analyzeSelectedText = (type) => {
+  if (!selectedText.value || !aiAssistantRef.value) return
+  
+  aiAssistantRef.value.analyzeSelectedText(selectedText.value, type)
+  
+  showTextAnalysisMenu.value = false
+}
+
+// 快捷键处理
+const handleKeyDown = (e) => {
+  if (e.ctrlKey && showTextAnalysisMenu.value) {
+    if (e.key === '1') {
+      e.preventDefault()
+      analyzeSelectedText('correctness')
+    } else if (e.key === '2') {
+      e.preventDefault()
+      analyzeSelectedText('meaning')
+    }
+  }
+}
+
+// 监听文本选择
+onMounted(() => {
+  document.addEventListener('selectionchange', handleSelectionChange)
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.text-analysis-menu')) {
+      showTextAnalysisMenu.value = false
+    }
+  })
+  document.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('selectionchange', handleSelectionChange)
+  document.removeEventListener('keydown', handleKeyDown)
+})
 
 const toggleTheme = () => {
   themeIndex.value = themeIndex.value >= 6 ? 2 : themeIndex.value + 1
@@ -208,6 +276,34 @@ const toggleTheme = () => {
 
     <!-- 页脚 -->
     <AppFooter />
+
+    <!-- 文本分析浮动菜单 -->
+    <transition name="menu-fade">
+      <div 
+        v-if="showTextAnalysisMenu && selectedText" 
+        class="text-analysis-menu"
+        :style="{ left: textAnalysisMenuPosition.x + 'px', top: textAnalysisMenuPosition.y + 'px' }"
+      >
+        <div class="selected-text-preview">
+          <span class="preview-label">已选中：</span>
+          <span class="preview-text">{{ selectedText.length > 50 ? selectedText.substring(0, 50) + '...' : selectedText }}</span>
+        </div>
+        <div class="menu-divider"></div>
+        <button @click="analyzeSelectedText('correctness')" class="analysis-btn">
+          <span class="btn-icon">🤔</span>
+          <span class="btn-label">分析对错</span>
+          <span class="btn-shortcut">Ctrl+1</span>
+        </button>
+        <button @click="analyzeSelectedText('meaning')" class="analysis-btn">
+          <span class="btn-icon">💡</span>
+          <span class="btn-label">解释含义</span>
+          <span class="btn-shortcut">Ctrl+2</span>
+        </button>
+      </div>
+    </transition>
+
+    <!-- WebSocket AI悬浮窗助手 - 仅登录后显示 -->
+    <FloatingAIAssistant v-if="userStore.userInfo?.token" ref="aiAssistantRef" />
   </div>
 </template>
 
@@ -662,6 +758,128 @@ const toggleTheme = () => {
 
 .app-main.with-topbar {
   padding-top: 92px;
+}
+
+/* 文本分析菜单 */
+.text-analysis-menu {
+  position: fixed;
+  z-index: 1200;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  min-width: 280px;
+  max-width: 360px;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.selected-text-preview {
+  padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(102, 114, 203, 0.05));
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.preview-label {
+  display: block;
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.preview-text {
+  display: block;
+  font-size: 13px;
+  color: #1f2937;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.menu-divider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.06);
+  margin: 0;
+}
+
+.analysis-btn {
+  padding: 12px 14px;
+  border: none;
+  background: transparent;
+  color: #374151;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.analysis-btn:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(102, 114, 203, 0.08));
+  color: #2563eb;
+  padding-left: 18px;
+}
+
+.analysis-btn:active {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(102, 114, 203, 0.12));
+}
+
+.btn-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.btn-label {
+  flex: 1;
+  font-weight: 500;
+}
+
+.btn-shortcut {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+  color: #9ca3af;
+  font-family: monospace;
+}
+
+.analysis-btn:hover .btn-shortcut {
+  background: rgba(59, 130, 246, 0.1);
+  color: #93c5fd;
+}
+
+/* 菜单淡入动画 */
+.menu-fade-enter-active,
+.menu-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.menu-fade-enter-from,
+.menu-fade-leave-to {
+  opacity: 0;
+}
+
+.assistant-fade-enter-active,
+.assistant-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.assistant-fade-enter-from,
+.assistant-fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.assistant-fade-enter-to,
+.assistant-fade-leave-from {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .hidden-on-desktop {

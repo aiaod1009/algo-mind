@@ -33,54 +33,7 @@ public class ErrorController {
     private static final String ANALYSIS_PENDING = "UNANALYZED";
     private static final String ANALYSIS_COMPLETED = "ANALYZED";
 
-    private static final String PROBLEM_ANALYSIS_PROMPT = """
-            你是一位经验丰富的算法教练。
-            请分析学习者的错误答案，并返回结构化的 JSON 报告。
-            所有内容必须使用中文返回。
-
-            请严格按照以下 JSON 格式返回四个模块：
-
-            {
-              "summary": "分析总结（一句话概括核心问题）",
-              "errorAnalysis": {
-                "rootCause": "错误根因（分析导致错误的根本原因）",
-                "detailedExplanation": "详细解释（对错误原因的详细说明）",
-                "commonMistakes": ["常见错误1", "常见错误2", "常见错误3"]
-              },
-              "knowledgePoints": [
-                {
-                  "name": "关键知识点名称",
-                  "description": "知识点描述（简明扼要地解释该知识点）",
-                  "masteryLevel": "掌握程度（beginner/intermediate/advanced）"
-                }
-              ],
-              "suggestions": [
-                {
-                  "title": "改进建议标题",
-                  "description": "建议详细描述",
-                  "priority": "优先级（high/medium/low）",
-                  "actionItems": ["具体行动1", "具体行动2"]
-                }
-              ],
-              "recommendedProblems": [
-                {
-                  "title": "题目名称",
-                  "question": "题目内容",
-                  "type": "题目类型（practice/review/challenge）",
-                  "difficulty": "难度（easy/medium/hard）",
-                  "reason": "推荐理由（为什么推荐这道题）"
-                }
-              ]
-            }
-
-            四个核心模块说明：
-            1. errorAnalysis（错误根因）：深入分析用户答案错误的根本原因，包括概念误解、思路偏差、细节疏忽等
-            2. knowledgePoints（关键知识点）：列出与错题相关的核心知识点，帮助用户查漏补缺
-            3. suggestions（改进建议）：提供具体、可执行的改进措施，按优先级排序
-            4. recommendedProblems（题库优先的练习）：优先从题库角度推荐适合巩固的练习题，包含推荐理由
-
-            请确保返回的是有效的 JSON 格式，不要包含 markdown 代码块标记。
-            """;
+    private static final String PROBLEM_ANALYSIS_PROMPT = "算法教练，分析错误答案，返回中文JSON。输出JSON，包含四模块：{\"summary\":\"分析总结\",\"errorAnalysis\":{\"rootCause\":\"错误根因\",\"detailedExplanation\":\"详细解释\",\"commonMistakes\":[\"常见错误1\",\"常见错误2\",\"常见错误3\"]},\"knowledgePoints\":[{\"name\":\"知识点名称\",\"description\":\"知识点描述\",\"masteryLevel\":\"掌握程度（beginner/intermediate/advanced）\"}],\"suggestions\":[{\"title\":\"建议标题\",\"description\":\"建议描述\",\"priority\":\"优先级（high/medium/low）\",\"actionItems\":[\"行动1\",\"行动2\"]}],\"recommendedProblems\":[{\"title\":\"题目名称\",\"question\":\"题目内容\",\"type\":\"类型（practice/review/challenge）\",\"difficulty\":\"难度（easy/medium/hard）\",\"reason\":\"推荐理由\"}]}。模块说明：1. errorAnalysis：分析错误根因 2. knowledgePoints：列出核心知识点 3. suggestions：提供改进措施 4. recommendedProblems：推荐巩固练习。要求：1. 仅JSON，无其他文字 2. 全部中文 3. 格式有效";
 
     @Resource
     private ErrorItemRepository errorRepository;
@@ -349,7 +302,7 @@ public class ErrorController {
         StringBuilder prompt = new StringBuilder();
         prompt.append("请分析以下错题，所有回复必须使用中文，并严格按照系统提示词中定义的 JSON 格式返回。\n\n");
         prompt.append("题目: ").append(nullToText(request.getQuestion())).append('\n');
-        prompt.append("用户答案: ").append(joinList(request.getUserAnswer())).append('\n');
+        prompt.append("用户答案: ").append(nullToText(request.getUserAnswer())).append('\n');
 
         if (hasText(request.getDescription())) {
             prompt.append("题目描述: ").append(request.getDescription()).append('\n');

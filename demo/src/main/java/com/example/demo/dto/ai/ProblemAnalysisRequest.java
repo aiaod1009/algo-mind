@@ -7,7 +7,7 @@ import java.util.List;
 public class ProblemAnalysisRequest {
     private Long errorId;
     private String question;
-    private List<String> userAnswer;
+    private String userAnswer;
     private String description;
     private String difficulty;
     private String track;

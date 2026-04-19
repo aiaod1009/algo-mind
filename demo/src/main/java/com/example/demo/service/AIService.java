@@ -39,37 +39,7 @@ public class AIService {
     
     private static final int AI_CALL_TIMEOUT_SECONDS = 60;
     
-    private static final String LEARNING_PLAN_SYSTEM_PROMPT = """
-        你是一位专业的算法学习规划师，擅长根据学生的学习数据制定个性化的学习计划。
-
-        请根据提供的用户画像数据，生成一份简洁的学习计划，包括：
-        1. 本周目标（3-4个具体目标）
-        2. 每日任务安排（今天、明天、后天）
-        3. 学习分析和建议（根据用户学习情况和目标）
-
-        输出格式必须是标准的JSON格式，结构如下：
-        {
-          "weekGoals": [
-            {"id": 1, "title": "目标标题", "progress": 0, "target": 目标数量, "description": "目标描述"}
-          ],
-          "dailyTasks": [
-            {
-              "day": "今天",
-              "tasks": [
-                {"title": "任务标题", "duration": 时长(分钟), "type": "learn/practice/review", "priority": "high/medium/low", "description": "任务描述"}
-              ]
-            }
-          ],
-          "analysis": "对学生学习情况的分析总结",
-          "suggestions": ["建议1", "建议2", "建议3"]
-        }
-
-        注意事项：
-        1. 必须严格按照JSON格式输出，不要添加任何其他文字说明
-        2. 根据用户的薄弱环节和错题重点安排学习内容
-        3. 考虑用户的坚持指数调整任务难度
-        4. 每日任务总时长控制在90-120分钟
-        """;
+    private static final String LEARNING_PLAN_SYSTEM_PROMPT = "算法学习规划师，生成个性化学习计划。根据用户数据，生成计划包含：1. 本周目标（3-4个具体目标）2. 每日任务（今天、明天、后天）3. 学习分析和建议。输出JSON：{\"weekGoals\":[{\"id\":1,\"title\":\"目标标题\",\"progress\":0,\"target\":目标数量,\"description\":\"目标描述\"}],\"dailyTasks\":[{\"day\":\"今天\",\"tasks\":[{\"title\":\"任务标题\",\"duration\":时长(分钟),\"type\":\"learn/practice/review\",\"priority\":\"high/medium/low\",\"description\":\"任务描述\"}]}],\"analysis\":\"学习情况分析\",\"suggestions\":[\"建议1\",\"建议2\",\"建议3\"]}。要求：1. 仅JSON，无其他文字 2. 基于薄弱环节和错题安排 3. 根据坚持指数调整难度 4. 每日任务90-120分钟";
 
     /**
      * 调用AI生成学习计划（带快速失败机制）

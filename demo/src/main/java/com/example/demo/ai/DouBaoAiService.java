@@ -337,4 +337,49 @@ public class DouBaoAiService {
             emitter.completeWithError(e);
         }
     }
+
+    // WebSocket 流式发送
+    public void sendMessageStream(List<ChatMessage> messages, java.util.function.Consumer<String> callback) {
+        List<ChatMessage> sanitizedMessages = sanitizeMessages(messages);
+        if (sanitizedMessages.isEmpty()) {
+            callback.accept("请输入有效内容后重试");
+            return;
+        }
+
+        AI_STREAM_POOL.execute(() -> {
+            HttpURLConnection conn = null;
+            try {
+                String requestBody = buildRequestBody(sanitizedMessages, true);
+                conn = openConnection(true);
+                conn.getOutputStream().write(requestBody.getBytes(StandardCharsets.UTF_8));
+
+                try (InputStream stream = getResponseStream(conn);
+                     BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (!line.startsWith("data:")) {
+                            continue;
+                        }
+
+                        String data = line.substring(5).trim();
+                        if (data.isEmpty() || "[DONE]".equals(data)) {
+                            continue;
+                        }
+
+                        String content = extractStreamContent(data);
+                        if (content != null && !content.isEmpty()) {
+                            callback.accept(content);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                logger.error("DouBao streaming request failed", e);
+                callback.accept("调用失败：" + e.getMessage());
+            } finally {
+                if (conn != null) {
+                    conn.disconnect();
+                }
+            }
+        });
+    }
 }
