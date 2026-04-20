@@ -58,30 +58,6 @@ public class Judge0Service {
     @Value("${judge0.api.health-check-enabled:true}")
     private boolean healthCheckEnabled;
 
-    @Value("${judge0.limits.cpu-time:5}")
-    private int defaultCpuTimeLimit;
-
-    @Value("${judge0.limits.memory:262144}")
-    private int defaultMemoryLimit;
-
-    @Value("${judge0.limits.wall-time:10}")
-    private int defaultWallTimeLimit;
-
-    @Value("${judge0.limits.max-cpu-time:15}")
-    private int maxCpuTimeLimit;
-
-    @Value("${judge0.limits.max-memory:524288}")
-    private int maxMemoryLimit;
-
-    @Value("${judge0.limits.max-wall-time:30}")
-    private int maxWallTimeLimit;
-
-    @Value("${judge0.limits.output:10240}")
-    private int defaultOutputLimit;
-
-    @Value("${judge0.limits.max-output:65536}")
-    private int maxOutputLimit;
-
     private final List<WorkerNode> workers = new CopyOnWriteArrayList<>();
     private final AtomicInteger roundRobinIndex = new AtomicInteger(0);
 
@@ -107,46 +83,21 @@ public class Judge0Service {
     }
 
     public Map<String, Object> execute(String language, String sourceCode, String stdinInput) {
-        return execute(language, sourceCode, stdinInput, null, null, null, null);
-    }
-
-    public Map<String, Object> execute(String language, String sourceCode, String stdinInput,
-                                        Integer cpuTimeLimit, Integer memoryLimit, Integer wallTimeLimit) {
-        return execute(language, sourceCode, stdinInput, cpuTimeLimit, memoryLimit, wallTimeLimit, null);
-    }
-
-    public Map<String, Object> execute(String language, String sourceCode, String stdinInput,
-                                        Integer cpuTimeLimit, Integer memoryLimit, Integer wallTimeLimit,
-                                        Integer outputLimit) {
         Integer languageId = LANGUAGE_ID_MAP.get(language.toLowerCase());
         if (languageId == null) {
             throw new IllegalArgumentException("Unsupported language: " + language);
         }
 
-        int cpu = clamp(cpuTimeLimit, defaultCpuTimeLimit, maxCpuTimeLimit);
-        int mem = clamp(memoryLimit, defaultMemoryLimit, maxMemoryLimit);
-        int wall = clamp(wallTimeLimit, defaultWallTimeLimit, maxWallTimeLimit);
-        int out = clamp(outputLimit, defaultOutputLimit, maxOutputLimit);
-
-        log.info("Judge0 resource limits: cpu={}s, memory={}KB, wall={}s, output={}chars (requested: cpu={}, mem={}, wall={}, out={})",
-                cpu, mem, wall, out, cpuTimeLimit, memoryLimit, wallTimeLimit, outputLimit);
-
         String wrappedCode = wrapCode(language, sourceCode);
-        ResourceLimits limits = new ResourceLimits(cpu, mem, wall, out);
 
         if (workers.size() == 1) {
-            return executeOnWorker(workers.get(0), languageId, wrappedCode, stdinInput, language, limits);
+            return executeOnWorker(workers.get(0), languageId, wrappedCode, stdinInput, language);
         }
 
-        return executeWithFailover(languageId, wrappedCode, stdinInput, language, limits);
+        return executeWithFailover(languageId, wrappedCode, stdinInput, language);
     }
 
-    private int clamp(Integer requested, int defaultVal, int maxVal) {
-        if (requested == null || requested <= 0) return defaultVal;
-        return Math.min(requested, maxVal);
-    }
-
-    private Map<String, Object> executeWithFailover(int languageId, String sourceCode, String stdinInput, String language, ResourceLimits limits) {
+    private Map<String, Object> executeWithFailover(int languageId, String sourceCode, String stdinInput, String language) {
         int attempts = 0;
         int maxAttempts = workers.size();
 
@@ -157,7 +108,7 @@ public class Judge0Service {
             }
 
             try {
-                Map<String, Object> result = executeOnWorker(worker, languageId, sourceCode, stdinInput, language, limits);
+                Map<String, Object> result = executeOnWorker(worker, languageId, sourceCode, stdinInput, language);
                 worker.recordSuccess();
                 return result;
             } catch (Exception e) {
@@ -187,9 +138,9 @@ public class Judge0Service {
         return available.get(idx);
     }
 
-    private Map<String, Object> executeOnWorker(WorkerNode worker, int languageId, String sourceCode, String stdinInput, String language, ResourceLimits limits) {
+    private Map<String, Object> executeOnWorker(WorkerNode worker, int languageId, String sourceCode, String stdinInput, String language) {
         try {
-            String token = submitToWorker(worker, sourceCode, languageId, stdinInput, limits);
+            String token = submitToWorker(worker, sourceCode, languageId, stdinInput);
             Map<String, Object> result = pollFromWorker(worker, token);
             int lineOffset = getHelperLineOffset(language);
             if (lineOffset > 0) {
@@ -202,15 +153,14 @@ public class Judge0Service {
         }
     }
 
-    private String submitToWorker(WorkerNode worker, String sourceCode, int languageId, String stdinInput, ResourceLimits limits) throws Exception {
+    private String submitToWorker(WorkerNode worker, String sourceCode, int languageId, String stdinInput) throws Exception {
         Map<String, Object> requestBody = Map.of(
                 "source_code", sourceCode,
                 "language_id", languageId,
                 "stdin", stdinInput != null ? stdinInput : "",
-                "cpu_time_limit", limits.cpuTimeLimit,
-                "memory_limit", limits.memoryLimit,
-                "wall_time_limit", limits.wallTimeLimit,
-                "output_limit", limits.outputLimit
+                "cpu_time_limit", 5,
+                "memory_limit", 128000,
+                "wall_time_limit", 10
         );
 
         String jsonBody = MAPPER.writeValueAsString(requestBody);
@@ -392,6 +342,4 @@ public class Judge0Service {
             Map.entry("swift", 83),
             Map.entry("typescript", 74)
     );
-
-    record ResourceLimits(int cpuTimeLimit, int memoryLimit, int wallTimeLimit, int outputLimit) {}
 }

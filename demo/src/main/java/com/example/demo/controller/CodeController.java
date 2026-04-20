@@ -61,11 +61,7 @@ public class CodeController {
                 judgeResult = judge0Service.execute(
                         req.getLanguage(),
                         req.getCode(),
-                        req.getStdinInput(),
-                        req.getCpuTimeLimit(),
-                        req.getMemoryLimit(),
-                        req.getWallTimeLimit(),
-                        req.getOutputLimit()
+                        req.getStdinInput()
                 );
             }
 
@@ -145,10 +141,6 @@ public class CodeController {
         private String language;
         private String code;
         private String stdinInput;
-        private Integer cpuTimeLimit;
-        private Integer memoryLimit;
-        private Integer wallTimeLimit;
-        private Integer outputLimit;
 
         public String getLanguage() {
             return language;
@@ -172,38 +164,6 @@ public class CodeController {
 
         public void setStdinInput(String stdinInput) {
             this.stdinInput = stdinInput;
-        }
-
-        public Integer getCpuTimeLimit() {
-            return cpuTimeLimit;
-        }
-
-        public void setCpuTimeLimit(Integer cpuTimeLimit) {
-            this.cpuTimeLimit = cpuTimeLimit;
-        }
-
-        public Integer getMemoryLimit() {
-            return memoryLimit;
-        }
-
-        public void setMemoryLimit(Integer memoryLimit) {
-            this.memoryLimit = memoryLimit;
-        }
-
-        public Integer getWallTimeLimit() {
-            return wallTimeLimit;
-        }
-
-        public void setWallTimeLimit(Integer wallTimeLimit) {
-            this.wallTimeLimit = wallTimeLimit;
-        }
-
-        public Integer getOutputLimit() {
-            return outputLimit;
-        }
-
-        public void setOutputLimit(Integer outputLimit) {
-            this.outputLimit = outputLimit;
         }
     }
 
