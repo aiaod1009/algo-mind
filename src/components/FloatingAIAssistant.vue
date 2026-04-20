@@ -1,27 +1,30 @@
 <template>
-  <div v-if="isLoggedIn" class="floating-ai-assistant" :class="{ 'expanded': isExpanded, 'minimized': isMinimized }" :style="positionStyle">
-    <!-- 头部 -->
-    <div class="assistant-header" @mousedown="startDrag">
+  <div
+    v-if="isLoggedIn"
+    class="floating-ai-assistant"
+    :class="{ minimized: isMinimized, dragging: isDragging, resizing: isResizing }"
+    :style="positionStyle"
+  >
+    <div class="assistant-header" @mousedown.left.prevent="startDrag" @click="handleHeaderClick">
       <div class="header-content">
         <div class="assistant-icon">
-          <span class="icon">🤖</span>
-          <span class="status-indicator" :class="{ 'connected': isConnected }"></span>
+          <span class="icon">AI</span>
+          <span class="status-indicator" :class="{ connected: isConnected }"></span>
         </div>
         <div class="assistant-title">AI 助手</div>
         <div class="header-actions">
-          <button class="action-btn" @click="toggleMinimize" title="最小化">
-            {{ isMinimized ? '📋' : '📌' }}
+          <button class="action-btn" @click.stop="toggleMinimize" :title="isMinimized ? '展开' : '最小化'">
+            {{ isMinimized ? '□' : '_' }}
           </button>
-          <button class="action-btn" @click="clearMessages" title="清空消息">
-            🗑️
+          <button class="action-btn" @click.stop="clearMessages" title="清空消息">
+            x
           </button>
         </div>
       </div>
     </div>
 
-    <!-- 消息区域 -->
-    <div v-if="!isMinimized" class="messages-container" ref="messagesContainer">
-      <div class="message" v-for="msg in messages" :key="msg.id" :class="msg.role">
+    <div v-if="!isMinimized" ref="messagesContainer" class="messages-container">
+      <div v-for="msg in messages" :key="msg.id" class="message" :class="msg.role">
         <div class="message-content">{{ msg.content }}</div>
         <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
       </div>
@@ -31,240 +34,200 @@
       </div>
     </div>
 
-    <!-- 输入区域 -->
     <div v-if="!isMinimized" class="input-container">
       <textarea
         v-model="inputMessage"
         class="message-input"
         placeholder="请输入您的问题..."
-        @keyup.enter.exact="sendMessage"
+        @keyup.enter.exact.prevent="sendMessage"
         @keyup.enter.shift="inputMessage += '\n'"
         :disabled="isLoading"
       ></textarea>
-      <button 
-        class="send-btn" 
+      <button
+        class="send-btn"
         @click="sendMessage"
         :disabled="!isConnected || isLoading || !inputMessage.trim()"
-        :class="{ 'loading': isLoading }"
+        :class="{ loading: isLoading }"
       >
         {{ isLoading ? '发送中...' : '发送' }}
       </button>
     </div>
+
+    <button
+      v-if="!isMinimized"
+      class="resize-handle"
+      type="button"
+      title="拖动调整大小"
+      @mousedown.left.prevent.stop="startResize"
+    ></button>
   </div>
 </template>
 
 <script>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useUserStore } from '../stores/user'
 
 export default {
   name: 'FloatingAIAssistant',
   setup() {
     const userStore = useUserStore()
-    
-    // 状态管理
-    const isVisible = ref(false)
-    const isExpanded = ref(true)
+
     const isDragging = ref(false)
-    const messages = ref([])
-    const inputMessage = ref('')
     const isConnected = ref(false)
     const isLoading = ref(false)
-    const isCancelling = ref(false)
-    const currentMessageId = ref(null)
-    const messagesContainer = ref(null)
     const isMinimized = ref(false)
-
-    // 位置管理
-    const position = ref({ x: 30, y: 30 })
-    const dragOffset = ref({ x: 0, y: 0 })
-
-    // WebSocket管理
+    const isResizing = ref(false)
+    const inputMessage = ref('')
+    const messages = ref([])
+    const messagesContainer = ref(null)
+    const currentMessageId = ref(null)
     const ws = ref(null)
     const reconnectTimer = ref(null)
     const pingTimer = ref(null)
+    const position = ref({ x: 30, y: 30 })
+    const size = ref({ width: 350, height: 430 })
+    const dragOffset = ref({ x: 0, y: 0 })
+    const dragStartPoint = ref({ x: 0, y: 0 })
+    const dragMoved = ref(false)
+    const dragResetTimer = ref(null)
+    const resizeStartPoint = ref({ x: 0, y: 0 })
+    const resizeStartSize = ref({ width: 350, height: 430 })
+    const DRAG_THRESHOLD = 6
+    const MIN_WIDTH = 300
+    const MIN_HEIGHT = 320
+    const DEFAULT_WIDTH = 350
+    const DEFAULT_HEIGHT = 430
+    const MINIMIZED_WIDTH = 60
+    const MINIMIZED_HEIGHT = 60
 
-    // 计算属性
     const isLoggedIn = computed(() => !!userStore.userInfo?.token)
 
-    const positionStyle = computed(() => {
-      return {
-        left: `${position.value.x}px`,
-        top: `${position.value.y}px`,
-        zIndex: 9999
-      }
-    })
+    const positionStyle = computed(() => ({
+      transform: `translate3d(${position.value.x}px, ${position.value.y}px, 0)`,
+      width: `${isMinimized.value ? MINIMIZED_WIDTH : size.value.width}px`,
+      height: `${isMinimized.value ? MINIMIZED_HEIGHT : size.value.height}px`,
+      zIndex: 9999,
+    }))
 
-    const wsUrl = computed(() => {
-      const token = userStore.userInfo?.token
-      const isDev = import.meta.env.DEV
-      if (isDev) {
-        return `/api/ws/chat${token ? `?token=${token}` : ''}`
-      }
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const host = window.location.host
-      return `${protocol}//${host}/api/ws/chat${token ? `?token=${token}` : ''}`
-    })
+    const getAssistantWidth = () => (isMinimized.value ? MINIMIZED_WIDTH : size.value.width)
 
-    // 方法
-    const initWebSocket = () => {
-      if (!isLoggedIn.value) return
-      
-      if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+    const snapToWindowEdgeIfIntersecting = () => {
+      if (typeof window === 'undefined') {
         return
       }
 
-      try {
-        console.log('正在建立WebSocket连接:', wsUrl.value)
-        ws.value = new WebSocket(wsUrl.value)
+      const assistantWidth = getAssistantWidth()
+      const viewportWidth = window.innerWidth
+      const intersectsLeftEdge = position.value.x < 0
+      const intersectsRightEdge = position.value.x + assistantWidth > viewportWidth
 
-        ws.value.onopen = () => {
-          console.log('WebSocket连接成功')
-          isConnected.value = true
-          isVisible.value = true
-          startPing()
-        }
-
-        ws.value.onmessage = (event) => {
-          try {
-            const response = JSON.parse(event.data)
-            handleMessage(response)
-          } catch (e) {
-            console.error('解析WebSocket消息失败', e)
-          }
-        }
-
-        ws.value.onerror = (error) => {
-          console.error('WebSocket错误', error)
-          isConnected.value = false
-        }
-
-        ws.value.onclose = () => {
-          console.log('WebSocket连接关闭')
-          isConnected.value = false
-          stopPing()
-          scheduleReconnect()
-        }
-      } catch (e) {
-        console.error('创建WebSocket失败', e)
-        scheduleReconnect()
+      if (!intersectsLeftEdge && !intersectsRightEdge) {
+        return
       }
+
+      const leftSnapX = 0
+      const rightSnapX = Math.max(0, viewportWidth - assistantWidth)
+
+      if (intersectsLeftEdge && intersectsRightEdge) {
+        const distanceToLeft = Math.abs(position.value.x - leftSnapX)
+        const distanceToRight = Math.abs(position.value.x - rightSnapX)
+        position.value.x = distanceToLeft <= distanceToRight ? leftSnapX : rightSnapX
+        return
+      }
+
+      position.value.x = intersectsLeftEdge ? leftSnapX : rightSnapX
+    }
+
+    const wsUrl = computed(() => {
+      const token = userStore.userInfo?.token
+      if (import.meta.env.DEV) {
+        return `/api/ws/chat${token ? `?token=${token}` : ''}`
+      }
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      return `${protocol}//${window.location.host}/api/ws/chat${token ? `?token=${token}` : ''}`
+    })
+
+    const scrollToBottom = () => {
+      nextTick(() => {
+        if (messagesContainer.value) {
+          messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+        }
+      })
+    }
+
+    const formatTime = (timestamp) =>
+      new Date(timestamp).toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+
+    const appendSystemMessage = (content) => {
+      messages.value.push({
+        id: `system-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        role: 'system',
+        content,
+        timestamp: new Date(),
+      })
+      scrollToBottom()
+    }
+
+    const upsertAssistantMessage = (id, content) => {
+      const existing = messages.value.find((msg) => msg.id === id)
+      if (existing) {
+        existing.content = content
+        existing.timestamp = new Date()
+      } else {
+        messages.value.push({
+          id,
+          role: 'assistant',
+          content,
+          timestamp: new Date(),
+        })
+      }
+      scrollToBottom()
     }
 
     const handleMessage = (response) => {
       switch (response.type) {
         case 'system':
           if (response.status === 'connected') {
-            messages.value.push({
-              id: Date.now(),
-              role: 'system',
-              content: '👋 ' + response.content,
-              timestamp: new Date()
-            })
+            appendSystemMessage(response.content || '连接成功')
           } else if (response.status === 'cleared') {
             messages.value = []
           }
           break
-        case 'user':
-          messages.value.push({
-            id: Date.now(),
-            role: 'user',
-            content: response.content,
-            timestamp: new Date()
-          })
-          scrollToBottom()
-          break
         case 'assistant':
           if (response.status === 'thinking') {
             isLoading.value = true
-            currentMessageId.value = response.id
-          } else if (response.status === 'streaming') {
-            const existingMessage = messages.value.find(msg => msg.id === response.id)
-            if (existingMessage) {
-              existingMessage.content = response.content
-            } else {
-              messages.value.push({
-                id: response.id,
-                role: 'assistant',
-                content: response.content,
-                timestamp: new Date()
-              })
-            }
-            scrollToBottom()
+            currentMessageId.value = response.id || currentMessageId.value
+          } else if (response.status === 'streaming' || response.status === 'message') {
+            const assistantId = response.id || currentMessageId.value || `assistant-${Date.now()}`
+            currentMessageId.value = assistantId
+            upsertAssistantMessage(assistantId, response.content || '')
           } else if (response.status === 'completed') {
-            isLoading.value = false
+            const assistantId = response.id || currentMessageId.value || `assistant-${Date.now()}`
+            if (response.content) {
+              upsertAssistantMessage(assistantId, response.content)
+            }
             currentMessageId.value = null
-            scrollToBottom()
+            isLoading.value = false
           }
           break
-      }
-    }
-
-    const sendMessage = () => {
-      if (!isConnected.value || isLoading.value || !inputMessage.value.trim()) {
-        return
-      }
-
-      const message = inputMessage.value.trim()
-      inputMessage.value = ''
-
-      try {
-        if (ws.value && ws.value.readyState === WebSocket.OPEN) {
-          ws.value.send(JSON.stringify({
-            type: 'message',
-            content: message
-          }))
-        }
-      } catch (e) {
-        console.error('发送消息失败', e)
-      }
-    }
-
-    const clearMessages = () => {
-      try {
-        if (ws.value && ws.value.readyState === WebSocket.OPEN) {
-          ws.value.send(JSON.stringify({
-            type: 'clear'
-          }))
-        }
-      } catch (e) {
-        console.error('清空消息失败', e)
-      }
-    }
-
-    const analyzeSelectedText = (text, type) => {
-      if (!isConnected.value || isLoading.value) {
-        return
-      }
-
-      let prompt = ''
-      if (type === 'correctness') {
-        prompt = `请分析以下代码的正确性：\n\n${text}`
-      } else if (type === 'meaning') {
-        prompt = `请解释以下代码的含义：\n\n${text}`
-      }
-
-      try {
-        if (ws.value && ws.value.readyState === WebSocket.OPEN) {
-          ws.value.send(JSON.stringify({
-            type: 'message',
-            content: prompt
-          }))
-        }
-      } catch (e) {
-        console.error('发送分析请求失败', e)
+        case 'error':
+          currentMessageId.value = null
+          isLoading.value = false
+          appendSystemMessage(response.content || 'AI 助手出现异常，请稍后重试')
+          break
+        default:
+          break
       }
     }
 
     const startPing = () => {
       stopPing()
       pingTimer.value = setInterval(() => {
-        if (ws.value && ws.value.readyState === WebSocket.OPEN) {
-          try {
-            ws.value.send(JSON.stringify({ type: 'ping' }))
-          } catch (e) {
-            console.error('发送ping失败', e)
-          }
+        if (ws.value?.readyState === WebSocket.OPEN) {
+          ws.value.send(JSON.stringify({ type: 'ping' }))
         }
       }, 30000)
     }
@@ -285,111 +248,314 @@ export default {
       }, 5000)
     }
 
-    const scrollToBottom = () => {
-      nextTick(() => {
-        if (messagesContainer.value) {
-          messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-        }
-      })
-    }
-
-    const formatTime = (timestamp) => {
-      return new Date(timestamp).toLocaleTimeString('zh-CN', {
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    }
-
-    // 拖拽功能
-    const startDrag = (e) => {
-      isDragging.value = true
-      dragOffset.value = {
-        x: e.clientX - position.value.x,
-        y: e.clientY - position.value.y
+    const cleanupSocket = () => {
+      if (ws.value) {
+        ws.value.onopen = null
+        ws.value.onmessage = null
+        ws.value.onerror = null
+        ws.value.onclose = null
+        ws.value.close()
+        ws.value = null
       }
+      stopPing()
+      isConnected.value = false
+      isLoading.value = false
+      currentMessageId.value = null
+    }
+
+    const initWebSocket = () => {
+      if (!isLoggedIn.value) return
+      if (ws.value?.readyState === WebSocket.OPEN || ws.value?.readyState === WebSocket.CONNECTING) {
+        return
+      }
+
+      try {
+        ws.value = new WebSocket(wsUrl.value)
+
+        ws.value.onopen = () => {
+          isConnected.value = true
+          startPing()
+        }
+
+        ws.value.onmessage = (event) => {
+          try {
+            handleMessage(JSON.parse(event.data))
+          } catch (error) {
+            console.error('解析 WebSocket 消息失败', error)
+          }
+        }
+
+        ws.value.onerror = (error) => {
+          console.error('WebSocket 错误', error)
+          isConnected.value = false
+        }
+
+        ws.value.onclose = () => {
+          isConnected.value = false
+          stopPing()
+          if (isLoggedIn.value) {
+            scheduleReconnect()
+          }
+        }
+      } catch (error) {
+        console.error('创建 WebSocket 失败', error)
+        scheduleReconnect()
+      }
+    }
+
+    const sendMessage = () => {
+      const content = inputMessage.value.trim()
+      if (!content || !isConnected.value || isLoading.value || ws.value?.readyState !== WebSocket.OPEN) {
+        return
+      }
+
+      const messageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      messages.value.push({
+        id: `user-${messageId}`,
+        role: 'user',
+        content,
+        timestamp: new Date(),
+      })
+      scrollToBottom()
+
+      inputMessage.value = ''
+      isLoading.value = true
+      currentMessageId.value = messageId
+
+      try {
+        ws.value.send(
+          JSON.stringify({
+            type: 'message',
+            content,
+            messageId,
+          }),
+        )
+      } catch (error) {
+        isLoading.value = false
+        currentMessageId.value = null
+        appendSystemMessage('发送失败，请稍后重试')
+        console.error('发送消息失败', error)
+      }
+    }
+
+    const clearMessages = () => {
+      if (ws.value?.readyState === WebSocket.OPEN) {
+        ws.value.send(JSON.stringify({ type: 'clear' }))
+      } else {
+        messages.value = []
+      }
+    }
+
+    const analyzeSelectedText = (text, type) => {
+      if (!text || !isConnected.value || isLoading.value) {
+        return
+      }
+
+      const prompt =
+        type === 'correctness'
+          ? `请分析以下代码的正确性：\n\n${text}`
+          : `请解释以下代码的含义：\n\n${text}`
+
+      inputMessage.value = prompt
+      sendMessage()
+    }
+
+    const startDrag = (event) => {
+      if (isResizing.value || event.target.closest('.action-btn') || event.target.closest('.resize-handle')) {
+        return
+      }
+
+      if (dragResetTimer.value) {
+        clearTimeout(dragResetTimer.value)
+        dragResetTimer.value = null
+      }
+
+      isDragging.value = true
+      dragMoved.value = false
+      dragStartPoint.value = {
+        x: event.clientX,
+        y: event.clientY,
+      }
+      dragOffset.value = {
+        x: event.clientX - position.value.x,
+        y: event.clientY - position.value.y,
+      }
+
       document.addEventListener('mousemove', onDrag)
       document.addEventListener('mouseup', stopDrag)
     }
 
-    const onDrag = (e) => {
-      if (isDragging.value) {
-        position.value = {
-          x: e.clientX - dragOffset.value.x,
-          y: e.clientY - dragOffset.value.y
-        }
+    const onDrag = (event) => {
+      if (!isDragging.value) {
+        return
       }
+
+      const deltaX = event.clientX - dragStartPoint.value.x
+      const deltaY = event.clientY - dragStartPoint.value.y
+      if (!dragMoved.value && Math.hypot(deltaX, deltaY) >= DRAG_THRESHOLD) {
+        dragMoved.value = true
+      }
+
+      if (!dragMoved.value) {
+        return
+      }
+
+      position.value = {
+        x: event.clientX - dragOffset.value.x,
+        y: event.clientY - dragOffset.value.y,
+      }
+    }
+
+    const startResize = (event) => {
+      if (isMinimized.value) {
+        return
+      }
+
+      isResizing.value = true
+      resizeStartPoint.value = {
+        x: event.clientX,
+        y: event.clientY,
+      }
+      resizeStartSize.value = {
+        width: size.value.width,
+        height: size.value.height,
+      }
+
+      document.addEventListener('mousemove', onResize)
+      document.addEventListener('mouseup', stopResize)
+    }
+
+    const onResize = (event) => {
+      if (!isResizing.value) {
+        return
+      }
+
+      const viewportWidth = typeof window === 'undefined' ? resizeStartSize.value.width : window.innerWidth
+      const viewportHeight = typeof window === 'undefined' ? resizeStartSize.value.height : window.innerHeight
+      const maxWidth = Math.max(MIN_WIDTH, viewportWidth - position.value.x)
+      const maxHeight = Math.max(MIN_HEIGHT, viewportHeight - position.value.y)
+
+      const nextWidth = resizeStartSize.value.width + (event.clientX - resizeStartPoint.value.x)
+      const nextHeight = resizeStartSize.value.height + (event.clientY - resizeStartPoint.value.y)
+
+      size.value = {
+        width: Math.min(maxWidth, Math.max(MIN_WIDTH, nextWidth)),
+        height: Math.min(maxHeight, Math.max(MIN_HEIGHT, nextHeight)),
+      }
+    }
+
+    const stopResize = () => {
+      isResizing.value = false
+      document.removeEventListener('mousemove', onResize)
+      document.removeEventListener('mouseup', stopResize)
     }
 
     const stopDrag = () => {
       isDragging.value = false
       document.removeEventListener('mousemove', onDrag)
       document.removeEventListener('mouseup', stopDrag)
+
+      if (dragMoved.value) {
+        snapToWindowEdgeIfIntersecting()
+      }
+
+      if (dragResetTimer.value) {
+        clearTimeout(dragResetTimer.value)
+      }
+      dragResetTimer.value = setTimeout(() => {
+        dragMoved.value = false
+        dragResetTimer.value = null
+      }, 120)
+    }
+
+    const handleHeaderClick = () => {
+      if (dragMoved.value) {
+        return
+      }
+
+      if (isMinimized.value) {
+        isMinimized.value = false
+      }
     }
 
     const toggleMinimize = () => {
       isMinimized.value = !isMinimized.value
     }
 
-    // 生命周期
     onMounted(() => {
       watch(
-        () => isLoggedIn.value,
-        (newValue) => {
-          if (newValue) {
+        isLoggedIn,
+        (loggedIn) => {
+          if (loggedIn) {
             initWebSocket()
           } else {
-            if (ws.value) {
-              ws.value.close()
-              ws.value = null
-            }
-            isConnected.value = false
+            cleanupSocket()
             messages.value = []
           }
         },
-        { immediate: true }
+        { immediate: true },
       )
     })
 
     onUnmounted(() => {
-      if (ws.value) {
-        ws.value.close()
-      }
-      stopPing()
+      cleanupSocket()
       if (reconnectTimer.value) {
         clearTimeout(reconnectTimer.value)
       }
+      if (dragResetTimer.value) {
+        clearTimeout(dragResetTimer.value)
+      }
+      document.removeEventListener('mousemove', onDrag)
+      document.removeEventListener('mouseup', stopDrag)
+      document.removeEventListener('mousemove', onResize)
+      document.removeEventListener('mouseup', stopResize)
     })
 
     return {
-      isLoggedIn,
-      isConnected,
-      isExpanded,
-      isMinimized,
-      messages,
-      inputMessage,
-      isLoading,
-      positionStyle,
-      messagesContainer,
-      startDrag,
-      sendMessage,
+      analyzeSelectedText,
       clearMessages,
+      formatTime,
+      handleHeaderClick,
+      inputMessage,
+      isConnected,
+      isDragging,
+      isLoading,
+      isLoggedIn,
+      isMinimized,
+      isResizing,
+      messages,
+      messagesContainer,
+      positionStyle,
+      sendMessage,
+      startDrag,
+      startResize,
       toggleMinimize,
-      analyzeSelectedText
     }
-  }
+  },
 }
 </script>
 
 <style scoped>
 .floating-ai-assistant {
   position: fixed;
-  width: 350px;
-  background: white;
+  top: 0;
+  left: 0;
+  background: #fff;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   overflow: hidden;
-  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.18s ease, box-shadow 0.2s ease, width 0.3s ease, height 0.3s ease;
   z-index: 9999;
+  will-change: transform;
+  min-width: 300px;
+  min-height: 320px;
+}
+
+.floating-ai-assistant.dragging,
+.floating-ai-assistant.resizing {
+  transition: none;
 }
 
 .assistant-header {
@@ -404,6 +570,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 .assistant-icon {
@@ -413,7 +580,8 @@ export default {
 }
 
 .icon {
-  font-size: 18px;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .status-indicator {
@@ -429,8 +597,9 @@ export default {
 }
 
 .assistant-title {
-  font-weight: 500;
+  flex: 1;
   font-size: 14px;
+  font-weight: 600;
   color: #333;
 }
 
@@ -444,41 +613,42 @@ export default {
   border: none;
   font-size: 14px;
   cursor: pointer;
-  padding: 4px;
+  padding: 4px 6px;
   border-radius: 4px;
   transition: background 0.2s ease;
 }
 
 .action-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .messages-container {
-  height: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 160px;
   overflow-y: auto;
   padding: 16px;
   background: #fafafa;
 }
 
 .message {
-  margin-bottom: 12px;
   max-width: 80%;
   padding: 10px 14px;
   border-radius: 18px;
-  position: relative;
 }
 
 .message.user {
   align-self: flex-end;
   background: #007bff;
-  color: white;
-  margin-left: auto;
+  color: #fff;
   border-bottom-right-radius: 4px;
 }
 
 .message.assistant {
   align-self: flex-start;
-  background: white;
+  background: #fff;
   color: #333;
   border: 1px solid #e9ecef;
   border-bottom-left-radius: 4px;
@@ -486,23 +656,42 @@ export default {
 
 .message.system {
   align-self: center;
+  width: 80px;
+  height: 50px;
   background: #e9ecef;
   color: #6c757d;
-  font-size: 12px;
-  max-width: 90%;
   text-align: center;
   border-radius: 12px;
+  font-size: 12px;
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.message.system .message-content {
+  word-break: break-word;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.message.system .message-time {
+  margin-top: 4px;
+  font-size: 10px;
+  opacity: 0.7;
+  text-align: center;
 }
 
 .message-content {
-  word-wrap: break-word;
+  word-break: break-word;
   line-height: 1.4;
 }
 
 .message-time {
+  margin-top: 4px;
   font-size: 10px;
   opacity: 0.7;
-  margin-top: 4px;
   text-align: right;
 }
 
@@ -512,7 +701,6 @@ export default {
   gap: 8px;
   color: #6c757d;
   font-size: 14px;
-  margin-top: 8px;
 }
 
 .loading-spinner {
@@ -525,27 +713,33 @@ export default {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .input-container {
   display: flex;
   padding: 12px 16px;
   border-top: 1px solid #e9ecef;
-  background: white;
+  background: #fff;
+  height: 83px;
 }
 
 .message-input {
   flex: 1;
+  min-height: 40px;
+  max-height: 120px;
   border: 1px solid #ced4da;
   border-radius: 20px;
   padding: 10px 16px;
   resize: none;
   font-size: 14px;
   line-height: 1.4;
-  min-height: 40px;
-  max-height: 120px;
   outline: none;
   transition: border-color 0.2s ease;
 }
@@ -561,16 +755,17 @@ export default {
 }
 
 .send-btn {
-  background: #007bff;
-  color: white;
+  margin-left: 8px;
+  padding: 0 16px;
   border: none;
   border-radius: 20px;
-  padding: 0 16px;
-  margin-left: 8px;
+  background: #007bff;
+  color: #fff;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
   transition: background 0.2s ease;
+  height: 55px;
 }
 
 .send-btn:hover:not(:disabled) {
@@ -586,10 +781,20 @@ export default {
   background: #17a2b8;
 }
 
-/* 最小化状态 */
 .floating-ai-assistant.minimized {
-  width: 60px;
-  height: 60px;
+  border-radius: 999px;
+  min-width: 60px;
+  min-height: 60px;
+}
+
+.floating-ai-assistant.minimized .assistant-header {
+  height: 100%;
+  padding: 0;
+  border-bottom: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 .floating-ai-assistant.minimized .header-content {
@@ -599,11 +804,24 @@ export default {
 .floating-ai-assistant.minimized .assistant-title,
 .floating-ai-assistant.minimized .header-actions,
 .floating-ai-assistant.minimized .messages-container,
-.floating-ai-assistant.minimized .input-container {
+.floating-ai-assistant.minimized .input-container,
+.floating-ai-assistant.minimized .resize-handle {
   display: none;
 }
 
-/* 滚动条样式 */
+.resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  border: none;
+  padding: 0;
+  background:
+    linear-gradient(135deg, transparent 0 38%, rgba(0, 0, 0, 0.24) 38% 46%, transparent 46% 58%, rgba(0, 0, 0, 0.24) 58% 66%, transparent 66%);
+  cursor: nwse-resize;
+}
+
 .messages-container::-webkit-scrollbar {
   width: 6px;
 }

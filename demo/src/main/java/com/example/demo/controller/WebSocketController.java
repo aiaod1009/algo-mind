@@ -5,7 +5,6 @@ import com.example.demo.dto.ai.ChatMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -16,6 +15,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
@@ -35,25 +35,20 @@ public class WebSocketController extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         sessions.put(session.getId(), session);
-        log.info("WebSocket 连接建立: {}", session.getId());
-        
-        // 发送连接成功消息
-        Map<String, Object> response = Map.of(
-                "type", "system",
-                "status", "connected",
-                "content", "连接成功"
-        );
-        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+        log.info("WebSocket connection established: {}", session.getId());
+        sendJson(
+                session,
+                Map.of(
+                        "type", "system",
+                        "status", "connected",
+                        "content", "连接成功"));
     }
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        String payload = message.getPayload();
-        log.info("收到 WebSocket 消息: {}", payload);
-
         try {
-            Map<String, Object> request = objectMapper.readValue(payload, Map.class);
-            String type = (String) request.get("type");
+            Map<String, Object> request = objectMapper.readValue(message.getPayload(), Map.class);
+            String type = stringValue(request.get("type"));
 
             switch (type) {
                 case "chat":
@@ -64,104 +59,137 @@ public class WebSocketController extends TextWebSocketHandler {
                     handleClearMessage(session);
                     break;
                 case "cancel":
-                    handleCancelMessage(session, request);
+                    handleCancelMessage(session);
                     break;
                 case "ping":
                     handlePingMessage(session);
                     break;
                 default:
-                    log.warn("未知消息类型: {}", type);
+                    log.warn("Unknown websocket message type: {}", type);
             }
-        } catch (Exception e) {
-            log.error("处理 WebSocket 消息失败", e);
-            sendErrorMessage(session, "处理消息失败: " + e.getMessage());
+        } catch (Exception exception) {
+            log.error("Failed to handle websocket message", exception);
+            sendErrorMessage(session, "处理消息失败: " + exception.getMessage());
         }
     }
 
     private void handleChatMessage(WebSocketSession session, Map<String, Object> request) throws Exception {
-        String content = (String) request.get("content");
-        String messageId = (String) request.get("messageId");
+        String content = stringValue(request.get("content"));
+        String messageId = resolveMessageId(request.get("messageId"));
 
-        // 发送思考中消息
-        Map<String, Object> thinkingResponse = Map.of(
-                "type", "assistant",
-                "status", "thinking",
-                "content", "思考中"
-        );
-        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(thinkingResponse)));
+        if (content == null || content.isBlank()) {
+            sendErrorMessage(session, "消息内容不能为空");
+            return;
+        }
 
-        // 准备 AI 消息
+        sendJson(
+                session,
+                Map.of(
+                        "type", "assistant",
+                        "status", "thinking",
+                        "id", messageId,
+                        "content", "AI 正在思考..."));
+
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(new ChatMessage("user", content));
 
-        // 调用 AI 服务
+        StringBuilder accumulatedContent = new StringBuilder();
         try {
-            // 使用流式调用
-            douBaoAiService.sendMessageStream(messages, response -> {
+            douBaoAiService.sendMessageStream(messages, chunk -> {
+                if (chunk == null || chunk.isBlank() || !session.isOpen()) {
+                    return;
+                }
+
+                accumulatedContent.append(chunk);
                 try {
-                    Map<String, Object> aiResponse = Map.of(
-                            "type", "assistant",
-                            "status", "message",
-                            "content", response
-                    );
-                    session.sendMessage(new TextMessage(objectMapper.writeValueAsString(aiResponse)));
-                } catch (IOException e) {
-                    log.error("发送 AI 响应失败", e);
+                    sendJson(
+                            session,
+                            Map.of(
+                                    "type", "assistant",
+                                    "status", "streaming",
+                                    "id", messageId,
+                                    "content", accumulatedContent.toString()));
+                } catch (IOException ioException) {
+                    log.error("Failed to stream websocket assistant response", ioException);
                 }
             });
-        } catch (Exception e) {
-            log.error("调用 AI 服务失败", e);
-            sendErrorMessage(session, "AI 服务调用失败: " + e.getMessage());
+
+            sendJson(
+                    session,
+                    Map.of(
+                            "type", "assistant",
+                            "status", "completed",
+                            "id", messageId,
+                            "content", accumulatedContent.toString()));
+        } catch (Exception exception) {
+            log.error("Failed to call AI service", exception);
+            sendErrorMessage(session, "AI 服务调用失败: " + exception.getMessage());
         }
     }
 
     private void handleClearMessage(WebSocketSession session) throws Exception {
-        Map<String, Object> response = Map.of(
-                "type", "system",
-                "status", "cleared",
-                "content", "对话已清空"
-        );
-        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+        sendJson(
+                session,
+                Map.of(
+                        "type", "system",
+                        "status", "cleared",
+                        "content", "对话已清空"));
     }
 
-    private void handleCancelMessage(WebSocketSession session, Map<String, Object> request) throws Exception {
-        // 这里可以实现取消 AI 生成的逻辑
-        Map<String, Object> response = Map.of(
-                "type", "system",
-                "status", "cancelled",
-                "content", "已取消生成"
-        );
-        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+    private void handleCancelMessage(WebSocketSession session) throws Exception {
+        sendJson(
+                session,
+                Map.of(
+                        "type", "system",
+                        "status", "cancelled",
+                        "content", "已取消生成"));
     }
 
     private void handlePingMessage(WebSocketSession session) throws Exception {
-        // 回复 pong 消息
-        Map<String, Object> response = Map.of(
-                "type", "system",
-                "status", "pong",
-                "content", "pong"
-        );
-        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+        sendJson(
+                session,
+                Map.of(
+                        "type", "system",
+                        "status", "pong",
+                        "content", "pong"));
     }
 
     private void sendErrorMessage(WebSocketSession session, String errorMessage) throws Exception {
-        Map<String, Object> response = Map.of(
-                "type", "error",
-                "content", errorMessage
-        );
-        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+        sendJson(
+                session,
+                Map.of(
+                        "type", "error",
+                        "content", errorMessage));
+    }
+
+    private void sendJson(WebSocketSession session, Map<String, Object> payload) throws IOException {
+        if (!session.isOpen()) {
+            return;
+        }
+        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
+    }
+
+    private String resolveMessageId(Object rawMessageId) {
+        String messageId = stringValue(rawMessageId);
+        return messageId == null || messageId.isBlank() ? UUID.randomUUID().toString() : messageId;
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         sessions.remove(session.getId());
-        log.info("WebSocket 连接关闭: {}, 状态: {}", session.getId(), status);
+        log.info("WebSocket connection closed: {}, status: {}", session.getId(), status);
     }
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
-        log.error("WebSocket 传输错误: {}", session.getId(), exception);
+        log.error("WebSocket transport error: {}", session.getId(), exception);
         sessions.remove(session.getId());
-        session.close();
+        if (session.isOpen()) {
+            session.close();
+        }
     }
 }
