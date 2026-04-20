@@ -1,15 +1,7 @@
 server:
-  port: 8443
+  port: 8000
   servlet:
     context-path: /api
-  http2:
-    enabled: true
-  ssl:
-    enabled: true
-    key-store: classpath:keystore.p12
-    key-store-password: 123456
-    key-store-type: PKCS12
-    key-alias: tomcat
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:https://www.usloa.cn,https://usloa.cn,http://localhost:5173,http://localhost:5174,http://localhost:5175}
@@ -75,6 +67,15 @@ judge0:
     url: http://43.139.148.97:2358
     urls: http://43.139.148.97:2358
     health-check-enabled: true
+  limits:
+    cpu-time: 5
+    memory: 262144
+    wall-time: 10
+    output: 10240
+    max-cpu-time: 15
+    max-memory: 524288
+    max-wall-time: 30
+    max-output: 65536
   use-mock: true
 
 doubao:
@@ -140,6 +141,15 @@ judge0:
     url: ${JUDGE0_API_URL:http://localhost:2358}
     urls: ${JUDGE0_API_URLS:http://localhost:2358}
     health-check-enabled: ${JUDGE0_HEALTH_CHECK:true}
+  limits:
+    cpu-time: ${JUDGE0_CPU_TIME:5}
+    memory: ${JUDGE0_MEMORY:262144}
+    wall-time: ${JUDGE0_WALL_TIME:10}
+    output: ${JUDGE0_OUTPUT:10240}
+    max-cpu-time: ${JUDGE0_MAX_CPU_TIME:15}
+    max-memory: ${JUDGE0_MAX_MEMORY:524288}
+    max-wall-time: ${JUDGE0_MAX_WALL_TIME:30}
+    max-output: ${JUDGE0_MAX_OUTPUT:65536}
   use-mock: ${JUDGE0_USE_MOCK:false}
 
 doubao:

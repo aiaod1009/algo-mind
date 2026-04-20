@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '../api'
@@ -8,6 +8,13 @@ import { useUserStore } from '../stores/user'
 const router = useRouter()
 const userStore = useUserStore()
 const loading = ref(false)
+
+onMounted(() => {
+  // 清除旧的用户状态，确保悬浮 AI 助手不会显示
+  if (userStore.userInfo) {
+    userStore.logout()
+  }
+})
 
 const form = reactive({
   name: '',

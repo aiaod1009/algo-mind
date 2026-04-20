@@ -776,6 +776,11 @@ const handleRegister = () => {
 }
 
 onMounted(async () => {
+  // 清除旧的用户状态，确保悬浮 AI 助手不会显示
+  if (userStore.userInfo) {
+    userStore.logout()
+  }
+
   await nextTick()
 
   if (

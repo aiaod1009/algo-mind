@@ -11,7 +11,9 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
-const showTopbar = computed(() => !['/', '/register'].includes(route.path))
+const isAuthPage = computed(() => ['/', '/register'].includes(route.path))
+const showTopbar = computed(() => !isAuthPage.value)
+const showFloatingAssistant = computed(() => !!userStore.userInfo?.token && !isAuthPage.value)
 
 const menuItems = [
   { path: '/home', label: '学习计划' },
@@ -303,7 +305,7 @@ const toggleTheme = () => {
     </transition>
 
     <!-- WebSocket AI悬浮窗助手 - 仅登录后显示 -->
-    <FloatingAIAssistant v-if="userStore.userInfo?.token" ref="aiAssistantRef" />
+    <FloatingAIAssistant v-if="showFloatingAssistant" ref="aiAssistantRef" />
   </div>
 </template>
 
