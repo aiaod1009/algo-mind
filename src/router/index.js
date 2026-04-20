@@ -11,6 +11,7 @@ import Forum from '../views/Forum.vue'
 import ForumPost from '../views/ForumPost.vue'
 import Register from '../views/Register.vue'
 import CodeHistory from '../views/CodeHistory.vue'
+import KnowledgeBase from '../views/KnowledgeBase.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -89,6 +90,12 @@ const router = createRouter({
       path: '/code-history',
       name: 'code-history',
       component: CodeHistory,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/knowledge-base',
+      name: 'knowledge-base',
+      component: KnowledgeBase,
       meta: { requiresAuth: true },
     },
   ],

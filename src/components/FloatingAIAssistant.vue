@@ -7,7 +7,7 @@
   >
     <div class="assistant-header" @mousedown.left.prevent="startDrag" @click="handleHeaderClick">
       <div class="header-content">
-        <div class="assistant-icon">
+        <div class="assistant-icon" @click.stop="handleAssistantIconClick">
           <span class="icon">AI</span>
           <span class="status-indicator" :class="{ connected: isConnected }"></span>
         </div>
@@ -75,7 +75,7 @@ export default {
     const isDragging = ref(false)
     const isConnected = ref(false)
     const isLoading = ref(false)
-    const isMinimized = ref(false)
+    const isMinimized = ref(true)
     const isResizing = ref(false)
     const inputMessage = ref('')
     const messages = ref([])
@@ -478,6 +478,10 @@ export default {
       }
     }
 
+    const handleAssistantIconClick = () => {
+      isMinimized.value = !isMinimized.value
+    }
+
     const toggleMinimize = () => {
       isMinimized.value = !isMinimized.value
     }
@@ -515,6 +519,7 @@ export default {
       analyzeSelectedText,
       clearMessages,
       formatTime,
+      handleAssistantIconClick,
       handleHeaderClick,
       inputMessage,
       isConnected,

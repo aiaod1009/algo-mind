@@ -618,6 +618,9 @@ onMounted(async () => {
 .course-count {
   font-size: 13px;
   color: #64748b;
+  background: #f1f5f9;
+  padding: 4px 12px;
+  border-radius: 20px;
 }
 
 .course-grid {

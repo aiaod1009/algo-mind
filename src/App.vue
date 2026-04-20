@@ -188,7 +188,11 @@ const toggleTheme = () => {
         </div>
         <el-menu class="main-menu" :default-active="activePath" mode="horizontal" @select="handleMenuSelect">
           <el-menu-item index="/home">首页</el-menu-item>
-          <el-menu-item index="/courses">网课</el-menu-item>
+          <el-sub-menu index="courses-group">
+            <template #title>网课</template>
+            <el-menu-item index="/courses">网课</el-menu-item>
+            <el-menu-item index="/knowledge-base">知识库</el-menu-item>
+          </el-sub-menu>
           <el-menu-item index="/projects">项目实战</el-menu-item>
           <el-menu-item index="/forum">论坛</el-menu-item>
           <el-menu-item index="/ranking">积分排行</el-menu-item>
@@ -461,6 +465,33 @@ const toggleTheme = () => {
   flex: 1;
   border-bottom: none;
   background: transparent;
+  --el-menu-horizontal-height: 72px;
+}
+
+.main-menu :deep(.el-menu-item),
+.main-menu :deep(.el-sub-menu__title) {
+  height: 72px !important;
+  line-height: 72px !important;
+  box-sizing: border-box;
+}
+
+.main-menu :deep(.el-sub-menu__title) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  vertical-align: middle;
+}
+
+.main-menu :deep(.el-sub-menu__icon-arrow) {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  opacity: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  pointer-events: none !important;
 }
 
 .nav-search-wrapper {
