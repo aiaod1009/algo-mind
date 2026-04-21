@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -87,12 +87,44 @@ const publishing = ref(false)
 const contentTextarea = ref(null)
 const showEmojiPicker = ref(false)
 
+const POST_DRAFT_KEY = 'forum_post_draft_v1'
 const postForm = reactive({
   topic: '',
   content: '',
   tag: '',
   quote: '',
 })
+
+// 回填本地草稿
+onMounted(() => {
+  try {
+    const draft = localStorage.getItem(POST_DRAFT_KEY)
+    if (draft) {
+      const data = JSON.parse(draft)
+      postForm.topic = data.topic || ''
+      postForm.content = data.content || ''
+      postForm.tag = data.tag || ''
+      postForm.quote = data.quote || ''
+    }
+  } catch (e) { }
+})
+
+// 自动保存草稿
+watch(
+  () => [postForm.topic, postForm.content, postForm.tag, postForm.quote],
+  ([topic, content, tag, quote]) => {
+    const isEmpty = !topic && !content && !tag && !quote
+    if (isEmpty) {
+      localStorage.removeItem(POST_DRAFT_KEY)
+    } else {
+      localStorage.setItem(
+        POST_DRAFT_KEY,
+        JSON.stringify({ topic, content, tag, quote })
+      )
+    }
+  },
+  { deep: true }
+)
 
 const allTags = [
   { name: '# 学习交流', icon: '📚', color: '#4a90d9' },
@@ -265,6 +297,7 @@ const handlePublish = async () => {
       postForm.quote = ''
       tagInput.value = ''
       isComposerExpanded.value = false
+      localStorage.removeItem(POST_DRAFT_KEY)
       if (result.synced) {
         ElMessage.success('发布成功')
       } else {
@@ -835,7 +868,8 @@ onUnmounted(() => {
               </span>
             </div>
             <div class="publish-actions">
-              <button class="cancel-btn" @click="isComposerExpanded = false">取消</button>
+              <button class="cancel-btn"
+                @click="() => { isComposerExpanded = false; localStorage.removeItem(POST_DRAFT_KEY) }">取消</button>
               <button class="publish-btn" :class="{ 'is-disabled': !postForm.topic.trim() || !postForm.content.trim() }"
                 :disabled="!postForm.topic.trim() || !postForm.content.trim()" @click="handlePublish">
                 <span v-if="publishing" class="loading-spinner"></span>
@@ -900,12 +934,13 @@ onUnmounted(() => {
                 @click.stop="toggleExpand(item.id)">...全文</span>
               {{ item.content }}
             </p>
-            <span v-if="expandedPosts[item.id]" class="collapse"
-              @click.stop="toggleExpand(item.id)">收起</span>
+            <span v-if="expandedPosts[item.id]" class="collapse" @click.stop="toggleExpand(item.id)">收起</span>
           </div>
 
           <div class="quote" v-if="item.quote">{{ item.quote }}</div>
-          <div class="hash" :class="{ 'is-active': searchFilters.tag && item.tag && item.tag.toLowerCase() === searchFilters.tag.toLowerCase() }" @click.stop="filterByTag(item.tag)">{{ item.tag }}</div>
+          <div class="hash"
+            :class="{ 'is-active': searchFilters.tag && item.tag && item.tag.toLowerCase() === searchFilters.tag.toLowerCase() }"
+            @click.stop="filterByTag(item.tag)">{{ item.tag }}</div>
 
           <div v-if="item.comments > 0" class="hot-comments-section">
             <div v-if="postHotComments[item.id]?.length > 0" class="hot-comments-carousel">
@@ -954,9 +989,8 @@ onUnmounted(() => {
               <el-avatar :size="28" :src="resolveAvatar(userStore.userInfo?.avatar) || ''">
                 {{ (userStore.userInfo?.name || '匿').slice(0, 1) }}
               </el-avatar>
-              <input v-model="quickReplyContent" class="quick-reply-input" type="text"
-                placeholder="写下你的评论..." maxlength="500"
-                @keyup.enter="submitQuickReply(item.id)" />
+              <input v-model="quickReplyContent" class="quick-reply-input" type="text" placeholder="写下你的评论..."
+                maxlength="500" @keyup.enter="submitQuickReply(item.id)" />
               <button class="quick-reply-btn" :disabled="quickReplySubmitting || !quickReplyContent.trim()"
                 @click.stop="submitQuickReply(item.id)">
                 {{ quickReplySubmitting ? '发送中...' : '发送' }}
