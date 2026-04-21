@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from './stores/user'
 import { getTrackLabel } from './constants'
@@ -97,26 +97,94 @@ if (themeIndex.value < 2 || themeIndex.value > 6) {
 const selectedText = ref('')
 const showTextAnalysisMenu = ref(false)
 const textAnalysisMenuPosition = ref({ x: 0, y: 0 })
+const textAnalysisMenuRef = ref(null)
+const textAnalysisMenuAnchorRect = ref(null)
+
+const clearBrowserSelection = () => {
+  const selection = window.getSelection()
+  if (selection && selection.rangeCount > 0) {
+    selection.removeAllRanges()
+  }
+}
+
+const hideTextAnalysisMenu = (clearSelection = false) => {
+  showTextAnalysisMenu.value = false
+  selectedText.value = ''
+  textAnalysisMenuAnchorRect.value = null
+  if (clearSelection) {
+    clearBrowserSelection()
+  }
+}
+
+const positionTextAnalysisMenu = async (rect) => {
+  if (!rect) {
+    return
+  }
+
+  const gap = 14
+  const margin = 16
+  const fallbackWidth = 320
+  const fallbackHeight = 164
+
+  await nextTick()
+
+  const menuElement = textAnalysisMenuRef.value
+  const menuWidth = menuElement?.offsetWidth || fallbackWidth
+  const menuHeight = menuElement?.offsetHeight || fallbackHeight
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const safeMenuWidth = Math.min(menuWidth, Math.max(0, viewportWidth - margin * 2))
+  const safeMenuHeight = Math.min(menuHeight, Math.max(0, viewportHeight - margin * 2))
+
+  const centeredX = rect.left + rect.width / 2
+  const minX = margin + safeMenuWidth / 2
+  const maxX = viewportWidth - margin - safeMenuWidth / 2
+  const nextX = Math.min(maxX, Math.max(minX, centeredX))
+
+  const spaceBelow = viewportHeight - rect.bottom - gap - margin
+  const spaceAbove = rect.top - gap - margin
+  const canFitBelow = spaceBelow >= safeMenuHeight
+  const canFitAbove = spaceAbove >= safeMenuHeight
+
+  let nextY = rect.bottom + gap
+  if (!canFitBelow && canFitAbove) {
+    nextY = rect.top - safeMenuHeight - gap
+  } else if (!canFitBelow && !canFitAbove) {
+    nextY = spaceBelow >= spaceAbove
+      ? viewportHeight - safeMenuHeight - margin
+      : margin
+  }
+
+  textAnalysisMenuPosition.value = {
+    x: nextX,
+    y: Math.min(viewportHeight - safeMenuHeight - margin, Math.max(margin, nextY)),
+  }
+}
 
 // 文本选择监听器
 const handleSelectionChange = () => {
   const selection = window.getSelection()
-  const selectedTextValue = selection.toString().trim()
+  const selectedTextValue = selection?.toString().trim() || ''
   
   if (selectedTextValue && selectedTextValue.length > 0) {
     selectedText.value = selectedTextValue
     const range = selection.getRangeAt(0)
     const rect = range.getBoundingClientRect()
-    
-    // 计算菜单位置 - 放在选中文字下方
-    textAnalysisMenuPosition.value = {
-      x: rect.left + rect.width / 2,
-      y: rect.bottom + 10
-    }
-    
+    textAnalysisMenuAnchorRect.value = rect
     showTextAnalysisMenu.value = true
-  } else {
-    showTextAnalysisMenu.value = false
+    positionTextAnalysisMenu(rect)
+    return
+  }
+
+  const activeElement = document.activeElement
+  const menuContainsFocus = Boolean(
+    textAnalysisMenuRef.value
+    && activeElement
+    && textAnalysisMenuRef.value.contains(activeElement),
+  )
+
+  if (!menuContainsFocus) {
+    hideTextAnalysisMenu()
   }
 }
 
@@ -128,7 +196,31 @@ const analyzeSelectedText = (type) => {
   
   aiAssistantRef.value.analyzeSelectedText(selectedText.value, type)
   
-  showTextAnalysisMenu.value = false
+  hideTextAnalysisMenu(true)
+}
+
+const handleTextAnalysisMenuPointerDown = (event) => {
+  event.preventDefault()
+}
+
+const handleDocumentPointerDown = (event) => {
+  if (!showTextAnalysisMenu.value) {
+    return
+  }
+
+  const menuElement = textAnalysisMenuRef.value
+  if (menuElement && menuElement.contains(event.target)) {
+    return
+  }
+
+  hideTextAnalysisMenu(true)
+}
+
+const handleWindowResize = () => {
+  if (!showTextAnalysisMenu.value || !textAnalysisMenuAnchorRect.value) {
+    return
+  }
+  positionTextAnalysisMenu(textAnalysisMenuAnchorRect.value)
 }
 
 // 快捷键处理
@@ -147,17 +239,16 @@ const handleKeyDown = (e) => {
 // 监听文本选择
 onMounted(() => {
   document.addEventListener('selectionchange', handleSelectionChange)
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.text-analysis-menu')) {
-      showTextAnalysisMenu.value = false
-    }
-  })
+  document.addEventListener('pointerdown', handleDocumentPointerDown, true)
   document.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('resize', handleWindowResize)
 })
 
 onUnmounted(() => {
   document.removeEventListener('selectionchange', handleSelectionChange)
+  document.removeEventListener('pointerdown', handleDocumentPointerDown, true)
   document.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('resize', handleWindowResize)
 })
 
 const toggleTheme = () => {
@@ -287,8 +378,10 @@ const toggleTheme = () => {
     <transition name="menu-fade">
       <div 
         v-if="showTextAnalysisMenu && selectedText" 
+        ref="textAnalysisMenuRef"
         class="text-analysis-menu"
         :style="{ left: textAnalysisMenuPosition.x + 'px', top: textAnalysisMenuPosition.y + 'px' }"
+        @pointerdown="handleTextAnalysisMenuPointerDown"
       >
         <div class="selected-text-preview">
           <span class="preview-label">已选中：</span>
@@ -796,71 +889,86 @@ const toggleTheme = () => {
 /* 文本分析菜单 */
 .text-analysis-menu {
   position: fixed;
-  z-index: 1200;
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  z-index: 10020;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.18)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.42), transparent 46%);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 18px;
+  box-shadow:
+    0 20px 48px rgba(15, 23, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
-  min-width: 280px;
-  max-width: 360px;
+  box-sizing: border-box;
+  min-width: min(280px, calc(100vw - 32px));
+  width: min(360px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
   transform: translate(-50%, 0);
   pointer-events: auto;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  isolation: isolate;
 }
 
 .selected-text-preview {
-  padding: 12px 14px;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(102, 114, 203, 0.05));
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 14px 16px 12px;
+  background: linear-gradient(135deg, rgba(90, 167, 255, 0.14), rgba(139, 92, 246, 0.12));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .preview-label {
   display: block;
   font-size: 11px;
-  color: #6b7280;
-  margin-bottom: 4px;
-  font-weight: 500;
+  color: rgba(71, 85, 105, 0.85);
+  margin-bottom: 6px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
 }
 
 .preview-text {
-  display: block;
+  display: -webkit-box;
   font-size: 13px;
-  color: #1f2937;
-  line-height: 1.4;
-  word-break: break-all;
+  color: #0f172a;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .menu-divider {
   height: 1px;
-  background: rgba(0, 0, 0, 0.06);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.38), transparent);
   margin: 0;
 }
 
 .analysis-btn {
-  padding: 12px 14px;
+  padding: 13px 16px;
   border: none;
   background: transparent;
-  color: #374151;
+  color: #1e293b;
   font-size: 14px;
   cursor: pointer;
   text-align: left;
-  transition: all 0.2s;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
 .analysis-btn:hover {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(102, 114, 203, 0.08));
-  color: #2563eb;
-  padding-left: 18px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.24), rgba(148, 163, 184, 0.12));
+  color: #1d4ed8;
+  transform: translateX(2px);
 }
 
 .analysis-btn:active {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(102, 114, 203, 0.12));
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.18), rgba(59, 130, 246, 0.14));
 }
 
 .btn-icon {
@@ -876,26 +984,34 @@ const toggleTheme = () => {
 .btn-shortcut {
   font-size: 11px;
   padding: 2px 6px;
-  background: rgba(0, 0, 0, 0.04);
-  border-radius: 4px;
-  color: #9ca3af;
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  color: rgba(71, 85, 105, 0.82);
   font-family: monospace;
 }
 
 .analysis-btn:hover .btn-shortcut {
-  background: rgba(59, 130, 246, 0.1);
-  color: #93c5fd;
+  background: rgba(255, 255, 255, 0.34);
+  color: #1d4ed8;
 }
 
 /* 菜单淡入动画 */
 .menu-fade-enter-active,
 .menu-fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
 .menu-fade-enter-from,
 .menu-fade-leave-to {
   opacity: 0;
+  transform: translate(-50%, -6px) scale(0.98);
+}
+
+.menu-fade-enter-to,
+.menu-fade-leave-from {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
 }
 
 .assistant-fade-enter-active,

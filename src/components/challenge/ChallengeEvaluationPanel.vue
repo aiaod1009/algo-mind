@@ -20,38 +20,268 @@ const props = defineProps({
   },
 })
 
+const CODE_SEPARATOR = '---CODE---'
+const JSON_SEPARATOR = '---JSON---'
+
 const passed = computed(() => Number(props.result?.score || 0) >= props.passScore)
 const starsDisplay = computed(() => {
   const stars = Math.min(3, Math.max(0, Number(props.result?.stars || 0)))
   return '★'.repeat(stars) + '☆'.repeat(3 - stars)
 })
 
-const simpleMarkdownToHtml = (text) => {
-  if (!text) return ''
-  return text
-    // 代码块
-    .replace(/```([\s\S]*?)```/g, '<pre class="code-block"><code>$1</code></pre>')
-    // 行内代码
-    .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
-    // 粗体
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    // 斜体
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    // 标题
-    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-    // 列表项
-    .replace(/^- (.*$)/gim, '<li>$1</li>')
-    // 换行
-    .replace(/\n/g, '<br>')
+const normalizeSuggestions = (value) => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.map((item) => String(item || '').trim()).filter(Boolean)
 }
 
-const streamingPreview = computed(() => {
-  const value = String(props.streamingText || '').trim()
-  const html = simpleMarkdownToHtml(value)
-  return html || 'AI 正在分析你的代码，请稍候...'
+const extractAnalysisText = (text) => {
+  const source = String(text || '')
+  const codeSeparatorIndex = source.indexOf(CODE_SEPARATOR)
+  if (codeSeparatorIndex !== -1) {
+    return source.slice(0, codeSeparatorIndex).trim()
+  }
+
+  const jsonSeparatorIndex = source.indexOf(JSON_SEPARATOR)
+  if (jsonSeparatorIndex === -1) {
+    return source.trim().startsWith('{') ? '' : source.trim()
+  }
+  return source.slice(0, jsonSeparatorIndex).trim()
+}
+
+const extractCodeCandidate = (text) => {
+  const source = String(text || '')
+  const codeSeparatorIndex = source.indexOf(CODE_SEPARATOR)
+  if (codeSeparatorIndex === -1) {
+    return ''
+  }
+
+  const codeStart = codeSeparatorIndex + CODE_SEPARATOR.length
+  const jsonSeparatorIndex = source.indexOf(JSON_SEPARATOR, codeStart)
+  return source.slice(codeStart, jsonSeparatorIndex === -1 ? undefined : jsonSeparatorIndex).trim()
+}
+
+const extractJsonCandidate = (text) => {
+  const source = String(text || '')
+  const separatorIndex = source.indexOf(JSON_SEPARATOR)
+  if (separatorIndex !== -1) {
+    return source.slice(separatorIndex + JSON_SEPARATOR.length).trim()
+  }
+
+  const trimmed = source.trim()
+  return trimmed.startsWith('{') ? trimmed : ''
+}
+
+const stripMarkdownFence = (text) => {
+  const value = String(text || '').trim()
+  if (!value.startsWith('```')) {
+    return value
+  }
+
+  return value
+    .replace(/^```[\w-]*\s*/, '')
+    .replace(/\s*```$/, '')
+    .trim()
+}
+
+const trimBlankLines = (text) => {
+  return String(text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/^\s*\n+/, '')
+    .replace(/\n+\s*$/, '')
+}
+
+const dedentBlock = (text) => {
+  const lines = trimBlankLines(text).split('\n')
+  const nonEmptyLines = lines.filter((line) => line.trim())
+  if (!nonEmptyLines.length) {
+    return ''
+  }
+
+  const minIndent = Math.min(
+    ...nonEmptyLines.map((line) => {
+      const match = line.match(/^\s*/)
+      return match ? match[0].length : 0
+    }),
+  )
+
+  return lines.map((line) => line.slice(Math.min(minIndent, line.length))).join('\n')
+}
+
+const normalizeCodeBlock = (text) => dedentBlock(stripMarkdownFence(text))
+
+const decodeEscapedCharacter = (char) => {
+  switch (char) {
+    case 'n':
+      return '\n'
+    case 'r':
+      return '\r'
+    case 't':
+      return '\t'
+    case 'b':
+      return '\b'
+    case 'f':
+      return '\f'
+    case '"':
+      return '"'
+    case '\\':
+      return '\\'
+    case '/':
+      return '/'
+    default:
+      return char
+  }
+}
+
+const readJsonString = (text, quoteIndex) => {
+  if (text[quoteIndex] !== '"') {
+    return { value: '', completed: false, endIndex: quoteIndex }
+  }
+
+  let value = ''
+  let escape = false
+
+  for (let index = quoteIndex + 1; index < text.length; index += 1) {
+    const char = text[index]
+
+    if (escape) {
+      if (char === 'u' && /^[\da-fA-F]{4}$/.test(text.slice(index + 1, index + 5))) {
+        value += String.fromCharCode(Number.parseInt(text.slice(index + 1, index + 5), 16))
+        index += 4
+      } else {
+        value += decodeEscapedCharacter(char)
+      }
+      escape = false
+      continue
+    }
+
+    if (char === '\\') {
+      escape = true
+      continue
+    }
+
+    if (char === '"') {
+      return { value, completed: true, endIndex: index }
+    }
+
+    value += char
+  }
+
+  return { value, completed: false, endIndex: text.length - 1 }
+}
+
+const extractJsonStringField = (text, fieldName) => {
+  const keyMatch = new RegExp(`"${fieldName}"\\s*:\\s*"`, 's').exec(text)
+  if (!keyMatch) {
+    return ''
+  }
+
+  const quoteIndex = keyMatch.index + keyMatch[0].length - 1
+  return readJsonString(text, quoteIndex).value.trim()
+}
+
+const extractJsonStringArrayField = (text, fieldName) => {
+  const keyMatch = new RegExp(`"${fieldName}"\\s*:\\s*\\[`, 's').exec(text)
+  if (!keyMatch) {
+    return []
+  }
+
+  const items = []
+  let cursor = keyMatch.index + keyMatch[0].length
+
+  while (cursor < text.length) {
+    while (cursor < text.length && /[\s,]/.test(text[cursor])) {
+      cursor += 1
+    }
+
+    if (cursor >= text.length || text[cursor] === ']') {
+      break
+    }
+
+    if (text[cursor] !== '"') {
+      break
+    }
+
+    const parsed = readJsonString(text, cursor)
+    if (parsed.value.trim()) {
+      items.push(parsed.value.trim())
+    }
+
+    cursor = parsed.endIndex + 1
+
+    if (!parsed.completed) {
+      break
+    }
+  }
+
+  return items
+}
+
+const mergeAnalysisText = (analysisBeforeJson, shortComment) => {
+  const preface = String(analysisBeforeJson || '').trim()
+  const comment = String(shortComment || '').trim()
+
+  if (!preface) {
+    return comment
+  }
+  if (!comment) {
+    return preface
+  }
+  if (preface === comment || preface.includes(comment)) {
+    return preface
+  }
+  if (comment.includes(preface)) {
+    return comment
+  }
+  return `${preface}\n\n${comment}`
+}
+
+const parseStreamingPayload = (rawValue) => {
+  const raw = String(rawValue || '')
+  const analysisBeforeJson = extractAnalysisText(raw)
+  const codeCandidate = extractCodeCandidate(raw)
+  const jsonCandidate = extractJsonCandidate(raw)
+
+  let shortComment = ''
+  let suggestions = []
+  let recommendedCode = ''
+
+  if (jsonCandidate) {
+    try {
+      const parsed = JSON.parse(jsonCandidate)
+      shortComment = String(parsed.shortComment ?? parsed.analysis ?? '').trim()
+      suggestions = normalizeSuggestions(parsed.suggestions)
+      recommendedCode = String(parsed.recommendedCode ?? '').trim()
+    } catch {
+      shortComment = extractJsonStringField(jsonCandidate, 'shortComment')
+      suggestions = extractJsonStringArrayField(jsonCandidate, 'suggestions')
+      recommendedCode = extractJsonStringField(jsonCandidate, 'recommendedCode')
+    }
+  }
+
+  if (codeCandidate) {
+    recommendedCode = codeCandidate
+  }
+
+  return {
+    analysisText: mergeAnalysisText(analysisBeforeJson, shortComment),
+    suggestions,
+    recommendedCode: normalizeCodeBlock(recommendedCode),
+  }
+}
+
+const streamingPayload = computed(() => parseStreamingPayload(props.streamingText))
+const streamingAnalysisText = computed(() => {
+  return streamingPayload.value.analysisText || 'AI 正在分析你的代码，请稍候...'
 })
+const streamingSuggestions = computed(() => streamingPayload.value.suggestions)
+const streamingRecommendedCode = computed(() => streamingPayload.value.recommendedCode)
+
+const finalAnalysisText = computed(() => {
+  return String(props.result?.shortComment || props.result?.analysis || '').trim() || '暂无分析内容'
+})
+const finalRecommendedCode = computed(() => normalizeCodeBlock(props.result?.recommendedCode || ''))
 </script>
 
 <template>
@@ -73,10 +303,22 @@ const streamingPreview = computed(() => {
       <div class="stream-shell">
         <div class="stream-shell-head">
           <span class="stream-shell-title">AI 分析进行中</span>
-          <span class="stream-shell-meta">内容会在完成后自动汇总到正式评测结果</span>
+          <span class="stream-shell-meta">分析、建议和参考代码会随着模型输出持续刷新</span>
         </div>
-        <div class="eval-analysis streaming-analysis markdown-body" v-html="streamingPreview"></div>
+        <div class="eval-analysis streaming-analysis">{{ streamingAnalysisText }}</div>
       </div>
+
+      <template v-if="streamingSuggestions.length">
+        <div class="eval-section-title">改进建议</div>
+        <ul class="eval-suggestions">
+          <li v-for="(suggestion, index) in streamingSuggestions" :key="index">{{ suggestion }}</li>
+        </ul>
+      </template>
+
+      <template v-if="streamingRecommendedCode">
+        <div class="eval-section-title">推荐代码</div>
+        <pre class="eval-pre recommended-code-block">{{ streamingRecommendedCode }}</pre>
+      </template>
     </template>
 
     <template v-else-if="result">
@@ -95,11 +337,11 @@ const streamingPreview = computed(() => {
         <span class="stars" :class="'stars-' + (result.stars || 0)">{{ starsDisplay }}</span>
       </div>
 
-      <div class="eval-meta" v-if="result.pointsEarned > 0">本次奖励：{{ result.pointsEarned }} 积分</div>
+      <div v-if="result.pointsEarned > 0" class="eval-meta">本次奖励：{{ result.pointsEarned }} 积分</div>
       <div class="eval-meta">评测时间：{{ result.updatedAt }}</div>
 
       <div class="eval-section-title">中文分析</div>
-      <p class="eval-analysis">{{ result.shortComment || result.analysis || '暂无分析内容' }}</p>
+      <div class="eval-analysis">{{ finalAnalysisText }}</div>
 
       <template v-if="result.suggestions?.length">
         <div class="eval-section-title">改进建议</div>
@@ -108,14 +350,14 @@ const streamingPreview = computed(() => {
         </ul>
       </template>
 
-      <template v-if="result.recommendedCode">
+      <template v-if="finalRecommendedCode">
         <div class="eval-section-title">推荐代码</div>
-        <pre class="eval-pre recommended-code-block">{{ result.recommendedCode }}</pre>
+        <pre class="eval-pre recommended-code-block">{{ finalRecommendedCode }}</pre>
       </template>
     </template>
 
     <template v-else>
-      <div class="empty-state">运行评测后，这里会展示 AI 评分和优化建议。</div>
+      <div class="empty-state">运行评测后，这里会展示 AI 评分、中文分析、改进建议和推荐代码。</div>
     </template>
   </aside>
 </template>
@@ -266,7 +508,7 @@ const streamingPreview = computed(() => {
   border-radius: 8px;
   padding: 8px;
   min-height: 68px;
-  max-height: 160px;
+  max-height: 320px;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
@@ -305,6 +547,8 @@ const streamingPreview = computed(() => {
   max-height: 220px;
   overflow-y: auto;
   white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.7;
   color: var(--text-main);
   font-size: 13px;
 }
@@ -322,11 +566,11 @@ const streamingPreview = computed(() => {
 
 .recommended-code-block {
   min-height: 180px;
-  max-height: 320px;
   background: #0f172a;
   color: #e2e8f0;
   border-color: rgba(148, 163, 184, 0.3);
   font-family: 'Fira Code', 'JetBrains Mono', monospace;
+  line-height: 1.6;
 }
 
 .eval-suggestions {
@@ -362,84 +606,5 @@ const streamingPreview = computed(() => {
     opacity: 1;
     transform: scale(1);
   }
-}
-
-/* Markdown 样式 */
-.markdown-body h1,
-.markdown-body h2,
-.markdown-body h3 {
-  margin: 8px 0 4px;
-  color: var(--text-title);
-  font-weight: 600;
-}
-
-.markdown-body h1 {
-  font-size: 16px;
-}
-
-.markdown-body h2 {
-  font-size: 14px;
-}
-
-.markdown-body h3 {
-  font-size: 13px;
-}
-
-.markdown-body strong {
-  color: #2563eb;
-  font-weight: 600;
-}
-
-.markdown-body em {
-  color: #7c3aed;
-  font-style: italic;
-}
-
-.markdown-body code {
-  font-family: 'Fira Code', monospace;
-  font-size: 12px;
-}
-
-.markdown-body .inline-code {
-  padding: 2px 6px;
-  background: rgba(37, 99, 235, 0.08);
-  border-radius: 4px;
-  color: #1d4ed8;
-}
-
-.markdown-body .code-block {
-  margin: 8px 0;
-  padding: 12px;
-  background: #0f172a;
-  border-radius: 8px;
-  overflow-x: auto;
-  color: #e2e8f0;
-  line-height: 1.5;
-}
-
-.markdown-body .code-block code {
-  color: #e2e8f0;
-  background: transparent;
-  padding: 0;
-}
-
-.markdown-body li {
-  margin: 6px 0 6px 18px;
-  color: var(--text-main);
-}
-
-.markdown-body li {
-  margin: 4px 0;
-  color: #cbd5e1;
-}
-
-.markdown-body li::marker {
-  color: #60a5fa;
-}
-
-.markdown-body br {
-  display: block;
-  content: '';
-  margin: 4px 0;
 }
 </style>

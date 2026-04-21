@@ -23,41 +23,43 @@ import java.util.List;
 @RequestMapping("/ai")
 public class AIController {
 
-    private static final String CODE_EVALUATION_SYSTEM_PROMPT = """
-            你是一位专业的算法代码评测助手，需要给出清晰、详细、可执行的中文评测。
+    private static final int QUESTION_PROMPT_LIMIT = 600;
+    private static final int DESCRIPTION_PROMPT_LIMIT = 1200;
+    private static final int CODE_PROMPT_LIMIT = 12000;
+    private static final int STDIN_PROMPT_LIMIT = 400;
+    private static final String CODE_SEPARATOR = "---CODE---";
+    private static final String JSON_SEPARATOR = "---JSON---";
 
-            你的目标：
-            1. 给出 0-100 的总分
-            2. 输出一段详细中文分析，说明代码的正确性、主要问题、可读性或复杂度表现
-            3. 给出 2 条最重要的改进建议
-            4. 给出一份可以直接参考或替换的推荐代码
+    private static final String CODE_EVALUATION_SYSTEM_PROMPT_V2 = """
+            角色：算法代码评测助手
+            任务：中文评测代码
 
-            输出格式要求：
-            1. 先输出 3-6 行中文分析，内容要具体，避免空话
-            2. 然后输出分隔符：---JSON---
-            3. 最后输出标准 JSON，结构如下：
+            输出格式：
+            [3-6行中文分析]
+            ---CODE---
+            [完整代码，直接输出，不要 markdown]
+            ---JSON---
             {
-              "score": 0-100 的整数,
-              "stars": 0-3 的整数,
-              "shortComment": "详细中文分析，建议 120-220 字，直接写分析内容，不要 Markdown 列表",
+              "score": 0-100,
+              "stars": 0-3,
+              "shortComment": "120-220字详细分析",
               "suggestions": ["建议1", "建议2"],
-              "recommendedCode": "完整推荐代码，不要 Markdown 代码块"
+              "recommendedCode": "同上方代码"
             }
 
-            评分要求：
-            - 90-100：实现完整、质量高、效率合理，3 星
-            - 70-89：基本正确，有少量问题，2 星
-            - 50-69：部分正确或存在明显问题，1 星
-            - 0-49：实现错误严重或明显未完成，0 星
+            评分标准：
+            - 90-100：完整高质量，3星
+            - 70-89：基本正确，2星
+            - 50-69：部分正确，1星
+            - 0-49：严重错误，0星
 
-            额外要求：
-            - 必须使用中文
-            - 纯文本分析在前，JSON 在后，用 ---JSON--- 分隔
-            - JSON 必须合法，不能附加 Markdown 代码块
-            - 只保留 score、stars、shortComment、suggestions、recommendedCode 这几个字段
-            - shortComment 字段名虽然叫 shortComment，但内容必须是详细中文分析
-            - suggestions 固定输出 2 条，每条尽量不超过 30 字
-            - recommendedCode 必须是完整代码，直接输出代码文本
+            约束：
+            1. 全部中文
+            2. suggestions 固定 2 条，每条不超过 30 字
+            3. 推荐代码必须放在 ---CODE--- 和 ---JSON--- 之间，按 100 分标准给出完整可运行代码，不要 markdown
+            4. 仅保留 score、stars、shortComment、suggestions、recommendedCode
+            5. JSON 前只能保留 3-6 行中文分析，JSON 后不要追加内容
+            6. ---CODE--- 中必须保留语法所需空格、换行和缩进，禁止输出 publicclass、returnnew、newArrayList 这类连写错误
             """;
 
     private static final String ASSISTANT_SYSTEM_PROMPT = """
@@ -118,8 +120,8 @@ public class AIController {
         log.info("收到代码评测请求，语言：{}，题目：{}", request.getLanguage(), request.getQuestion());
 
         try {
-            String responseContent = douBaoAiService.sendToAiFastOrThrow(buildCodeEvaluationMessages(request));
-            CodeEvaluationResponse evalResponse = parseCodeEvaluationResponse(responseContent);
+            String responseContent = douBaoAiService.sendToAiFastOrThrowForCodeEvaluation(buildCodeEvaluationMessages(request));
+            CodeEvaluationResponse evalResponse = normalizeEvaluationResponse(parseCodeEvaluationResponse(responseContent));
             log.info("代码评测成功，得分：{}，星级：{}", evalResponse.getScore(), evalResponse.getStars());
             return Result.success(evalResponse);
         } catch (Exception e) {
@@ -131,7 +133,7 @@ public class AIController {
     @PostMapping(value = "/evaluate-code/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter evaluateCodeStream(@RequestBody CodeEvaluationRequest request) {
         String fallbackJson = toJson(generateFallbackEvaluation(request));
-        return douBaoAiService.sendToAiStreamFast(buildCodeEvaluationMessages(request), fallbackJson);
+        return douBaoAiService.sendToAiStreamFastForCodeEvaluation(buildCodeEvaluationMessages(request), fallbackJson);
     }
 
     private List<ChatMessage> buildAssistantMessages(ChatRequest request) {
@@ -194,31 +196,63 @@ public class AIController {
 
     private List<ChatMessage> buildCodeEvaluationMessages(CodeEvaluationRequest request) {
         List<ChatMessage> messages = new ArrayList<>();
-        messages.add(ChatMessage.system(CODE_EVALUATION_SYSTEM_PROMPT));
+        messages.add(ChatMessage.system(CODE_EVALUATION_SYSTEM_PROMPT_V2));
         messages.add(ChatMessage.user(buildCodeEvaluationPrompt(request)));
         return messages;
     }
 
     private String buildCodeEvaluationPrompt(CodeEvaluationRequest request) {
         StringBuilder userPrompt = new StringBuilder();
-        userPrompt.append("请评估以下代码：\n\n");
-        userPrompt.append("【题目】\n").append(nullSafe(request.getQuestion())).append("\n\n");
-        userPrompt.append("【题目描述】\n").append(nullSafe(request.getDescription())).append("\n\n");
-        userPrompt.append("【编程语言】\n").append(nullSafe(request.getLanguage())).append("\n\n");
-        userPrompt.append("【学生代码】\n").append(nullSafe(request.getCode())).append("\n\n");
+        userPrompt.append("请按要求评测以下算法代码：\n\n");
+        appendPromptSection(userPrompt, "题目", request.getQuestion(), QUESTION_PROMPT_LIMIT);
 
-        if (hasText(request.getStdinInput())) {
-            userPrompt.append("【测试输入】\n").append(request.getStdinInput()).append("\n\n");
+        String description = normalizePromptText(request.getDescription());
+        String question = normalizePromptText(request.getQuestion());
+        if (hasText(description) && !description.equals(question)) {
+            appendPromptSection(userPrompt, "题目描述", description, DESCRIPTION_PROMPT_LIMIT);
         }
 
-        userPrompt.append("请输出详细中文分析、建议和推荐代码，不要输出额外字段。");
+        appendPromptSection(userPrompt, "编程语言", request.getLanguage(), 80);
+        appendPromptSection(userPrompt, "学生代码", request.getCode(), CODE_PROMPT_LIMIT);
+
+        if (hasText(request.getStdinInput())) {
+            appendPromptSection(userPrompt, "测试输入", request.getStdinInput(), STDIN_PROMPT_LIMIT);
+        }
+
+        userPrompt.append("请严格按照既定格式输出。");
         return userPrompt.toString();
+    }
+
+    private void appendPromptSection(StringBuilder builder, String title, String value, int limit) {
+        String normalized = normalizePromptText(value);
+        if (!hasText(normalized)) {
+            return;
+        }
+        builder.append("【").append(title).append("】\n")
+                .append(truncatePromptText(normalized, limit))
+                .append("\n\n");
+    }
+
+    private String normalizePromptText(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private String truncatePromptText(String value, int limit) {
+        if (!hasText(value) || value.length() <= limit) {
+            return value;
+        }
+        return value.substring(0, limit) + "\n...[内容过长，已截断]";
     }
 
     private CodeEvaluationResponse parseCodeEvaluationResponse(String content) {
         try {
             String jsonContent = extractEvaluationJson(content);
-            return objectMapper.readValue(jsonContent, CodeEvaluationResponse.class);
+            CodeEvaluationResponse response = objectMapper.readValue(jsonContent, CodeEvaluationResponse.class);
+            String extractedCode = extractEvaluationCode(content);
+            if (hasText(extractedCode)) {
+                response.setRecommendedCode(extractedCode);
+            }
+            return normalizeEvaluationResponse(response);
         } catch (Exception e) {
             log.error("解析代码评测响应失败，原始内容：{}", content, e);
             CodeEvaluationResponse response = new CodeEvaluationResponse();
@@ -227,7 +261,7 @@ public class AIController {
             response.setShortComment("评测结果解析失败，已回退到基础中文分析。当前只能确认代码已成功提交，但 AI 返回内容没有按约定格式输出，建议重新发起一次评测，并重点检查边界条件、输入处理和核心逻辑是否完整。");
             response.setSuggestions(List.of("稍后重试一次 AI 评测", "检查代码是否完整提交"));
             response.setRecommendedCode("");
-            return response;
+            return normalizeEvaluationResponse(response);
         }
     }
 
@@ -275,7 +309,7 @@ public class AIController {
         response.setShortComment("已使用本地快速评测。当前代码已经具备基础结构，但还无法像完整 AI 评测那样确认逻辑是否覆盖题目要求、边界条件和复杂度约束。建议先自查输入输出、循环分支和返回结果，再结合推荐代码继续完善。");
         response.setSuggestions(List.of("补充边界条件测试", "检查复杂度是否满足题目要求"));
         response.setRecommendedCode(buildFallbackRecommendedCode(code, request.getLanguage()));
-        return response;
+        return normalizeEvaluationResponse(response);
     }
 
     private String buildChatFailureResponse(ChatRequest request, Exception e) {
@@ -379,9 +413,9 @@ public class AIController {
 
         String normalized = stripMarkdownFence(content);
 
-        int separatorIndex = normalized.indexOf("---JSON---");
+        int separatorIndex = normalized.indexOf(JSON_SEPARATOR);
         String afterSeparator = separatorIndex >= 0
-                ? normalized.substring(separatorIndex + "---JSON---".length()).trim()
+                ? normalized.substring(separatorIndex + JSON_SEPARATOR.length()).trim()
                 : normalized.trim();
 
         int braceStart = afterSeparator.indexOf('{');
@@ -439,6 +473,25 @@ public class AIController {
         return afterSeparator.substring(braceStart);
     }
 
+    private String extractEvaluationCode(String content) {
+        if (!hasText(content)) {
+            return "";
+        }
+
+        String normalized = content.replace("\r\n", "\n");
+        int codeStart = normalized.indexOf(CODE_SEPARATOR);
+        if (codeStart < 0) {
+            return "";
+        }
+
+        int contentStart = codeStart + CODE_SEPARATOR.length();
+        int jsonStart = normalized.indexOf(JSON_SEPARATOR, contentStart);
+        String codeSection = jsonStart >= 0
+                ? normalized.substring(contentStart, jsonStart)
+                : normalized.substring(contentStart);
+        return cleanRecommendedCode(codeSection);
+    }
+
     private String toJson(CodeEvaluationResponse response) {
         try {
             return objectMapper.writeValueAsString(response);
@@ -448,17 +501,107 @@ public class AIController {
         }
     }
 
-    private String buildFallbackRecommendedCode(String code, String language) {
-        if (hasText(code)) {
-            return code.trim();
+    private CodeEvaluationResponse normalizeEvaluationResponse(CodeEvaluationResponse response) {
+        if (response == null) {
+            return null;
         }
 
+        int score = response.getScore() == null ? 0 : Math.max(0, Math.min(100, response.getScore()));
+        int stars = response.getStars() == null ? 0 : Math.max(0, Math.min(3, response.getStars()));
+        response.setScore(score);
+        response.setStars(stars);
+
+        if (response.getShortComment() != null) {
+            response.setShortComment(response.getShortComment().trim());
+        }
+
+        response.setSuggestions(normalizeSuggestions(response.getSuggestions()));
+        response.setRecommendedCode(cleanRecommendedCode(response.getRecommendedCode()));
+        return response;
+    }
+
+    private List<String> normalizeSuggestions(List<String> suggestions) {
+        if (suggestions == null || suggestions.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> normalized = new ArrayList<>();
+        for (String suggestion : suggestions) {
+            if (!hasText(suggestion)) {
+                continue;
+            }
+
+            normalized.add(suggestion.trim());
+            if (normalized.size() == 2) {
+                break;
+            }
+        }
+        return normalized;
+    }
+
+    private String cleanRecommendedCode(String recommendedCode) {
+        String stripped = stripMarkdownFence(recommendedCode);
+        if (!hasText(stripped)) {
+            return "";
+        }
+        return dedentCommonIndent(trimBlankLines(stripped));
+    }
+
+    private String trimBlankLines(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replace("\r\n", "\n")
+                .replaceAll("^\\s*\\n+", "")
+                .replaceAll("\\n+\\s*$", "");
+    }
+
+    private String dedentCommonIndent(String value) {
+        if (!hasText(value)) {
+            return "";
+        }
+
+        String[] lines = value.split("\n", -1);
+        int minIndent = Integer.MAX_VALUE;
+        for (String line : lines) {
+            if (!hasText(line)) {
+                continue;
+            }
+
+            int indent = 0;
+            while (indent < line.length() && Character.isWhitespace(line.charAt(indent))) {
+                indent++;
+            }
+            minIndent = Math.min(minIndent, indent);
+        }
+
+        if (minIndent == Integer.MAX_VALUE || minIndent == 0) {
+            return value;
+        }
+
+        StringBuilder builder = new StringBuilder();
+        for (int index = 0; index < lines.length; index++) {
+            String line = lines[index];
+            if (hasText(line)) {
+                builder.append(line.substring(Math.min(minIndent, line.length())));
+            }
+
+            if (index < lines.length - 1) {
+                builder.append('\n');
+            }
+        }
+        return builder.toString();
+    }
+
+    private String buildFallbackRecommendedCode(String code, String language) {
         String normalizedLanguage = language == null ? "" : language.trim().toLowerCase();
         return switch (normalizedLanguage) {
             case "java" -> """
                     public class Main {
                         public static void main(String[] args) {
-                            System.out.println("TODO");
+                            // AI fallback could not produce a trusted reference solution.
+                            // Please retry the full AI evaluation to get a 100-point example.
                         }
                     }
                     """.trim();
@@ -466,20 +609,23 @@ public class AIController {
                     #include <iostream>
 
                     int main() {
-                        std::cout << "TODO" << std::endl;
+                        // AI fallback could not produce a trusted reference solution.
+                        // Please retry the full AI evaluation to get a 100-point example.
                         return 0;
                     }
                     """.trim();
             case "javascript", "js" -> """
                     function solve() {
-                      console.log('TODO')
+                      // AI fallback could not produce a trusted reference solution.
+                      // Please retry the full AI evaluation to get a 100-point example.
                     }
 
                     solve()
                     """.trim();
             default -> """
                     def solve():
-                        print("TODO")
+                        # AI fallback could not produce a trusted reference solution.
+                        # Please retry the full AI evaluation to get a 100-point example.
 
                     solve()
                     """.trim();

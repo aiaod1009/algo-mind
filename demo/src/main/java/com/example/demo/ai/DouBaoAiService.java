@@ -31,6 +31,9 @@ public class DouBaoAiService {
 
     private static final Logger logger = LoggerFactory.getLogger(DouBaoAiService.class);
     private static final long STREAM_TIMEOUT_MS = 180_000L;
+    private static final int DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
+    private static final int DEFAULT_READ_TIMEOUT_MS = 120_000;
+    private static final int DEFAULT_STREAM_READ_TIMEOUT_MS = 180_000;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final ExecutorService AI_STREAM_POOL = new ThreadPoolExecutor(
             Math.max(4, Runtime.getRuntime().availableProcessors() * 2),
@@ -43,9 +46,18 @@ public class DouBaoAiService {
 
     private final DouBaoProperties properties;
 
+    private record RequestOptions(
+            String model,
+            Integer maxTokens,
+            Double temperature,
+            Integer connectTimeoutMs,
+            Integer readTimeoutMs
+    ) {
+    }
+
     public String sendToAi(String userText) {
         try {
-            return requestText(buildSingleUserMessages(userText));
+            return requestText(buildSingleUserMessages(userText), buildDefaultRequestOptions(false));
         } catch (Exception e) {
             logger.error("DouBao request failed", e);
             return "调用失败：" + e.getMessage();
@@ -71,7 +83,11 @@ public class DouBaoAiService {
     }
 
     public String sendToAiFastOrThrow(List<ChatMessage> messages) {
-        return requestTextFast(messages);
+        return requestTextFast(messages, buildDefaultRequestOptions(false));
+    }
+
+    public String sendToAiFastOrThrowForCodeEvaluation(List<ChatMessage> messages) {
+        return requestTextFast(messages, buildCodeEvaluationRequestOptions());
     }
 
     public SseEmitter sendToAiStream(String userText) {
@@ -100,18 +116,33 @@ public class DouBaoAiService {
         return emitter;
     }
 
+    public SseEmitter sendToAiStreamFastForCodeEvaluation(List<ChatMessage> messages, String fallbackContent) {
+        SseEmitter emitter = createEmitter();
+        sendToAiStreamFast(messages, emitter, fallbackContent, buildCodeEvaluationRequestOptions());
+        return emitter;
+    }
+
     public void sendToAiStreamFast(List<ChatMessage> messages, SseEmitter emitter) {
         sendToAiStreamFast(messages, emitter, null);
     }
 
     public void sendToAiStreamFast(List<ChatMessage> messages, SseEmitter emitter, String fallbackContent) {
+        sendToAiStreamFast(messages, emitter, fallbackContent, buildDefaultRequestOptions(true));
+    }
+
+    private void sendToAiStreamFast(
+            List<ChatMessage> messages,
+            SseEmitter emitter,
+            String fallbackContent,
+            RequestOptions options
+    ) {
         List<ChatMessage> sanitizedMessages = sanitizeMessages(messages);
         if (sanitizedMessages.isEmpty()) {
             completeWithError(emitter, fallbackContent != null ? fallbackContent : "请输入有效内容后重试");
             return;
         }
 
-        AI_STREAM_POOL.execute(() -> streamToEmitter(sanitizedMessages, emitter, fallbackContent));
+        AI_STREAM_POOL.execute(() -> streamToEmitter(sanitizedMessages, emitter, fallbackContent, options));
     }
 
     public SseEmitter sendToAiStream(List<ChatMessage> messages, String fallbackContent) {
@@ -122,7 +153,12 @@ public class DouBaoAiService {
             return emitter;
         }
 
-        AI_STREAM_POOL.execute(() -> streamToEmitter(sanitizedMessages, emitter, fallbackContent));
+        AI_STREAM_POOL.execute(() -> streamToEmitter(
+                sanitizedMessages,
+                emitter,
+                fallbackContent,
+                buildDefaultRequestOptions(true)
+        ));
         return emitter;
     }
 
@@ -136,11 +172,18 @@ public class DouBaoAiService {
         return emitter;
     }
 
-    private void streamToEmitter(List<ChatMessage> messages, SseEmitter emitter, String fallbackContent) {
+    private void streamToEmitter(
+            List<ChatMessage> messages,
+            SseEmitter emitter,
+            String fallbackContent,
+            RequestOptions options
+    ) {
         HttpURLConnection conn = null;
+        long startedAt = System.currentTimeMillis();
+        boolean firstChunkDelivered = false;
         try {
-            String requestBody = buildRequestBody(messages, true);
-            conn = openConnection(true);
+            String requestBody = buildRequestBody(messages, true, options);
+            conn = openConnection(true, options);
             conn.getOutputStream().write(requestBody.getBytes(StandardCharsets.UTF_8));
 
             try (InputStream stream = getResponseStream(conn);
@@ -158,10 +201,25 @@ public class DouBaoAiService {
 
                     String content = extractStreamContent(data);
                     if (content != null && !content.isEmpty()) {
+                        if (!firstChunkDelivered) {
+                            firstChunkDelivered = true;
+                            logger.info(
+                                    "DouBao stream first chunk in {} ms, model={}, maxTokens={}",
+                                    System.currentTimeMillis() - startedAt,
+                                    options.model(),
+                                    options.maxTokens()
+                            );
+                        }
                         emitter.send(content);
                     }
                 }
             }
+            logger.info(
+                    "DouBao streaming request completed in {} ms, model={}, maxTokens={}",
+                    System.currentTimeMillis() - startedAt,
+                    options.model(),
+                    options.maxTokens()
+            );
             emitter.complete();
         } catch (Exception e) {
             logger.error("DouBao streaming request failed", e);
@@ -173,16 +231,17 @@ public class DouBaoAiService {
         }
     }
 
-    private String requestText(List<ChatMessage> messages) {
+    private String requestText(List<ChatMessage> messages, RequestOptions options) {
         List<ChatMessage> sanitizedMessages = sanitizeMessages(messages);
         if (sanitizedMessages.isEmpty()) {
             throw new IllegalArgumentException("请输入有效内容后重试");
         }
 
         HttpURLConnection conn = null;
+        long startedAt = System.currentTimeMillis();
         try {
-            String requestBody = buildRequestBody(sanitizedMessages, false);
-            conn = openConnection(false);
+            String requestBody = buildRequestBody(sanitizedMessages, false, options);
+            conn = openConnection(false, options);
             conn.getOutputStream().write(requestBody.getBytes(StandardCharsets.UTF_8));
 
             try (InputStream stream = getResponseStream(conn);
@@ -192,7 +251,12 @@ public class DouBaoAiService {
                 while ((line = reader.readLine()) != null) {
                     response.append(line);
                 }
-                logger.info("DouBao request completed");
+                logger.info(
+                        "DouBao request completed in {} ms, model={}, maxTokens={}",
+                        System.currentTimeMillis() - startedAt,
+                        options.model(),
+                        options.maxTokens()
+                );
                 return extractContent(response.toString());
             }
         } catch (IOException e) {
@@ -205,10 +269,14 @@ public class DouBaoAiService {
     }
 
     private String requestTextFast(List<ChatMessage> messages) {
-        return requestText(messages);
+        return requestText(messages, buildDefaultRequestOptions(false));
     }
 
-    private HttpURLConnection openConnection(boolean stream) throws IOException {
+    private String requestTextFast(List<ChatMessage> messages, RequestOptions options) {
+        return requestText(messages, options);
+    }
+
+    private HttpURLConnection openConnection(boolean stream, RequestOptions options) throws IOException {
         URL url = new URL(properties.getUrl());
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("POST");
@@ -216,12 +284,13 @@ public class DouBaoAiService {
         conn.setRequestProperty("Authorization", "Bearer " + properties.getKey());
         if (stream) {
             conn.setRequestProperty("Accept", "text/event-stream");
-            conn.setReadTimeout(180_000);
-        } else {
-            conn.setReadTimeout(120_000);
         }
         conn.setDoOutput(true);
-        conn.setConnectTimeout(30_000);
+        conn.setReadTimeout(positiveOrDefault(
+                options.readTimeoutMs(),
+                stream ? DEFAULT_STREAM_READ_TIMEOUT_MS : DEFAULT_READ_TIMEOUT_MS
+        ));
+        conn.setConnectTimeout(positiveOrDefault(options.connectTimeoutMs(), DEFAULT_CONNECT_TIMEOUT_MS));
         return conn;
     }
 
@@ -237,10 +306,12 @@ public class DouBaoAiService {
         return stream;
     }
 
-    private String buildRequestBody(List<ChatMessage> messages, boolean stream) throws IOException {
+    private String buildRequestBody(List<ChatMessage> messages, boolean stream, RequestOptions options) throws IOException {
         ObjectNode root = OBJECT_MAPPER.createObjectNode();
-        root.put("model", properties.getModel());
-        
+        root.put("model", firstNonBlank(options.model(), properties.getModel()));
+        root.put("temperature", nonNullOrDefault(options.temperature(), properties.getTemperature(), 0.7));
+        root.put("max_tokens", positiveOrDefault(options.maxTokens(), properties.getMaxTokens(), 1200));
+
         if (stream) {
             root.put("stream", true);
         }
@@ -329,6 +400,61 @@ public class DouBaoAiService {
         return "user";
     }
 
+    private RequestOptions buildDefaultRequestOptions(boolean stream) {
+        return new RequestOptions(
+                firstNonBlank(properties.getModel(), ""),
+                positiveOrDefault(properties.getMaxTokens(), 1200),
+                nonNullOrDefault(properties.getTemperature(), 0.7),
+                DEFAULT_CONNECT_TIMEOUT_MS,
+                stream ? DEFAULT_STREAM_READ_TIMEOUT_MS : DEFAULT_READ_TIMEOUT_MS
+        );
+    }
+
+    private RequestOptions buildCodeEvaluationRequestOptions() {
+        return new RequestOptions(
+                firstNonBlank(properties.getCodeEvaluationModel(), properties.getModel()),
+                positiveOrDefault(properties.getCodeEvaluationMaxTokens(), properties.getMaxTokens(), 1400),
+                nonNullOrDefault(properties.getCodeEvaluationTemperature(), properties.getTemperature(), 0.2),
+                positiveOrDefault(properties.getCodeEvaluationConnectTimeoutMs(), DEFAULT_CONNECT_TIMEOUT_MS),
+                positiveOrDefault(properties.getCodeEvaluationReadTimeoutMs(), 45_000)
+        );
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        if (primary != null && !primary.isBlank()) {
+            return primary;
+        }
+        return fallback;
+    }
+
+    private int positiveOrDefault(Integer value, int fallback) {
+        return value != null && value > 0 ? value : fallback;
+    }
+
+    private int positiveOrDefault(Integer first, Integer second, int fallback) {
+        if (first != null && first > 0) {
+            return first;
+        }
+        if (second != null && second > 0) {
+            return second;
+        }
+        return fallback;
+    }
+
+    private double nonNullOrDefault(Double first, Double fallback, double defaultValue) {
+        if (first != null) {
+            return first;
+        }
+        if (fallback != null) {
+            return fallback;
+        }
+        return defaultValue;
+    }
+
+    private double nonNullOrDefault(Double value, double fallback) {
+        return value != null ? value : fallback;
+    }
+
     private void completeWithError(SseEmitter emitter, String errorMsg) {
         try {
             emitter.send(errorMsg == null ? "调用失败，请稍后重试" : errorMsg);
@@ -349,8 +475,8 @@ public class DouBaoAiService {
         AI_STREAM_POOL.execute(() -> {
             HttpURLConnection conn = null;
             try {
-                String requestBody = buildRequestBody(sanitizedMessages, true);
-                conn = openConnection(true);
+                String requestBody = buildRequestBody(sanitizedMessages, true, buildDefaultRequestOptions(true));
+                conn = openConnection(true, buildDefaultRequestOptions(true));
                 conn.getOutputStream().write(requestBody.getBytes(StandardCharsets.UTF_8));
 
                 try (InputStream stream = getResponseStream(conn);

@@ -93,6 +93,7 @@ public class CodeComparisonController {
         }
         
         response.setHistorySnapshot(buildSnapshotInfo(historySnapshot));
+        response.setCurrentScore(request.getCurrentScore());
         response.setHistoryScore(historySnapshot.getScore());
         
         return Result.success(response);

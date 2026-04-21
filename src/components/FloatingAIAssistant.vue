@@ -89,10 +89,10 @@ export default {
     const dragOffset = ref({ x: 0, y: 0 })
     const dragStartPoint = ref({ x: 0, y: 0 })
     const dragMoved = ref(false)
-    const dragResetTimer = ref(null)
+    const suppressHeaderClick = ref(false)
     const resizeStartPoint = ref({ x: 0, y: 0 })
     const resizeStartSize = ref({ width: 350, height: 430 })
-    const DRAG_THRESHOLD = 6
+    const DRAG_THRESHOLD = 3
     const MIN_WIDTH = 300
     const MIN_HEIGHT = 320
     const DEFAULT_WIDTH = 350
@@ -346,7 +346,15 @@ export default {
       }
     }
 
+    const expandAssistant = () => {
+      if (isMinimized.value) {
+        isMinimized.value = false
+      }
+    }
+
     const analyzeSelectedText = (text, type) => {
+      expandAssistant()
+
       if (!text || !isConnected.value || isLoading.value) {
         return
       }
@@ -365,13 +373,9 @@ export default {
         return
       }
 
-      if (dragResetTimer.value) {
-        clearTimeout(dragResetTimer.value)
-        dragResetTimer.value = null
-      }
-
       isDragging.value = true
       dragMoved.value = false
+      suppressHeaderClick.value = false
       dragStartPoint.value = {
         x: event.clientX,
         y: event.clientY,
@@ -457,19 +461,14 @@ export default {
 
       if (dragMoved.value) {
         snapToWindowEdgeIfIntersecting()
+        suppressHeaderClick.value = true
       }
-
-      if (dragResetTimer.value) {
-        clearTimeout(dragResetTimer.value)
-      }
-      dragResetTimer.value = setTimeout(() => {
-        dragMoved.value = false
-        dragResetTimer.value = null
-      }, 120)
+      dragMoved.value = false
     }
 
     const handleHeaderClick = () => {
-      if (dragMoved.value) {
+      if (dragMoved.value || suppressHeaderClick.value) {
+        suppressHeaderClick.value = false
         return
       }
 
@@ -479,6 +478,10 @@ export default {
     }
 
     const handleAssistantIconClick = () => {
+      if (dragMoved.value || suppressHeaderClick.value || isDragging.value) {
+        suppressHeaderClick.value = false
+        return
+      }
       isMinimized.value = !isMinimized.value
     }
 
@@ -506,9 +509,6 @@ export default {
       if (reconnectTimer.value) {
         clearTimeout(reconnectTimer.value)
       }
-      if (dragResetTimer.value) {
-        clearTimeout(dragResetTimer.value)
-      }
       document.removeEventListener('mousemove', onDrag)
       document.removeEventListener('mouseup', stopDrag)
       document.removeEventListener('mousemove', onResize)
@@ -518,6 +518,7 @@ export default {
     return {
       analyzeSelectedText,
       clearMessages,
+      expandAssistant,
       formatTime,
       handleAssistantIconClick,
       handleHeaderClick,

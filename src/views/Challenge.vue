@@ -25,6 +25,7 @@ const errorStore = useErrorStore()
 const userStore = useUserStore()
 
 const DRAFT_KEY_PREFIX = 'challenge-draft-'
+const COMPARE_CONTEXT_KEY_PREFIX = 'challenge-compare-context-'
 const CODE_PASS_SCORE = 70
 const MAX_ATTEMPTS = 5
 
@@ -58,8 +59,21 @@ const currentLevel = computed(() => levelStore.findLevelById(currentLevelId.valu
 const maxAttempts = computed(() => MAX_ATTEMPTS)
 const isCodeChallenge = computed(() => currentLevel.value?.type === 'code')
 const hasEvaluationResult = computed(() => isCodeChallenge.value && Boolean(evaluationResult.value))
+const hasAiDockContent = computed(() => (
+  hasEvaluationResult.value
+  || isEvaluatingStream.value
+  || Boolean(comparisonResult.value)
+  || isComparing.value
+))
 const showRunPanel = computed(() => isCodeChallenge.value && Boolean(runResult.value))
 const submitButtonText = computed(() => (isCodeChallenge.value ? '运行评测' : '提交答案'))
+const aiDockToggleText = computed(() => {
+  const comparisonMode = isComparing.value || Boolean(comparisonResult.value)
+  if (comparisonMode) {
+    return isAiDockExpanded.value ? '收起对比详情' : '展开对比详情'
+  }
+  return isAiDockExpanded.value ? '收起评估详情' : '展开评估详情'
+})
 const evaluationSummary = computed(() => {
   if (!evaluationResult.value) {
     return {
@@ -93,6 +107,7 @@ const navigateBackToLevels = () => {
 }
 
 const getDraftKey = () => `${DRAFT_KEY_PREFIX}${currentLevelId.value}`
+const getCompareContextKey = () => `${COMPARE_CONTEXT_KEY_PREFIX}${currentLevelId.value}`
 
 const getTemplatePrompt = () => {
   return currentLevel.value?.question || currentLevel.value?.name || 'Write your solution here.'
@@ -163,20 +178,33 @@ const buildEvaluationPayload = () => ({
   stdinInput: stdinInput.value,
 })
 
+const CODE_SEPARATOR = '---CODE---'
 const parseEvaluationResponseContent = (content) => {
   const rawText = String(content || '').trim()
   if (!rawText) {
     throw new Error('AI 未返回评测内容')
   }
 
-  let jsonText = rawText
+  const jsonStart = rawText.indexOf(JSON_SEPARATOR)
+  let jsonText = jsonStart >= 0
+    ? rawText.slice(jsonStart + JSON_SEPARATOR.length).trim()
+    : rawText
   if (jsonText.startsWith('```json')) {
     jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '')
   } else if (jsonText.startsWith('```')) {
     jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '')
   }
 
-  return normalizeEvaluationResult(JSON.parse(jsonText.trim()))
+  const codeStart = rawText.indexOf(CODE_SEPARATOR)
+  const extractedCode = codeStart >= 0
+    ? rawText.slice(codeStart + CODE_SEPARATOR.length, jsonStart >= 0 ? jsonStart : undefined).trim()
+    : ''
+
+  const parsed = JSON.parse(jsonText.trim())
+  if (extractedCode) {
+    parsed.recommendedCode = extractedCode
+  }
+  return normalizeEvaluationResult(parsed)
 }
 
 const JSON_SEPARATOR = '---JSON---'
@@ -204,12 +232,11 @@ const requestStreamEvaluation = (payload) => new Promise((resolve, reject) => {
     payload,
     (chunk) => {
       fullText += chunk
-      evaluationStreamingText.value = extractTextBeforeJson(fullText)
+      evaluationStreamingText.value = fullText
     },
     async () => {
       try {
-        const jsonText = extractJsonAfterSeparator(fullText) || fullText
-        const parsed = parseEvaluationResponseContent(jsonText)
+        const parsed = parseEvaluationResponseContent(fullText)
         resolve(parsed)
       } catch (streamParseError) {
         try {
@@ -270,8 +297,69 @@ const persistDraft = () => {
   )
 }
 
+const persistCompareContext = () => {
+  if (!isCodeChallenge.value || !currentLevel.value) {
+    return
+  }
+
+  sessionStorage.setItem(
+    getCompareContextKey(),
+    JSON.stringify({
+      answer: answer.value,
+      stdinInput: stdinInput.value,
+      language: language.value,
+      attemptsInRun: attemptsInRun.value,
+      startTimestamp: startTimestamp.value,
+      evaluationResult: evaluationResult.value,
+      runResult: runResult.value,
+      isAiDockExpanded: isAiDockExpanded.value,
+      savedAt: Date.now(),
+    }),
+  )
+}
+
 const removeDraft = () => {
   localStorage.removeItem(getDraftKey())
+}
+
+const resetComparisonState = () => {
+  comparisonResult.value = null
+  selectedHistorySnapshot.value = null
+  isComparing.value = false
+}
+
+const applyStoredChallengeState = (draft) => {
+  if (draft.answer != null) {
+    answer.value = currentLevel.value?.type === 'multi'
+      ? (Array.isArray(draft.answer) ? draft.answer : [])
+      : draft.answer
+  } else {
+    answer.value = createEmptyAnswer()
+  }
+
+  if (typeof draft.stdinInput === 'string') {
+    stdinInput.value = draft.stdinInput
+  }
+
+  if (typeof draft.language === 'string' && LANGUAGE_LABEL_MAP[draft.language]) {
+    language.value = draft.language
+  }
+
+  if (Number.isFinite(Number(draft.attemptsInRun))) {
+    attemptsInRun.value = Math.max(0, Number(draft.attemptsInRun))
+  }
+
+  if (Number.isFinite(Number(draft.startTimestamp)) && Number(draft.startTimestamp) > 0) {
+    startTimestamp.value = Number(draft.startTimestamp)
+  }
+
+  evaluationResult.value = normalizeEvaluationResult(draft.evaluationResult)
+  runResult.value = normalizeRunResult(draft.runResult)
+  isAiDockExpanded.value = Boolean(draft.isAiDockExpanded && isCodeChallenge.value)
+
+  if (isCodeChallenge.value && !String(answer.value || '').trim()) {
+    applyCodeTemplate(true)
+  }
 }
 
 const restoreDraft = () => {
@@ -287,39 +375,7 @@ const restoreDraft = () => {
   }
 
   try {
-    const draft = JSON.parse(raw)
-
-    if (draft.answer != null) {
-      answer.value = currentLevel.value?.type === 'multi'
-        ? (Array.isArray(draft.answer) ? draft.answer : [])
-        : draft.answer
-    } else {
-      answer.value = createEmptyAnswer()
-    }
-
-    if (typeof draft.stdinInput === 'string') {
-      stdinInput.value = draft.stdinInput
-    }
-
-    if (typeof draft.language === 'string' && LANGUAGE_LABEL_MAP[draft.language]) {
-      language.value = draft.language
-    }
-
-    if (Number.isFinite(Number(draft.attemptsInRun))) {
-      attemptsInRun.value = Math.max(0, Number(draft.attemptsInRun))
-    }
-
-    if (Number.isFinite(Number(draft.startTimestamp)) && Number(draft.startTimestamp) > 0) {
-      startTimestamp.value = Number(draft.startTimestamp)
-    }
-
-    evaluationResult.value = normalizeEvaluationResult(draft.evaluationResult)
-    runResult.value = normalizeRunResult(draft.runResult)
-    isAiDockExpanded.value = Boolean(draft.isAiDockExpanded && isCodeChallenge.value)
-
-    if (isCodeChallenge.value && !String(answer.value || '').trim()) {
-      applyCodeTemplate(true)
-    }
+    applyStoredChallengeState(JSON.parse(raw))
   } catch (error) {
     console.warn('读取作答草稿失败。', error)
     answer.value = createEmptyAnswer()
@@ -327,6 +383,23 @@ const restoreDraft = () => {
     if (isCodeChallenge.value) {
       applyCodeTemplate(true)
     }
+  }
+}
+
+const restoreCompareContext = () => {
+  const raw = sessionStorage.getItem(getCompareContextKey())
+  if (!raw) {
+    return false
+  }
+
+  sessionStorage.removeItem(getCompareContextKey())
+
+  try {
+    applyStoredChallengeState(JSON.parse(raw))
+    return true
+  } catch (error) {
+    console.warn('Failed to restore comparison context', error)
+    return false
   }
 }
 
@@ -365,23 +438,28 @@ const initializeChallenge = async () => {
   isEvaluatingStream.value = false
   isAiDockExpanded.value = false
   runResult.value = null
+  resetComparisonState()
   answer.value = createEmptyAnswer()
   stdinInput.value = ''
   language.value = DEFAULT_EDITOR_LANGUAGE
 
   // 检查是否从 URL 参数恢复历史代码
   const applySnapshotId = route.query.applySnapshot
+  const compareSnapshotId = route.query.compareSnapshot
   const targetLanguage = route.query.language
 
   if (applySnapshotId) {
     await loadAndApplySnapshot(Number(applySnapshotId), targetLanguage)
+  } else if (compareSnapshotId) {
+    if (!restoreCompareContext()) {
+      restoreDraft()
+    }
+    await performCodeComparison(Number(compareSnapshotId))
   } else {
     restoreDraft()
   }
 
-  const compareSnapshotId = route.query.compareSnapshot
   if (compareSnapshotId) {
-    await performCodeComparison(Number(compareSnapshotId))
     router.replace({
       path: `/challenge/${currentLevelId.value}`,
       query: projectQuery.value ? { project: projectQuery.value } : {},
@@ -459,6 +537,7 @@ const refreshErrorBook = async () => {
 const submitCodeChallenge = async () => {
   const payload = buildEvaluationPayload()
 
+  resetComparisonState()
   evaluationResult.value = null
   evaluationStreamingText.value = ''
   isEvaluatingStream.value = true
@@ -651,6 +730,7 @@ const handleQuickRun = async () => {
   // AI 代码评测（仅评测，不提交进度）
   const payload = buildEvaluationPayload()
 
+  resetComparisonState()
   evaluationResult.value = null
   evaluationStreamingText.value = ''
   isEvaluatingStream.value = true
@@ -672,6 +752,7 @@ const handleQuickRun = async () => {
 
 const handleResetTemplate = () => {
   applyCodeTemplate(true)
+  resetComparisonState()
   evaluationResult.value = null
   evaluationStreamingText.value = ''
   isEvaluatingStream.value = false
@@ -682,6 +763,7 @@ const handleResetTemplate = () => {
 
 const loadAndApplySnapshot = async (snapshotId, targetLanguage) => {
   try {
+    resetComparisonState()
     const res = await api.getCodeSnapshots({ levelId: currentLevelId.value })
     const list = res.data?.data || []
     const snapshot = list.find(item => item.id === snapshotId)
@@ -796,7 +878,7 @@ const openEvaluationDialog = () => {
     isAiDockExpanded.value = true
     return
   }
-  if (!hasEvaluationResult.value) {
+  if (!hasAiDockContent.value) {
     message.info('请先运行评测')
     return
   }
@@ -829,6 +911,7 @@ const checkHistoryCode = async () => {
 }
 
 const openCompareHistory = () => {
+  persistCompareContext()
   persistDraft()
   router.push({
     path: '/code-history',
@@ -849,6 +932,7 @@ const performCodeComparison = async (snapshotId) => {
     const res = await api.compareCode({
       currentCode: answer.value,
       currentLanguage: LANGUAGE_LABEL_MAP[language.value] || language.value,
+      currentScore: evaluationResult.value?.score ?? null,
       historySnapshotId: snapshotId,
       levelId: currentLevelId.value
     })
@@ -865,8 +949,7 @@ const performCodeComparison = async (snapshotId) => {
 }
 
 const clearComparison = () => {
-  comparisonResult.value = null
-  selectedHistorySnapshot.value = null
+  resetComparisonState()
 }
 
 onMounted(initializeChallenge)
@@ -883,6 +966,7 @@ watch(language, (nextLanguage, previousLanguage) => {
   isEvaluatingStream.value = false
   isAiDockExpanded.value = false
   runResult.value = null
+  resetComparisonState()
 
   if (isTemplateLikeCode(answer.value)) {
     answer.value = getCodeTemplate(nextLanguage)
@@ -979,7 +1063,7 @@ watch(
 
           <p class="ai-dock-tip">点击下方按钮查看完整代码评审与优化建议。</p>
 
-          <el-button type="primary" plain class="open-eval-btn" :disabled="!hasEvaluationResult && !isEvaluatingStream"
+          <el-button type="primary" plain class="open-eval-btn" :disabled="!hasAiDockContent"
             @click="openEvaluationDialog">
             展开评估详情
           </el-button>
@@ -1001,7 +1085,8 @@ watch(
               <span>正在对比代码...</span>
             </div>
             <CodeComparisonPanel v-else-if="comparisonResult" :result="comparisonResult"
-              :history-snapshot="selectedHistorySnapshot" :current-score="evaluationResult?.score || 0"
+              :history-snapshot="selectedHistorySnapshot"
+              :current-score="comparisonResult?.currentScore ?? evaluationResult?.score ?? null"
               @clear="clearComparison" />
             <ChallengeEvaluationPanel v-else-if="hasEvaluationResult || isEvaluatingStream" :result="evaluationResult"
               :pass-score="CODE_PASS_SCORE" :loading="isEvaluatingStream" :streaming-text="evaluationStreamingText" />

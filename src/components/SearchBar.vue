@@ -5,7 +5,7 @@
         <div class="search-input-container">
           <div class="search-input-wrapper">
             <input type="text" class="search-input" v-model="searchKeyword" :placeholder="placeholder"
-              @input="handleSearch" @focus="isFocused = true" @blur="isFocused = false" />
+              @keyup.enter="handleSearch" @focus="isFocused = true" @blur="isFocused = false" />
             <button v-if="searchKeyword" class="clear-btn" @click="clearSearch">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="14" height="14">
                 <path fill="currentColor"
@@ -14,6 +14,13 @@
             </button>
           </div>
         </div>
+        <button class="search-btn" @click="handleSearch">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+          <span>搜索</span>
+        </button>
       </div>
 
       <div class="filter-options" :class="{ 'is-expanded': showFilters }">
@@ -94,6 +101,19 @@
           </Transition>
         </div>
       </div>
+      
+      <!-- 标签导航 -->
+      <div class="search-tabs">
+        <div 
+          v-for="tab in tabs" 
+          :key="tab.value"
+          class="search-tab"
+          :class="{ 'is-active': currentTab === tab.value }"
+          @click="selectTab(tab)"
+        >
+          {{ tab.label }}
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -112,12 +132,22 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['search', 'filter-change'])
+const emit = defineEmits(['search', 'filter-change', 'tab-change'])
 
 const searchKeyword = ref('')
 const isFocused = ref(false)
 const showFilters = ref(true)
 const openDropdown = ref(null)
+
+// 标签选项
+const tabs = [
+  { label: '综合', value: 'all' },
+  { label: '题库', value: 'questions' },
+  { label: '鱼友', value: 'friends' },
+  { label: '知识库', value: 'knowledge' }
+]
+
+const currentTab = ref('all')
 
 const sortOptions = [
   { label: '最新发布', value: 'latest' },
@@ -181,6 +211,12 @@ const selectCategory = (item) => {
 const selectTime = (item) => {
   currentTime.value = item
   openDropdown.value = null
+  handleSearch()
+}
+
+const selectTab = (tab) => {
+  currentTab.value = tab.value
+  emit('tab-change', tab.value)
   handleSearch()
 }
 
@@ -290,6 +326,34 @@ onUnmounted(() => {
   color: var(--text-main);
 }
 
+.search-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 20px;
+  height: 44px;
+  background: linear-gradient(135deg, #0050b9 0%, #006aa8 100%);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 185, 107, 0.3);
+}
+
+.search-btn:hover {
+  background: linear-gradient(135deg, #00a85c 0%, #00994d 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 185, 107, 0.4);
+}
+
+.search-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 185, 107, 0.3);
+}
+
 .filter-options {
   display: flex;
   align-items: center;
@@ -396,6 +460,50 @@ onUnmounted(() => {
 
 .dropdown-enter-active {
   animation: dropdown-in 0.2s ease-out;
+}
+
+/* 标签导航样式 */
+.search-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  padding-left: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin-top: 4px;
+}
+
+.search-tab {
+  padding: 6px 16px;
+  font-size: 16px;
+  color: var(--text-sub);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.search-tab:hover {
+  color: var(--text-main);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.search-tab.is-active {
+  color: #00b96b;
+  font-weight: 600;
+  background: rgba(0, 185, 107, 0.1);
+}
+
+.search-tab.is-active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 3px;
+  background: #00b96b;
+  border-radius: 2px;
 }
 
 .dropdown-leave-active {

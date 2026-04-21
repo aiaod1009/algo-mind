@@ -90,6 +90,11 @@ doubao:
     max-retries: 3
     temperature: 0.7
     max-tokens: 4096
+    code-evaluation-model: ${DOUBAO_CODE_EVAL_MODEL:${DOUBAO_MODEL:doubao-seed-1-8-251228}}
+    code-evaluation-max-tokens: ${DOUBAO_CODE_EVAL_MAX_TOKENS:1400}
+    code-evaluation-temperature: ${DOUBAO_CODE_EVAL_TEMPERATURE:0.2}
+    code-evaluation-connect-timeout-ms: ${DOUBAO_CODE_EVAL_CONNECT_TIMEOUT_MS:10000}
+    code-evaluation-read-timeout-ms: ${DOUBAO_CODE_EVAL_READ_TIMEOUT_MS:45000}
 
 ---
 spring:
@@ -164,3 +169,8 @@ doubao:
     max-retries: 3
     temperature: 0.7
     max-tokens: 4096
+    code-evaluation-model: ${DOUBAO_CODE_EVAL_MODEL:${DOUBAO_MODEL:doubao-seed-1-8-251228}}
+    code-evaluation-max-tokens: ${DOUBAO_CODE_EVAL_MAX_TOKENS:1400}
+    code-evaluation-temperature: ${DOUBAO_CODE_EVAL_TEMPERATURE:0.2}
+    code-evaluation-connect-timeout-ms: ${DOUBAO_CODE_EVAL_CONNECT_TIMEOUT_MS:10000}
+    code-evaluation-read-timeout-ms: ${DOUBAO_CODE_EVAL_READ_TIMEOUT_MS:45000}

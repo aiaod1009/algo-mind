@@ -12,26 +12,38 @@ const props = defineProps({
   },
   currentScore: {
     type: Number,
-    default: 0,
+    default: null,
   },
 })
 
 const emit = defineEmits(['clear'])
 
+const displayHistoryScore = computed(() => {
+  const score = Number(props.historySnapshot?.score ?? props.result?.historyScore)
+  return Number.isFinite(score) ? score : null
+})
+
+const displayCurrentScore = computed(() => {
+  const score = Number(props.result?.currentScore ?? props.currentScore)
+  return Number.isFinite(score) ? score : null
+})
+
 const scoreDiff = computed(() => {
-  const current = props.currentScore || 0
-  const history = props.historySnapshot?.score || 0
-  return current - history
+  if (displayCurrentScore.value == null || displayHistoryScore.value == null) {
+    return null
+  }
+  return displayCurrentScore.value - displayHistoryScore.value
 })
 
 const scoreDiffText = computed(() => {
-  const diff = scoreDiff.value
-  if (diff > 0) return `+${diff}分`
-  if (diff < 0) return `${diff}分`
+  if (scoreDiff.value == null) return '待评测'
+  if (scoreDiff.value > 0) return `+${scoreDiff.value}分`
+  if (scoreDiff.value < 0) return `${scoreDiff.value}分`
   return '持平'
 })
 
 const scoreDiffClass = computed(() => {
+  if (scoreDiff.value == null) return 'unchanged'
   if (scoreDiff.value > 0) return 'improved'
   if (scoreDiff.value < 0) return 'declined'
   return 'unchanged'
@@ -60,58 +72,58 @@ const formatTime = (value) => {
 <template>
   <div class="comparison-panel">
     <div class="comparison-header">
-      <h4>📊 代码对比结果</h4>
+      <h4>代码对比结果</h4>
       <button class="clear-btn" @click="emit('clear')" title="关闭对比">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M18 6L6 18M6 6l12 12"/>
+          <path d="M18 6L6 18M6 6l12 12" />
         </svg>
       </button>
     </div>
-    
+
     <div class="score-comparison">
       <div class="score-item history">
         <span class="label">历史代码</span>
-        <span class="score">{{ historySnapshot?.score || '--' }}分</span>
+        <span class="score">{{ displayHistoryScore ?? '--' }}分</span>
         <span class="time">{{ formatTime(historySnapshot?.savedAt) }}</span>
       </div>
       <div class="score-arrow">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M5 12h14M12 5l7 7-7 7"/>
+          <path d="M5 12h14M12 5l7 7-7 7" />
         </svg>
       </div>
       <div class="score-item current">
         <span class="label">当前代码</span>
-        <span class="score">{{ currentScore || '--' }}分</span>
+        <span class="score">{{ displayCurrentScore ?? '--' }}分</span>
         <span class="diff" :class="scoreDiffClass">{{ scoreDiffText }}</span>
       </div>
     </div>
-    
-    <div class="comparison-section" v-if="result?.summary">
-      <h5>📝 总结</h5>
+
+    <div v-if="result?.summary" class="comparison-section">
+      <h5>总结</h5>
       <p class="summary-text">{{ result.summary }}</p>
     </div>
-    
-    <div class="comparison-section" v-if="result?.diffAnalysis?.length">
-      <h5>🔍 差异分析</h5>
+
+    <div v-if="result?.diffAnalysis?.length" class="comparison-section">
+      <h5>差异分析</h5>
       <ul class="diff-list">
         <li v-for="(diff, index) in result.diffAnalysis" :key="index">
           {{ diff }}
         </li>
       </ul>
     </div>
-    
-    <div class="comparison-section" v-if="result?.improvements?.length">
-      <h5>✨ 改进点</h5>
+
+    <div v-if="result?.improvements?.length" class="comparison-section">
+      <h5>优劣对照</h5>
       <ul class="improvement-list">
         <li v-for="(item, index) in result.improvements" :key="index" :class="item.type">
-          <span class="icon">{{ item.type === 'current' ? '✓' : '○' }}</span>
+          <span class="icon">{{ item.type === 'current' ? '优' : '参' }}</span>
           <span class="desc">{{ item.description }}</span>
         </li>
       </ul>
     </div>
-    
-    <div class="comparison-section" v-if="result?.suggestions?.length">
-      <h5>💡 优化建议</h5>
+
+    <div v-if="result?.suggestions?.length" class="comparison-section">
+      <h5>优化建议</h5>
       <ul class="suggestion-list">
         <li v-for="(suggestion, index) in result.suggestions" :key="index">
           {{ suggestion }}
