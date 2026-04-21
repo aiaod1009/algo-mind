@@ -88,6 +88,7 @@ public class LoginController {
         userInfo.put("authorScore", user.getAuthorScore());
         userInfo.put("authorLevelCode", user.getAuthorLevelCode());
         userInfo.put("authorLevelProfile", user.getAuthorLevelProfile());
+        userInfo.put("isAdmin", Boolean.TRUE.equals(user.getIsAdmin()));
 
         result.put("token", jwtService.generateToken(user, expirationMinutes));
         result.put("user", userInfo);
@@ -145,6 +146,7 @@ public class LoginController {
         user.setGender("unknown");
         user.setTargetTrack("algo");
         user.setWeeklyGoal(10);
+        user.setIsAdmin(false);
         user.setCreatedAt(OffsetDateTime.now());
         user.setUpdatedAt(OffsetDateTime.now());
         user.setAuthorLevelUpdatedAt(OffsetDateTime.now());

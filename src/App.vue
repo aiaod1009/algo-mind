@@ -282,7 +282,7 @@ const toggleTheme = () => {
           <el-sub-menu index="courses-group">
             <template #title>网课</template>
             <el-menu-item index="/courses">网课</el-menu-item>
-            <el-menu-item index="/knowledge-base">知识库</el-menu-item>
+            <el-menu-item index="/knowledge-base">知识专区</el-menu-item>
           </el-sub-menu>
           <el-menu-item index="/projects">项目实战</el-menu-item>
           <el-menu-item index="/forum">论坛</el-menu-item>

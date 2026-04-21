@@ -284,3 +284,56 @@ VALUES
 (1, NULL, '算法小白', '/avatars/default.png', 'Lv.1', '感谢分享，很有用！', 0, '清华大学 软件学院');
 
 SELECT '数据库初始化完成！' AS message;
+-- ============================================
+-- Knowledge Base admin support
+-- ============================================
+
+ALTER TABLE `t_user`
+  ADD COLUMN IF NOT EXISTS `is_admin` tinyint DEFAULT 0 COMMENT '是否管理员';
+
+CREATE TABLE IF NOT EXISTS `t_knowledge_base_config` (
+  `id` bigint PRIMARY KEY AUTO_INCREMENT,
+  `site_title` varchar(160) DEFAULT NULL COMMENT '知识库站点标题',
+  `site_subtitle` text COMMENT '知识库站点副标题',
+  `empty_state_title` varchar(160) DEFAULT NULL COMMENT '空状态标题',
+  `empty_state_description` text COMMENT '空状态描述',
+  `default_article_slug` varchar(120) DEFAULT NULL COMMENT '默认文章 slug',
+  `quick_searches_text` text COMMENT '推荐搜索词，逗号分隔',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) COMMENT='知识库运营配置';
+
+CREATE TABLE IF NOT EXISTS `t_knowledge_article` (
+  `id` bigint PRIMARY KEY AUTO_INCREMENT,
+  `slug` varchar(120) NOT NULL UNIQUE COMMENT '文章唯一 slug',
+  `title` varchar(160) NOT NULL COMMENT '文章标题',
+  `english_title` varchar(160) DEFAULT NULL COMMENT '英文标题',
+  `section_id` varchar(120) NOT NULL COMMENT '栏目 ID',
+  `section_title` varchar(120) NOT NULL COMMENT '栏目名称',
+  `section_description` text COMMENT '栏目描述',
+  `badge` varchar(120) DEFAULT NULL COMMENT '文章徽标',
+  `summary` text COMMENT '文章摘要',
+  `lead` text COMMENT '文章导语',
+  `complexity` varchar(120) DEFAULT NULL COMMENT '复杂度提示',
+  `read_time` varchar(60) DEFAULT NULL COMMENT '阅读时长',
+  `tags_text` text COMMENT '标签，逗号分隔',
+  `learning_objectives_json` longtext COMMENT '学习目标 JSON',
+  `strategy_steps_json` longtext COMMENT '步骤 JSON',
+  `insights_json` longtext COMMENT '洞察卡片 JSON',
+  `code_blocks_json` longtext COMMENT '代码块 JSON',
+  `checklist_json` longtext COMMENT '复盘清单 JSON',
+  `related_slugs_text` text COMMENT '相关文章 slug，逗号分隔',
+  `spotlight_enabled` tinyint DEFAULT 0 COMMENT '是否展示在推荐位',
+  `spotlight_eyebrow` varchar(80) DEFAULT NULL COMMENT '推荐位眉标题',
+  `spotlight_title` varchar(160) DEFAULT NULL COMMENT '推荐位标题',
+  `spotlight_description` text COMMENT '推荐位描述',
+  `spotlight_accent` varchar(40) DEFAULT NULL COMMENT '推荐位主题色',
+  `published` tinyint DEFAULT 1 COMMENT '是否发布',
+  `sort_order` int DEFAULT 0 COMMENT '排序',
+  `created_by_user_id` bigint DEFAULT NULL COMMENT '创建人用户 ID',
+  `updated_by_user_id` bigint DEFAULT NULL COMMENT '更新人用户 ID',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_knowledge_section_sort` (`section_id`, `sort_order`),
+  INDEX `idx_knowledge_published` (`published`)
+) COMMENT='知识库文章';

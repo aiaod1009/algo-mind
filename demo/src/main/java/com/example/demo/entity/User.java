@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
@@ -47,6 +48,9 @@ public class User {
     private String github;
     private String website;
 
+    @Column(name = "is_admin")
+    private Boolean isAdmin;
+
     @Transient
     private AuthorLevelProfile authorLevelProfile;
 
@@ -82,6 +86,9 @@ public class User {
         }
         if (authorLevelUpdatedAt == null) {
             authorLevelUpdatedAt = OffsetDateTime.now();
+        }
+        if (isAdmin == null) {
+            isAdmin = false;
         }
     }
 }

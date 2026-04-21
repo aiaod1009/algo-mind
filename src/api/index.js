@@ -91,6 +91,14 @@ api.getCodeSnapshotStats = userApi.getCodeSnapshotStats
 api.saveCodeSnapshot = userApi.saveCodeSnapshot
 api.deleteCodeSnapshot = userApi.deleteCodeSnapshot
 api.compareCode = userApi.compareCode
+api.getKnowledgeCatalog = (params = {}) => api.get('/knowledge-base/catalog', { params })
+api.getKnowledgeArticle = (slug) => api.get(`/knowledge-base/articles/${slug}`)
+api.getKnowledgeAdminDashboard = () => api.get('/knowledge-base/admin/dashboard')
+api.getKnowledgeAdminArticle = (id) => api.get(`/knowledge-base/admin/articles/${id}`)
+api.createKnowledgeAdminArticle = (payload) => api.post('/knowledge-base/admin/articles', payload)
+api.updateKnowledgeAdminArticle = (id, payload) => api.put(`/knowledge-base/admin/articles/${id}`, payload)
+api.deleteKnowledgeAdminArticle = (id) => api.delete(`/knowledge-base/admin/articles/${id}`)
+api.updateKnowledgeAdminConfig = (payload) => api.put('/knowledge-base/admin/config', payload)
 api.uploadChatFile = userApi.uploadChatFile
 api.aiChatMultimodal = userApi.aiChatMultimodal
 api.aiChatMultimodalStream = userApi.aiChatMultimodalStream

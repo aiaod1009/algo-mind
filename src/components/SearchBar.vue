@@ -4,18 +4,37 @@
       <div class="search-main-row">
         <div class="search-input-container">
           <div class="search-input-wrapper">
-            <input type="text" class="search-input" v-model="searchKeyword" :placeholder="placeholder"
-              @keyup.enter="handleSearch" @focus="isFocused = true" @blur="isFocused = false" />
+            <input
+              v-model="searchKeyword"
+              type="text"
+              class="search-input"
+              :placeholder="placeholder"
+              @keyup.enter="handleSearch"
+              @focus="isFocused = true"
+              @blur="isFocused = false"
+            />
             <button v-if="searchKeyword" class="clear-btn" @click="clearSearch">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="14" height="14">
-                <path fill="currentColor"
-                  d="M764.288 214.592 512 466.88 259.712 214.592a31.936 31.936 0 0 0-45.12 45.12L466.752 512 214.528 764.224a31.936 31.936 0 1 0 45.12 45.184L512 557.184l252.288 252.288a31.936 31.936 0 0 0 45.12-45.12L557.12 512.064l252.288-252.352a31.936 31.936 0 1 0-45.12-45.184z" />
+                <path
+                  fill="currentColor"
+                  d="M764.288 214.592 512 466.88 259.712 214.592a31.936 31.936 0 0 0-45.12 45.12L466.752 512 214.528 764.224a31.936 31.936 0 1 0 45.12 45.184L512 557.184l252.288 252.288a31.936 31.936 0 0 0 45.12-45.12L557.12 512.064l252.288-252.352a31.936 31.936 0 1 0-45.12-45.184z"
+                />
               </svg>
             </button>
           </div>
         </div>
         <button class="search-btn" @click="handleSearch">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.35-4.35" />
           </svg>
@@ -29,16 +48,29 @@
             <div class="trigger-content">
               <span class="trigger-text">{{ currentSort.label }}</span>
             </div>
-            <svg class="dropdown-arrow" :class="{ 'is-open': openDropdown === 'sort' }"
-              xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="12" height="12">
-              <path fill="currentColor"
-                d="M340.864 149.312a30.592 30.592 0 0 0 0 42.752L652.736 512 340.864 831.872a30.592 30.592 0 0 0 0 42.752 29.12 29.12 0 0 0 41.728 0L714.24 534.336a32 32 0 0 0 0-44.672L382.592 149.376a29.12 29.12 0 0 0-41.728 0z" />
+            <svg
+              class="dropdown-arrow"
+              :class="{ 'is-open': openDropdown === 'sort' }"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 1024 1024"
+              width="12"
+              height="12"
+            >
+              <path
+                fill="currentColor"
+                d="M340.864 149.312a30.592 30.592 0 0 0 0 42.752L652.736 512 340.864 831.872a30.592 30.592 0 0 0 0 42.752 29.12 29.12 0 0 0 41.728 0L714.24 534.336a32 32 0 0 0 0-44.672L382.592 149.376a29.12 29.12 0 0 0-41.728 0z"
+              />
             </svg>
           </div>
           <Transition name="dropdown">
             <div v-if="openDropdown === 'sort'" class="dropdown-menu">
-              <div v-for="item in sortOptions" :key="item.value" class="dropdown-item"
-                :class="{ 'is-active': currentSort.value === item.value }" @click="selectSort(item)">
+              <div
+                v-for="item in sortOptions"
+                :key="item.value"
+                class="dropdown-item"
+                :class="{ 'is-active': currentSort.value === item.value }"
+                @click="selectSort(item)"
+              >
                 {{ item.label }}
               </div>
             </div>
@@ -50,24 +82,41 @@
             <div class="trigger-content">
               <i class="el-icon trigger-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="14" height="14">
-                  <path fill="currentColor"
-                    d="M160 160v704h704V160zm-32-64h768a32 32 0 0 1 32 32v768a32 32 0 0 1-32 32H128a32 32 0 0 1-32-32V128a32 32 0 0 1 32-32" />
-                  <path fill="currentColor"
-                    d="M384 288q64 0 64 64t-64 64-64-64 64-64M185.408 876.992l-50.816-38.912L350.72 556.032a96 96 0 0 1 134.592-17.856l1.856 1.472 122.88 99.136a32 32 0 0 0 44.992-4.864l216-269.888 49.92 39.936-215.808 269.824-.256.32a96 96 0 0 1-135.04 14.464l-122.88-99.072-.64-.512a32 32 0 0 0-44.8 5.952z" />
+                  <path
+                    fill="currentColor"
+                    d="M160 160v704h704V160zm-32-64h768a32 32 0 0 1 32 32v768a32 32 0 0 1-32 32H128a32 32 0 0 1-32-32V128a32 32 0 0 1 32-32"
+                  />
+                  <path
+                    fill="currentColor"
+                    d="M384 288q64 0 64 64t-64 64-64-64 64-64M185.408 876.992l-50.816-38.912L350.72 556.032a96 96 0 0 1 134.592-17.856l1.856 1.472 122.88 99.136a32 32 0 0 0 44.992-4.864l216-269.888 49.92 39.936-215.808 269.824-.256.32a96 96 0 0 1-135.04 14.464l-122.88-99.072-.64-.512a32 32 0 0 0-44.8 5.952z"
+                  />
                 </svg>
               </i>
               <span class="trigger-text">{{ currentCategory.label }}</span>
             </div>
-            <svg class="dropdown-arrow" :class="{ 'is-open': openDropdown === 'category' }"
-              xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="12" height="12">
-              <path fill="currentColor"
-                d="M340.864 149.312a30.592 30.592 0 0 0 0 42.752L652.736 512 340.864 831.872a30.592 30.592 0 0 0 0 42.752 29.12 29.12 0 0 0 41.728 0L714.24 534.336a32 32 0 0 0 0-44.672L382.592 149.376a29.12 29.12 0 0 0-41.728 0z" />
+            <svg
+              class="dropdown-arrow"
+              :class="{ 'is-open': openDropdown === 'category' }"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 1024 1024"
+              width="12"
+              height="12"
+            >
+              <path
+                fill="currentColor"
+                d="M340.864 149.312a30.592 30.592 0 0 0 0 42.752L652.736 512 340.864 831.872a30.592 30.592 0 0 0 0 42.752 29.12 29.12 0 0 0 41.728 0L714.24 534.336a32 32 0 0 0 0-44.672L382.592 149.376a29.12 29.12 0 0 0-41.728 0z"
+              />
             </svg>
           </div>
           <Transition name="dropdown">
             <div v-if="openDropdown === 'category'" class="dropdown-menu">
-              <div v-for="item in categoryOptions" :key="item.value" class="dropdown-item"
-                :class="{ 'is-active': currentCategory.value === item.value }" @click="selectCategory(item)">
+              <div
+                v-for="item in categoryOptions"
+                :key="item.value"
+                class="dropdown-item"
+                :class="{ 'is-active': currentCategory.value === item.value }"
+                @click="selectCategory(item)"
+              >
                 {{ item.label }}
               </div>
             </div>
@@ -79,33 +128,47 @@
             <div class="trigger-content">
               <i class="el-icon trigger-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="14" height="14">
-                  <path fill="currentColor"
-                    d="M128 384a512 512 0 1 0 512-512 512 512 0 0 0-512 512m544 0a32 32 0 0 1-32 32H448a32 32 0 0 1-32-32V192a32 32 0 0 1 64 0v160h160a32 32 0 0 1 32 32" />
+                  <path
+                    fill="currentColor"
+                    d="M128 384a512 512 0 1 0 512-512 512 512 0 0 0-512 512m544 0a32 32 0 0 1-32 32H448a32 32 0 0 1-32-32V192a32 32 0 0 1 64 0v160h160a32 32 0 0 1 32 32"
+                  />
                 </svg>
               </i>
               <span class="trigger-text">{{ currentTime.label }}</span>
             </div>
-            <svg class="dropdown-arrow" :class="{ 'is-open': openDropdown === 'time' }"
-              xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="12" height="12">
-              <path fill="currentColor"
-                d="M340.864 149.312a30.592 30.592 0 0 0 0 42.752L652.736 512 340.864 831.872a30.592 30.592 0 0 0 0 42.752 29.12 29.12 0 0 0 41.728 0L714.24 534.336a32 32 0 0 0 0-44.672L382.592 149.376a29.12 29.12 0 0 0-41.728 0z" />
+            <svg
+              class="dropdown-arrow"
+              :class="{ 'is-open': openDropdown === 'time' }"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 1024 1024"
+              width="12"
+              height="12"
+            >
+              <path
+                fill="currentColor"
+                d="M340.864 149.312a30.592 30.592 0 0 0 0 42.752L652.736 512 340.864 831.872a30.592 30.592 0 0 0 0 42.752 29.12 29.12 0 0 0 41.728 0L714.24 534.336a32 32 0 0 0 0-44.672L382.592 149.376a29.12 29.12 0 0 0-41.728 0z"
+              />
             </svg>
           </div>
           <Transition name="dropdown">
             <div v-if="openDropdown === 'time'" class="dropdown-menu">
-              <div v-for="item in timeOptions" :key="item.value" class="dropdown-item"
-                :class="{ 'is-active': currentTime.value === item.value }" @click="selectTime(item)">
+              <div
+                v-for="item in timeOptions"
+                :key="item.value"
+                class="dropdown-item"
+                :class="{ 'is-active': currentTime.value === item.value }"
+                @click="selectTime(item)"
+              >
                 {{ item.label }}
               </div>
             </div>
           </Transition>
         </div>
       </div>
-      
-      <!-- 标签导航 -->
+
       <div class="search-tabs">
-        <div 
-          v-for="tab in tabs" 
+        <div
+          v-for="tab in tabs"
           :key="tab.value"
           class="search-tab"
           :class="{ 'is-active': currentTab === tab.value }"
@@ -119,27 +182,46 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 
 const props = defineProps({
   placeholder: {
     type: String,
-    default: '搜索帖子、话题...'
+    default: '搜索帖子、题目或知识点...'
   },
   isSticky: {
     type: Boolean,
     default: false
+  },
+  keyword: {
+    type: String,
+    default: ''
+  },
+  activeTab: {
+    type: String,
+    default: 'all'
+  },
+  sortValue: {
+    type: String,
+    default: 'latest'
+  },
+  categoryValue: {
+    type: String,
+    default: 'all'
+  },
+  timeValue: {
+    type: String,
+    default: 'all'
   }
 })
 
 const emit = defineEmits(['search', 'filter-change', 'tab-change'])
 
-const searchKeyword = ref('')
+const searchKeyword = ref(props.keyword)
 const isFocused = ref(false)
 const showFilters = ref(true)
 const openDropdown = ref(null)
 
-// 标签选项
 const tabs = [
   { label: '综合', value: 'all' },
   { label: '题库', value: 'questions' },
@@ -147,7 +229,7 @@ const tabs = [
   { label: '知识库', value: 'knowledge' }
 ]
 
-const currentTab = ref('all')
+const currentTab = ref(props.activeTab)
 
 const sortOptions = [
   { label: '最新发布', value: 'latest' },
@@ -174,22 +256,49 @@ const timeOptions = [
   { label: '最近一月', value: 'month' }
 ]
 
-const currentSort = ref(sortOptions[0])
-const currentCategory = ref(categoryOptions[0])
-const currentTime = ref(timeOptions[0])
+const findOption = (options, value) => options.find((item) => item.value === value) || options[0]
 
-const handleSearch = () => {
+const currentSort = ref(findOption(sortOptions, props.sortValue))
+const currentCategory = ref(findOption(categoryOptions, props.categoryValue))
+const currentTime = ref(findOption(timeOptions, props.timeValue))
+
+watch(() => props.keyword, (value) => {
+  searchKeyword.value = value
+})
+
+watch(() => props.activeTab, (value) => {
+  currentTab.value = value
+})
+
+watch(() => props.sortValue, (value) => {
+  currentSort.value = findOption(sortOptions, value)
+})
+
+watch(() => props.categoryValue, (value) => {
+  currentCategory.value = findOption(categoryOptions, value)
+})
+
+watch(() => props.timeValue, (value) => {
+  currentTime.value = findOption(timeOptions, value)
+})
+
+const emitSearch = () => {
   emit('search', {
-    keyword: searchKeyword.value,
+    keyword: searchKeyword.value.trim(),
     sort: currentSort.value.value,
     category: currentCategory.value.value,
-    time: currentTime.value.value
+    time: currentTime.value.value,
+    tab: currentTab.value
   })
+}
+
+const handleSearch = () => {
+  emitSearch()
 }
 
 const clearSearch = () => {
   searchKeyword.value = ''
-  handleSearch()
+  emitSearch()
 }
 
 const toggleDropdown = (name) => {
@@ -199,29 +308,29 @@ const toggleDropdown = (name) => {
 const selectSort = (item) => {
   currentSort.value = item
   openDropdown.value = null
-  handleSearch()
+  emitSearch()
 }
 
 const selectCategory = (item) => {
   currentCategory.value = item
   openDropdown.value = null
-  handleSearch()
+  emitSearch()
 }
 
 const selectTime = (item) => {
   currentTime.value = item
   openDropdown.value = null
-  handleSearch()
+  emitSearch()
 }
 
 const selectTab = (tab) => {
   currentTab.value = tab.value
   emit('tab-change', tab.value)
-  handleSearch()
+  emitSearch()
 }
 
-const handleClickOutside = (e) => {
-  if (!e.target.closest('.search-dropdown-container')) {
+const handleClickOutside = (event) => {
+  if (!event.target.closest('.search-dropdown-container')) {
     openDropdown.value = null
   }
 }
@@ -269,6 +378,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .search-input-container {
@@ -462,7 +572,6 @@ onUnmounted(() => {
   animation: dropdown-in 0.2s ease-out;
 }
 
-/* 标签导航样式 */
 .search-tabs {
   display: flex;
   align-items: center;
@@ -471,6 +580,7 @@ onUnmounted(() => {
   padding-left: 8px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
   margin-top: 4px;
+  flex-wrap: wrap;
 }
 
 .search-tab {

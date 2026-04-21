@@ -271,6 +271,7 @@ public class DataInitializer implements CommandLineRunner {
                 user.setAvatar(buildAvatar(seed.name(), colorIndex));
                 user.setTargetTrack(seed.targetTrack());
                 user.setWeeklyGoal(seed.weeklyGoal());
+                user.setIsAdmin("admin@example.com".equalsIgnoreCase(seed.email()));
 
                 OffsetDateTime createdAt = now.minusDays(seed.joinedDaysAgo())
                                 .minusHours(seed.joinedHourOffset())

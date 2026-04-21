@@ -1,5 +1,5 @@
 server:
-  port: 8000
+  port: 8080
   servlet:
     context-path: /api
 
@@ -11,6 +11,13 @@ auth:
     issuer: ${JWT_ISSUER:algo-mind}
     secret: ${JWT_SECRET:algo-mind-demo-jwt-secret-key-change-me-2026}
     expiration-minutes: ${JWT_EXPIRATION_MINUTES:10080}
+
+algo:
+  knowledge:
+    seed:
+      enabled: ${ALGO_KNOWLEDGE_SEED_ENABLED:false}
+      replace-existing: ${ALGO_KNOWLEDGE_SEED_REPLACE_EXISTING:false}
+      operator-user-id: ${ALGO_KNOWLEDGE_SEED_OPERATOR_USER_ID:1}
 
 ip:
   location:

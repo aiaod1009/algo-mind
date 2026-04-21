@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { confirmWarning } from '../composables/useConfirm.js'
 import { useForumStore } from '../stores/forum'
+import { useLevelStore } from '../stores/level'
 import { useUserStore } from '../stores/user'
 import FlowerPagination from '../components/FlowerPagination.vue'
 import SearchBar from '../components/SearchBar.vue'
@@ -15,6 +16,7 @@ import { normalizeAuthorLevelProfile } from '../constants/authorLevelThemes'
 
 const router = useRouter()
 const forumStore = useForumStore()
+const levelStore = useLevelStore()
 const userStore = useUserStore()
 
 const posts = computed(() => forumStore.posts)
@@ -283,33 +285,188 @@ const handlePublish = async () => {
 const POSTS_PER_PAGE = 15
 const currentPage = ref(1)
 
+const KNOWLEDGE_ARTICLES = [
+  {
+    id: 'kb-algo',
+    title: '算法基础',
+    description: '学习双指针、二分查找、贪心、回溯和动态规划等常见算法思路。',
+    tags: ['算法', '复杂度', '刷题'],
+    category: 'algorithm',
+  },
+  {
+    id: 'kb-ds',
+    title: '数据结构',
+    description: '掌握数组、链表、栈、队列、哈希表、树和图等核心数据结构。',
+    tags: ['数据结构', '树', '图'],
+    category: 'algorithm',
+  },
+  {
+    id: 'kb-design',
+    title: '设计模式',
+    description: '理解常见设计模式、分层结构和工程协作中的可维护性设计。',
+    tags: ['设计模式', '架构', '工程'],
+    category: 'tech',
+  },
+  {
+    id: 'kb-os',
+    title: '计算机基础',
+    description: '覆盖操作系统、计算机网络、数据库和系统设计的常见考点。',
+    tags: ['操作系统', '网络', '数据库'],
+    category: 'tech',
+  },
+  {
+    id: 'kb-interview',
+    title: '面试知识库',
+    description: '整理八股文、高频面试题、项目讲解模板和行为面试回答思路。',
+    tags: ['面试', '项目', '表达'],
+    category: 'interview',
+  },
+  {
+    id: 'kb-career',
+    title: '成长指南',
+    description: '包含学习路线、转岗经验、职业规划和技术人成长方法论。',
+    tags: ['成长', '规划', '转行'],
+    category: 'career',
+  },
+]
+
+const CATEGORY_TAG_KEYWORDS = {
+  all: [],
+  study: ['学习交流', '实习分享'],
+  algorithm: ['算法刷题'],
+  interview: ['面试经验', '校招求职'],
+  career: ['职场成长', '项目经验'],
+  tech: ['技术讨论', '系统设计', '源码解析'],
+}
+
 const searchFilters = ref({
   keyword: '',
+  tab: 'all',
   sort: 'latest',
   category: 'all',
   time: 'all',
-  tag: ''
+  tag: '',
+  author: '',
 })
 
 const normalizedKeyword = computed(() => searchFilters.value.keyword.trim().toLowerCase())
+const currentSearchTab = computed(() => searchFilters.value.tab || 'all')
+
+const currentUserType = ref('all')
+const currentActivityFilter = ref('all')
+
+const USER_TYPE_LABELS = {
+  all: '所有用户',
+  verified: '认证用户',
+}
+
+const ACTIVITY_FILTER_LABELS = {
+  all: '全部活跃度',
+  high: '高活跃',
+  medium: '中活跃',
+  low: '低活跃',
+}
+
+const buildSearchTerms = (keyword) => {
+  const normalized = String(keyword || '').trim().toLowerCase()
+  if (!normalized) {
+    return []
+  }
+  return normalized.split(/\s+/).filter(Boolean)
+}
+
+const matchesSearch = (fields, keyword) => {
+  const terms = buildSearchTerms(keyword)
+  if (!terms.length) {
+    return true
+  }
+  const haystack = fields
+    .flatMap((field) => (Array.isArray(field) ? field : [field]))
+    .map((field) => String(field || '').toLowerCase())
+    .join(' ')
+
+  return terms.every((term) => haystack.includes(term))
+}
+
+const matchesCategory = (post, category) => {
+  if (!category || category === 'all') {
+    return true
+  }
+  const tag = String(post?.tag || '').toLowerCase()
+  return CATEGORY_TAG_KEYWORDS[category]?.some((keyword) => tag.includes(keyword.toLowerCase())) || false
+}
+
+const matchesTimeFilter = (timestamp, time) => {
+  if (!time || time === 'all') {
+    return true
+  }
+
+  const createdAt = Number(timestamp || 0)
+  if (!createdAt) {
+    return false
+  }
+
+  const diff = Date.now() - createdAt
+  const oneDay = 24 * 60 * 60 * 1000
+
+  if (time === 'today') return diff <= oneDay
+  if (time === '3days') return diff <= oneDay * 3
+  if (time === 'week') return diff <= oneDay * 7
+  if (time === 'month') return diff <= oneDay * 30
+  return true
+}
+
+const sortPosts = (list, sort) => {
+  const sorted = [...list]
+
+  if (sort === 'latest') {
+    return sorted.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+  }
+
+  if (sort === 'yesterday') {
+    return sorted
+      .filter((item) => matchesTimeFilter(item.createdAt, 'today') || matchesTimeFilter(item.createdAt, '3days'))
+      .sort((a, b) => Number(b.likes || 0) + Number(b.comments || 0) - Number(a.likes || 0) - Number(a.comments || 0))
+  }
+
+  if (sort === 'week' || sort === 'month' || sort === 'all') {
+    const timeWindow = sort === 'all' ? 'all' : sort
+    return sorted
+      .filter((item) => matchesTimeFilter(item.createdAt, timeWindow))
+      .sort((a, b) => Number(b.likes || 0) + Number(b.comments || 0) - Number(a.likes || 0) - Number(a.comments || 0))
+  }
+
+  return sorted
+}
 
 const filteredSource = computed(() => {
-  let result = posts.value
+  let result = posts.value.filter((post) => matchesCategory(post, searchFilters.value.category))
+
+  result = result.filter((post) => matchesTimeFilter(post.createdAt, searchFilters.value.time))
+
   const activeTag = searchFilters.value.tag
   if (activeTag) {
     result = result.filter(post =>
       post.tag && post.tag.toLowerCase() === activeTag.toLowerCase()
     )
   }
+
+  const activeAuthor = searchFilters.value.author
+  if (activeAuthor) {
+    result = result.filter((post) => resolvePostAuthor(post) === activeAuthor)
+  }
+
   if (normalizedKeyword.value) {
     const keyword = normalizedKeyword.value
     result = result.filter(post =>
-      post.topic.toLowerCase().includes(keyword) ||
-      post.content.toLowerCase().includes(keyword) ||
-      post.tag.toLowerCase().includes(keyword)
+      matchesSearch(
+        [post.topic, post.content, post.tag, resolvePostAuthor(post), post.quote],
+        keyword,
+      )
     )
   }
-  return result
+
+  return sortPosts(result, searchFilters.value.sort)
 })
 
 const totalPages = computed(() => {
@@ -321,8 +478,402 @@ const paginatedPosts = computed(() => {
   return filteredSource.value.slice(start, start + POSTS_PER_PAGE)
 })
 
+const questionSearchResults = computed(() => {
+  if (!normalizedKeyword.value) {
+    return []
+  }
+
+  const levels = levelStore.levels.map((level) => ({
+    id: level.id,
+    title: level.name,
+    description: level.description || '',
+    track: level.track,
+    trackName: levelStore.tracks.find((track) => track.code === level.track)?.name || '算法题库',
+    type: level.type,
+    rewardPoints: level.rewardPoints || 0,
+  }))
+
+  const matchedLevels = levels.filter((level) =>
+    matchesSearch(
+      [level.title, level.description, level.trackName, level.type],
+      normalizedKeyword.value,
+    ),
+  )
+
+  return matchedLevels.slice(0, 12)
+})
+
+const friendSourcePosts = computed(() =>
+  posts.value
+    .filter((post) => matchesCategory(post, searchFilters.value.category))
+    .filter((post) => matchesTimeFilter(post.createdAt, searchFilters.value.time)),
+)
+
+const buildCommunityFriends = (sourcePosts) => {
+  const friendMap = new Map()
+
+  sourcePosts.forEach((post) => {
+    const name = resolvePostAuthor(post)
+    const createdAt = Number(post.createdAt || 0)
+    const existing = friendMap.get(name) || {
+      name,
+      avatar: resolvePostAvatar(post),
+      authorLevel: post.authorLevel || 'Lv.1',
+      authorLevelProfile: post.authorLevelProfile || null,
+      postsCount: 0,
+      totalLikes: 0,
+      totalComments: 0,
+      tags: new Set(),
+      latestTopic: '',
+      latestCreatedAt: 0,
+    }
+
+    existing.postsCount += 1
+    existing.totalLikes += Number(post.likes || 0)
+    existing.totalComments += Number(post.comments || 0)
+
+    if (post.tag) {
+      existing.tags.add(post.tag)
+    }
+
+    if (createdAt >= existing.latestCreatedAt) {
+      existing.latestCreatedAt = createdAt
+      existing.latestTopic = post.topic || existing.latestTopic
+      existing.avatar = existing.avatar || resolvePostAvatar(post)
+      existing.authorLevel = post.authorLevel || existing.authorLevel
+      existing.authorLevelProfile = post.authorLevelProfile || existing.authorLevelProfile
+    }
+
+    friendMap.set(name, existing)
+  })
+
+  return [...friendMap.values()].map((friend) => ({
+    ...friend,
+    tags: [...friend.tags].slice(0, 3),
+    hotness: Number(friend.totalLikes || 0) + Number(friend.totalComments || 0) * 2 + Number(friend.postsCount || 0) * 12,
+  }))
+}
+
+const sortCommunityFriends = (list, sort) => {
+  const sorted = [...list]
+
+  if (sort === 'latest') {
+    return sorted.sort((a, b) => {
+      if (b.latestCreatedAt !== a.latestCreatedAt) {
+        return b.latestCreatedAt - a.latestCreatedAt
+      }
+      return b.totalLikes - a.totalLikes
+    })
+  }
+
+  return sorted.sort((a, b) => {
+    if (b.hotness !== a.hotness) {
+      return b.hotness - a.hotness
+    }
+    if (b.totalLikes !== a.totalLikes) {
+      return b.totalLikes - a.totalLikes
+    }
+    return b.postsCount - a.postsCount
+  })
+}
+
+const communityFriendResults = computed(() =>
+  sortCommunityFriends(
+    buildCommunityFriends(friendSourcePosts.value),
+    currentSearchTab.value === 'friends' ? 'activity' : searchFilters.value.sort,
+  ),
+)
+
+const getFriendLevelRank = (friend) => {
+  const profileRank = Number(friend?.authorLevelProfile?.rank || 0)
+  if (profileRank > 0) {
+    return profileRank
+  }
+
+  const normalizedProfile = normalizeAuthorLevelProfile(friend?.authorLevelProfile, friend?.authorLevel || 'Lv.1')
+  if (Number(normalizedProfile?.rank || 0) > 0) {
+    return Number(normalizedProfile.rank)
+  }
+
+  const match = String(friend?.authorLevel || '').match(/lv\.?\s*(\d+)/i)
+  return match ? Number(match[1]) : 1
+}
+
+const isVerifiedFriend = (friend) => getFriendLevelRank(friend) >= 2
+
+const scopedCommunityFriendResults = computed(() => {
+  if (currentUserType.value === 'verified') {
+    return communityFriendResults.value.filter((friend) => isVerifiedFriend(friend))
+  }
+
+  return communityFriendResults.value
+})
+
+const matchesActivityFilter = (friend, peakHotness) => {
+  if (!peakHotness || currentActivityFilter.value === 'all') {
+    return true
+  }
+
+  const ratio = Number(friend?.hotness || 0) / peakHotness
+
+  if (currentActivityFilter.value === 'high') {
+    return ratio >= 0.66
+  }
+
+  if (currentActivityFilter.value === 'medium') {
+    return ratio >= 0.33 && ratio < 0.66
+  }
+
+  if (currentActivityFilter.value === 'low') {
+    return ratio < 0.33
+  }
+
+  return true
+}
+
+const activityFilteredCommunityFriendResults = computed(() => {
+  const peakHotness = scopedCommunityFriendResults.value.reduce(
+    (max, friend) => Math.max(max, Number(friend.hotness || 0)),
+    0,
+  )
+
+  return scopedCommunityFriendResults.value.filter((friend) => matchesActivityFilter(friend, peakHotness))
+})
+
+const scopedFriendNames = computed(() =>
+  new Set(activityFilteredCommunityFriendResults.value.map((friend) => friend.name)),
+)
+
+const scopedFriendSourcePosts = computed(() =>
+  friendSourcePosts.value.filter((post) => scopedFriendNames.value.has(resolvePostAuthor(post))),
+)
+
+const friendSearchResults = computed(() => {
+  if (!normalizedKeyword.value) {
+    return []
+  }
+
+  return communityFriendResults.value
+    .filter((friend) =>
+      matchesSearch(
+        [friend.name, friend.latestTopic, friend.tags, friend.authorLevel],
+        normalizedKeyword.value,
+      ),
+    )
+    .slice(0, 12)
+})
+
+const displayedFriendSearchResults = computed(() => {
+  if (!normalizedKeyword.value) {
+    return []
+  }
+
+  return activityFilteredCommunityFriendResults.value
+    .filter((friend) =>
+      matchesSearch(
+        [friend.name, friend.latestTopic, friend.tags, friend.authorLevel],
+        normalizedKeyword.value,
+      ),
+    )
+    .slice(0, 12)
+})
+
+const suggestedFriendQueries = computed(() => {
+  const baseList = normalizedKeyword.value && displayedFriendSearchResults.value.length
+    ? displayedFriendSearchResults.value
+    : activityFilteredCommunityFriendResults.value
+
+  return baseList.slice(0, 10)
+})
+
+const friendHotTopics = computed(() => {
+  const topicMap = new Map()
+
+  scopedFriendSourcePosts.value.forEach((post) => {
+    const tag = String(post.tag || '').trim()
+    if (!tag) {
+      return
+    }
+
+    const existing = topicMap.get(tag) || {
+      tag,
+      postsCount: 0,
+      totalLikes: 0,
+      totalComments: 0,
+      latestTopic: '',
+    }
+
+    existing.postsCount += 1
+    existing.totalLikes += Number(post.likes || 0)
+    existing.totalComments += Number(post.comments || 0)
+    existing.latestTopic = existing.latestTopic || post.topic || ''
+
+    topicMap.set(tag, existing)
+  })
+
+  return [...topicMap.values()]
+    .map((topic) => ({
+      ...topic,
+      hotness: Number(topic.totalLikes || 0) + Number(topic.totalComments || 0) * 2 + Number(topic.postsCount || 0) * 10,
+    }))
+    .sort((a, b) => b.hotness - a.hotness)
+    .slice(0, 6)
+})
+
+const knowledgeSearchResults = computed(() => {
+  if (!normalizedKeyword.value) {
+    return []
+  }
+
+  return KNOWLEDGE_ARTICLES
+    .filter((article) =>
+      matchesSearch(
+        [article.title, article.description, article.tags, article.category],
+        normalizedKeyword.value,
+      ),
+    )
+    .slice(0, 12)
+})
+
+const comprehensiveSearchResult = computed(() => ({
+  posts: filteredSource.value.slice(0, 4),
+  questions: questionSearchResults.value.slice(0, 4),
+  friends: friendSearchResults.value.slice(0, 4),
+  knowledge: knowledgeSearchResults.value.slice(0, 4),
+}))
+
+const hasSearchKeyword = computed(() => Boolean(normalizedKeyword.value))
+const showSearchSummary = computed(() => hasSearchKeyword.value)
+const currentUserTypeLabel = computed(() => USER_TYPE_LABELS[currentUserType.value] || USER_TYPE_LABELS.all)
+const currentActivityFilterLabel = computed(() => ACTIVITY_FILTER_LABELS[currentActivityFilter.value] || ACTIVITY_FILTER_LABELS.all)
+const friendActivityPeak = computed(() =>
+  activityFilteredCommunityFriendResults.value.reduce((max, friend) => Math.max(max, Number(friend.hotness || 0)), 0),
+)
+const friendActivityAverage = computed(() => {
+  if (!activityFilteredCommunityFriendResults.value.length) {
+    return 0
+  }
+
+  const totalHotness = activityFilteredCommunityFriendResults.value.reduce(
+    (sum, friend) => sum + Number(friend.hotness || 0),
+    0,
+  )
+  return Math.round(totalHotness / activityFilteredCommunityFriendResults.value.length)
+})
+
 const handleSearch = (filters) => {
-  searchFilters.value = { ...filters, tag: searchFilters.value.tag }
+  const nextKeyword = filters.keyword ?? searchFilters.value.keyword
+  const nextTab = filters.tab ?? searchFilters.value.tab
+  const keepAuthorFilter = (
+    nextTab === 'friends'
+    && searchFilters.value.author
+    && (filters.keyword === undefined || nextKeyword === searchFilters.value.author)
+  )
+
+  searchFilters.value = {
+    ...searchFilters.value,
+    ...filters,
+    keyword: nextKeyword,
+    tab: nextTab,
+    author: keepAuthorFilter ? searchFilters.value.author : '',
+  }
+  currentPage.value = 1
+}
+
+const handleCurrentUserTypeChange = (event) => {
+  currentUserType.value = event?.target?.value || 'all'
+}
+
+const handleActivityFilterChange = (event) => {
+  currentActivityFilter.value = event?.target?.value || 'all'
+}
+
+const followUser = (userName) => {
+  ElMessage.success(`已关注用户「${userName}」`)
+}
+
+const focusFriendPosts = (friendName) => {
+  searchFilters.value = {
+    ...searchFilters.value,
+    tab: 'all',
+    author: friendName,
+    keyword: friendName,
+  }
+  currentPage.value = 1
+  nextTick(() => {
+    const feedList = document.querySelector('.feed-list')
+    if (feedList) {
+      feedList.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  })
+}
+
+const cleanTagLabel = (tag) => String(tag || '').replace(/^#\s*/, '').trim()
+
+const formatCompactNumber = (value) => {
+  const numeric = Number(value || 0)
+  if (numeric >= 10000) {
+    return `${(numeric / 10000).toFixed(1)}w`
+  }
+  if (numeric >= 1000) {
+    return `${(numeric / 1000).toFixed(1)}k`
+  }
+  return `${numeric}`
+}
+
+const getFriendDescription = (friend) => {
+  if (friend?.latestTopic) {
+    return `最近在聊：${friend.latestTopic}`
+  }
+  if (friend?.tags?.length) {
+    return `活跃标签：${friend.tags.map(cleanTagLabel).join(' / ')}`
+  }
+  return '社区活跃鱼友'
+}
+
+const searchFriendByName = (friendName) => {
+  searchFilters.value = {
+    ...searchFilters.value,
+    tab: 'friends',
+    keyword: friendName,
+    author: '',
+  }
+  currentPage.value = 1
+}
+
+const searchFriendByTag = (tag) => {
+  if (!tag) {
+    return
+  }
+
+  searchFilters.value = {
+    ...searchFilters.value,
+    tab: 'friends',
+    keyword: cleanTagLabel(tag),
+    author: '',
+  }
+  currentPage.value = 1
+}
+
+const openTopicFeed = (tag) => {
+  searchFilters.value = {
+    ...searchFilters.value,
+    tab: 'all',
+    keyword: tag,
+    tag,
+    author: '',
+  }
+  currentPage.value = 1
+  nextTick(() => {
+    const feedList = document.querySelector('.feed-list')
+    if (feedList) {
+      feedList.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  })
+}
+
+const clearAuthorFilter = () => {
+  searchFilters.value.author = ''
   currentPage.value = 1
 }
 
@@ -604,8 +1155,14 @@ onMounted(async () => {
   window.addEventListener('scroll', handleScroll, { passive: true })
   document.addEventListener('click', handleQuickReplyOutsideClick, true)
   forumStore.hydratePostsFromLocal()
+  levelStore.hydrateLevelsFromLocal()
   updateSearchBarPosition()
   await forumStore.fetchPosts({ skipIfLoaded: false })
+  if (!levelStore.levels.length) {
+    levelStore.fetchLevels().catch(() => {
+      console.warn('题库数据加载失败，搜索将仅展示社区结果')
+    })
+  }
   paginatedPosts.value.forEach(post => {
     if (post.comments > 0) {
       fetchHotComments(post.id)
@@ -641,7 +1198,17 @@ onUnmounted(() => {
     <h2 class="section-title"> </h2>
 
     <Transition name="search-slide">
-      <SearchBar v-if="!searchBarAtBottom" placeholder="搜索帖子、话题..." :is-sticky="false" @search="handleSearch" />
+      <SearchBar
+        v-if="!searchBarAtBottom"
+        placeholder="搜索帖子、题目、鱼友或知识点..."
+        :is-sticky="false"
+        :keyword="searchFilters.keyword"
+        :active-tab="currentSearchTab"
+        :sort-value="searchFilters.sort"
+        :category-value="searchFilters.category"
+        :time-value="searchFilters.time"
+        @search="handleSearch"
+      />
     </Transition>
 
     <div class="composer-wrapper">
@@ -850,11 +1417,277 @@ onUnmounted(() => {
 
     <div class="forum-layout">
       <section class="feed-list">
+        <div v-if="showSearchSummary && currentSearchTab !== 'friends'" class="search-summary-card">
+          <div class="search-summary-head">
+            <div>
+              <h3 class="search-summary-title">搜索结果</h3>
+              <p class="search-summary-subtitle">
+                当前搜索域：{{ currentSearchTab === 'all' ? '综合' : currentSearchTab === 'questions' ? '题库' : currentSearchTab === 'friends' ? '鱼友' : '知识库' }}
+              </p>
+            </div>
+            <span v-if="hasSearchKeyword" class="search-summary-keyword">“{{ searchFilters.keyword }}”</span>
+          </div>
+
+          <div v-if="currentSearchTab === 'all'" class="search-overview-grid">
+            <div class="search-overview-item">
+              <span class="search-overview-label">帖子</span>
+              <strong>{{ filteredSource.length }}</strong>
+            </div>
+            <div class="search-overview-item">
+              <span class="search-overview-label">题目</span>
+              <strong>{{ questionSearchResults.length }}</strong>
+            </div>
+            <div class="search-overview-item">
+              <span class="search-overview-label">鱼友</span>
+              <strong>{{ friendSearchResults.length }}</strong>
+            </div>
+            <div class="search-overview-item">
+              <span class="search-overview-label">知识点</span>
+              <strong>{{ knowledgeSearchResults.length }}</strong>
+            </div>
+          </div>
+
+          <div v-if="currentSearchTab === 'all'" class="search-groups">
+            <div v-if="comprehensiveSearchResult.questions.length" class="search-group">
+              <div class="search-group-head">
+                <span class="search-group-title">题库匹配</span>
+                <span class="search-group-meta">{{ questionSearchResults.length }} 条</span>
+              </div>
+              <div class="mini-result-list">
+                <button
+                  v-for="item in comprehensiveSearchResult.questions"
+                  :key="`question-${item.id}`"
+                  class="mini-result-card"
+                  @click="goToChallenge(item.id)"
+                >
+                  <span class="mini-result-title">{{ item.title }}</span>
+                  <span class="mini-result-desc">{{ item.trackName }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div v-if="comprehensiveSearchResult.friends.length" class="search-group">
+              <div class="search-group-head">
+                <span class="search-group-title">鱼友匹配</span>
+                <span class="search-group-meta">{{ friendSearchResults.length }} 位</span>
+              </div>
+              <div class="mini-result-list">
+                <button
+                  v-for="friend in comprehensiveSearchResult.friends"
+                  :key="`friend-${friend.name}`"
+                  class="mini-result-card"
+                  @click="focusFriendPosts(friend.name)"
+                >
+                  <span class="mini-result-title">{{ friend.name }}</span>
+                  <span class="mini-result-desc">{{ friend.postsCount }} 篇帖子 · {{ friend.totalLikes }} 获赞</span>
+                </button>
+              </div>
+            </div>
+
+            <div v-if="comprehensiveSearchResult.knowledge.length" class="search-group">
+              <div class="search-group-head">
+                <span class="search-group-title">知识库匹配</span>
+                <span class="search-group-meta">{{ knowledgeSearchResults.length }} 条</span>
+              </div>
+              <div class="mini-result-list">
+                <button
+                  v-for="article in comprehensiveSearchResult.knowledge"
+                  :key="article.id"
+                  class="mini-result-card"
+                  @click="router.push('/knowledge-base')"
+                >
+                  <span class="mini-result-title">{{ article.title }}</span>
+                  <span class="mini-result-desc">{{ article.tags.join(' / ') }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="currentSearchTab === 'questions'" class="result-grid">
+            <button
+              v-for="item in questionSearchResults"
+              :key="`question-grid-${item.id}`"
+              class="result-card question-result-card"
+              @click="goToChallenge(item.id)"
+            >
+              <div class="result-card-head">
+                <span class="result-type-chip">题库</span>
+                <span class="result-track">{{ item.trackName }}</span>
+              </div>
+              <h4 class="result-card-title">{{ item.title }}</h4>
+              <p class="result-card-desc">{{ item.description || '点击查看题目详情' }}</p>
+              <div class="result-card-meta">
+                <span>{{ item.type }}</span>
+                <span>{{ item.rewardPoints }} 积分</span>
+              </div>
+            </button>
+            <div v-if="!questionSearchResults.length" class="result-empty">题库里暂时没有匹配结果。</div>
+          </div>
+
+          <div v-if="currentSearchTab === 'knowledge'" class="result-grid">
+            <button
+              v-for="article in knowledgeSearchResults"
+              :key="`knowledge-grid-${article.id}`"
+              class="result-card knowledge-result-card"
+              @click="router.push('/knowledge-base')"
+            >
+              <div class="result-card-head">
+                <span class="result-type-chip">知识库</span>
+                <span class="result-track">{{ article.category }}</span>
+              </div>
+              <h4 class="result-card-title">{{ article.title }}</h4>
+              <p class="result-card-desc">{{ article.description }}</p>
+              <div class="result-card-meta">
+                <span v-for="tag in article.tags" :key="`${article.id}-${tag}`">{{ tag }}</span>
+              </div>
+            </button>
+            <div v-if="!knowledgeSearchResults.length" class="result-empty">知识库里暂时没有匹配内容。</div>
+          </div>
+        </div>
+
+        <div v-if="currentSearchTab === 'friends'" class="friend-search-page">
+          <div class="friend-search-shell">
+            <div class="friend-search-hero">
+              <div class="friend-search-copy">
+                <span class="friend-search-kicker">鱼友搜索</span>
+                <h3 class="friend-search-title">在社区里找到和你话题相近的鱼友</h3>
+              </div>
+
+
+            </div>
+
+            <div class="friend-search-toolbar">
+              <div class="friend-filter-pills">
+                <label class="friend-scope-picker">
+                  <span class="friend-scope-label">社区作者库</span>
+                  <select
+                    class="friend-scope-select"
+                    :value="currentUserType"
+                    @change="handleCurrentUserTypeChange"
+                  >
+                    <option
+                      v-for="option in Object.entries(USER_TYPE_LABELS)"
+                      :key="option[0]"
+                      :value="option[0]"
+                    >
+                      {{ option[1] }}
+                    </option>
+                  </select>
+                </label>
+                <label class="friend-scope-picker activity-scope-picker">
+                  <span class="friend-scope-label">活跃度</span>
+                  <select
+                    class="friend-scope-select"
+                    :value="currentActivityFilter"
+                    @change="handleActivityFilterChange"
+                  >
+                    <option
+                      v-for="option in Object.entries(ACTIVITY_FILTER_LABELS)"
+                      :key="option[0]"
+                      :value="option[0]"
+                    >
+                      {{ option[1] }}
+                    </option>
+                  </select>
+                </label>
+
+              </div>
+              <span v-if="hasSearchKeyword" class="friend-keyword-chip">"{{ searchFilters.keyword }}"</span>
+            </div>
+
+            <div v-if="forumStore.isFromCache" class="cache-warning friend-cache-warning">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>当前鱼友结果来自本地缓存社区数据</span>
+            </div>
+
+            <div v-if="displayedFriendSearchResults.length" class="friend-list-board">
+              <div class="friend-list-head">
+                <div>
+                  <h4 class="friend-list-title">找到 {{ displayedFriendSearchResults.length }} 位相关鱼友</h4>
+                  <p class="friend-list-subtitle">结果来自当前社区帖子作者的聚合搜索</p>
+                </div>
+                <span class="friend-list-note">主按钮会直接带你查看 TA 的帖子</span>
+              </div>
+
+              <div class="friend-list">
+                <article
+                  v-for="friend in displayedFriendSearchResults"
+                  :key="`friend-row-${friend.name}`"
+                  class="friend-list-item"
+                >
+                  <div class="friend-item-main">
+                    <el-avatar class="friend-item-avatar" :size="72" :src="friend.avatar || ''">
+                      {{ friend.name.slice(0, 1) }}
+                    </el-avatar>
+
+                    <div class="friend-item-body">
+                      <div class="friend-item-topline">
+                        <div class="friend-item-heading">
+                          <h4 class="friend-item-name">{{ friend.name }}</h4>
+                          <AuthorLevelBadge
+                            :profile="normalizeAuthorLevelProfile(friend.authorLevelProfile, friend.authorLevel || 'Lv.1')"
+                            :raw-label="friend.authorLevel || 'Lv.1'"
+                            size="sm"
+                          />
+                        </div>
+                        <span class="friend-item-hotness">热度 {{ formatCompactNumber(friend.hotness) }}</span>
+                      </div>
+
+                      <p class="friend-item-description">{{ getFriendDescription(friend) }}</p>
+
+                      <div class="friend-item-meta">
+                        <span>发布 {{ friend.postsCount }} 篇</span>
+                        <span>获赞 {{ formatCompactNumber(friend.totalLikes) }}</span>
+                        <span>评论 {{ formatCompactNumber(friend.totalComments) }}</span>
+                      </div>
+
+                      <div v-if="friend.tags.length" class="friend-item-tags">
+                        <button
+                          v-for="tag in friend.tags"
+                          :key="`${friend.name}-${tag}`"
+                          class="friend-tag-chip"
+                          @click.stop="searchFriendByTag(tag)"
+                        >
+                          {{ tag }}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="friend-item-actions">
+                    <button class="friend-action-btn follow-btn" @click.stop="followUser(friend.name)">
+                      关注
+                    </button>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <div v-else class="friend-empty-panel">
+              <img src="../assets/icons/empty-search.svg" class="friend-empty-icon" alt="搜索图标" />
+              <h4 class="friend-empty-title">
+                {{ hasSearchKeyword ? '没找到匹配的鱼友' : '输入关键词开始搜索鱼友' }}
+              </h4>
+            </div>
+          </div>
+        </div>
+
+        <template v-if="currentSearchTab === 'all'">
         <div v-if="searchFilters.tag" class="tag-filter-bar">
           <span class="tag-filter-label">筛选标签：</span>
           <span class="tag-filter-value">{{ searchFilters.tag }}</span>
           <span class="tag-filter-count">{{ filteredSource.length }} 篇帖子</span>
           <span class="tag-filter-clear" @click="clearTagFilter">✕ 清除筛选</span>
+        </div>
+        <div v-if="searchFilters.author" class="tag-filter-bar author-filter-bar">
+          <span class="tag-filter-label">鱼友筛选：</span>
+          <span class="tag-filter-value">{{ searchFilters.author }}</span>
+          <span class="tag-filter-count">{{ filteredSource.length }} 篇相关帖子</span>
+          <span class="tag-filter-clear" @click="clearAuthorFilter">清除鱼友筛选</span>
         </div>
         <div v-if="forumStore.isFromCache" class="cache-warning">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -966,15 +1799,40 @@ onUnmounted(() => {
         </el-card>
 
         <Transition name="search-slide">
-          <SearchBar v-if="searchBarAtBottom" placeholder="搜索帖子、话题..." :is-sticky="false" @search="handleSearch" />
+          <SearchBar
+            v-if="searchBarAtBottom"
+            placeholder="搜索帖子、题目、鱼友或知识点..."
+            :is-sticky="false"
+            :keyword="searchFilters.keyword"
+            :active-tab="currentSearchTab"
+            :sort-value="searchFilters.sort"
+            :category-value="searchFilters.category"
+            :time-value="searchFilters.time"
+            @search="handleSearch"
+          />
         </Transition>
 
         <div v-if="totalPages > 1" class="pagination-wrapper">
           <FlowerPagination :total="totalPages" :defaultPage="currentPage" @change="handlePageChange" />
         </div>
+        </template>
+
+        <Transition name="search-slide">
+          <SearchBar
+            v-if="searchBarAtBottom && currentSearchTab !== 'all'"
+            placeholder="搜索帖子、题目、鱼友或知识点..."
+            :is-sticky="false"
+            :keyword="searchFilters.keyword"
+            :active-tab="currentSearchTab"
+            :sort-value="searchFilters.sort"
+            :category-value="searchFilters.category"
+            :time-value="searchFilters.time"
+            @search="handleSearch"
+          />
+        </Transition>
       </section>
 
-      <aside class="hot-sidebar">
+      <aside class="hot-sidebar" :class="{ 'friends-sidebar': currentSearchTab === 'friends' }">
         <div class="hot-card">
           <div class="hot-header">
             <h3 class="hot-title">🔥 今日热门题</h3>
@@ -3215,6 +4073,754 @@ onUnmounted(() => {
   transform: translateY(-8px) scale(0.95);
 }
 
+.search-summary-card {
+  margin-bottom: 18px;
+  padding: 18px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(244, 249, 255, 0.9));
+  border: 1px solid rgba(191, 219, 254, 0.65);
+  box-shadow: 0 16px 36px rgba(24, 39, 75, 0.08);
+}
+
+.search-summary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.search-summary-title {
+  margin: 0;
+  font-size: 20px;
+  color: var(--text-title);
+}
+
+.search-summary-subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-sub);
+}
+
+.search-summary-keyword {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.1);
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.search-overview-grid,
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.search-overview-grid {
+  margin-bottom: 16px;
+}
+
+.search-overview-item,
+.result-card,
+.mini-result-card {
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.92);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.search-overview-item {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.search-overview-item strong {
+  font-size: 24px;
+  color: #0f172a;
+}
+
+.search-overview-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.search-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.search-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.search-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.search-group-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-title);
+}
+
+.search-group-meta {
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.mini-result-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.mini-result-card,
+.result-card {
+  text-align: left;
+  cursor: pointer;
+}
+
+.mini-result-card {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-card {
+  padding: 16px;
+}
+
+.mini-result-card:hover,
+.result-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(59, 130, 246, 0.35);
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.08);
+}
+
+.mini-result-title,
+.result-card-title {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.mini-result-title {
+  font-size: 14px;
+}
+
+.mini-result-desc,
+.result-card-desc,
+.result-track {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.result-card-head,
+.result-card-meta,
+.friend-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.result-card-head {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.result-type-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.result-card-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.result-card-desc {
+  margin: 0 0 12px;
+  line-height: 1.6;
+}
+
+.result-card-meta {
+  flex-wrap: wrap;
+  color: #475569;
+  font-size: 12px;
+}
+
+.friend-card-top {
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.friend-card-text {
+  min-width: 0;
+}
+
+.result-empty {
+  grid-column: 1 / -1;
+  padding: 18px;
+  border: 1px dashed rgba(148, 163, 184, 0.5);
+  border-radius: 14px;
+  text-align: center;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.friend-search-page {
+  display: grid;
+}
+
+.friend-search-shell {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(45, 212, 191, 0.14), transparent 34%),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.94));
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 22px 44px rgba(15, 23, 42, 0.08);
+}
+
+.friend-search-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+  flex-wrap: wrap;
+}
+
+.friend-search-copy {
+  display: grid;
+  gap: 10px;
+  max-width: 620px;
+  flex: 1;
+  min-width: 0;
+}
+
+.friend-search-kicker {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.friend-search-title {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.15;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.friend-search-subtitle {
+  margin: 0;
+  max-width: 56ch;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.friend-search-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(100px, 1fr));
+  gap: 12px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.friend-metric-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(191, 219, 254, 0.8);
+}
+
+.friend-metric-label {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.friend-metric-card strong {
+  font-size: 20px;
+  color: #0f172a;
+}
+
+.friend-search-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.friend-filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.friend-scope-picker,
+.friend-activity-chip,
+.friend-keyword-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: rgba(255, 255, 255, 0.88);
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.friend-scope-picker {
+  gap: 10px;
+  padding: 6px 10px 6px 14px;
+}
+
+.friend-scope-label,
+.friend-activity-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.friend-scope-select {
+  min-width: 120px;
+  padding: 8px 28px 8px 12px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, 0.12);
+  color: #0f766e;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #0f766e 50%),
+    linear-gradient(135deg, #0f766e 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) calc(50% - 2px),
+    calc(100% - 11px) calc(50% - 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.friend-scope-select:hover {
+  background-color: rgba(20, 184, 166, 0.18);
+}
+
+.friend-activity-chip {
+  gap: 10px;
+  padding: 0 16px;
+}
+
+.friend-activity-chip strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.friend-activity-chip.is-highlight {
+  border-color: rgba(16, 185, 129, 0.28);
+  background: rgba(236, 253, 245, 0.9);
+}
+
+.friend-activity-chip.is-highlight strong {
+  color: #0f766e;
+}
+
+.friend-keyword-chip {
+  padding: 0 16px;
+  color: #0f766e;
+  border-color: rgba(20, 184, 166, 0.22);
+  background: rgba(236, 253, 245, 0.9);
+}
+
+.friend-toolbar-hint {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.friend-cache-warning {
+  margin-bottom: 0;
+}
+
+.friend-list-board {
+  display: grid;
+  gap: 14px;
+}
+
+.friend-list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.friend-list-title {
+  margin: 0;
+  font-size: 22px;
+  color: #0f172a;
+}
+
+.friend-list-subtitle,
+.friend-list-note {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.friend-list-note {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.friend-list {
+  display: grid;
+}
+
+.friend-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
+}
+
+.friend-list-item:first-child {
+  padding-top: 8px;
+}
+
+.friend-list-item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.friend-item-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: 0;
+  flex: 1;
+}
+
+.friend-item-avatar {
+  flex-shrink: 0;
+  border: 3px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
+}
+
+.friend-item-body {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.friend-item-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.friend-item-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.friend-item-name {
+  margin: 0;
+  color: #0f172a;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.friend-item-hotness {
+  white-space: nowrap;
+  color: #059669;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.friend-item-description {
+  margin: 0;
+  color: #475569;
+  font-size: 15px;
+  line-height: 1.7;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.friend-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.friend-item-tags {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.friend-tag-chip {
+  border: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.08);
+  color: #0f766e;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.friend-tag-chip:hover {
+  transform: translateY(-1px);
+  background: rgba(15, 118, 110, 0.14);
+}
+
+.friend-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.friend-action-btn {
+  min-width: 108px;
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.friend-action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.friend-action-btn.ghost {
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: white;
+  color: #1e293b;
+}
+
+.friend-action-btn.solid {
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, #34d399, #10b981);
+  color: white;
+  box-shadow: 0 14px 28px rgba(16, 185, 129, 0.2);
+}
+
+.friend-action-btn.follow-btn {
+  min-width: auto;
+  min-height: auto;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.08);
+  color: #059669;
+}
+
+.friend-action-btn.follow-btn:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.friend-empty-panel {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 56px 20px;
+  border-radius: 22px;
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+  background: rgba(255, 255, 255, 0.78);
+  text-align: center;
+}
+
+.friend-empty-icon {
+  width: 66px;
+  height: 66px;
+  object-fit: contain;
+}
+
+.friend-empty-title {
+  margin: 0;
+  font-size: 20px;
+  color: #0f172a;
+}
+
+.friend-empty-text {
+  margin: 0;
+  max-width: 36ch;
+  color: #64748b;
+  line-height: 1.7;
+}
+
+.friends-sidebar {
+  display: grid;
+  gap: 16px;
+}
+
+.friend-side-card {
+  width: 340px;
+  padding: 18px;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.94));
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
+}
+
+.friend-side-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.friend-side-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.friend-side-meta {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.friend-rank-list,
+.friend-topic-list {
+  display: grid;
+  gap: 8px;
+}
+
+.friend-rank-item,
+.friend-topic-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.friend-rank-item:hover,
+.friend-topic-item:hover {
+  background: rgba(15, 118, 110, 0.06);
+  transform: translateX(2px);
+}
+
+.friend-rank-index,
+.friend-topic-index {
+  width: 24px;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 800;
+  color: #cbd5e1;
+  line-height: 1;
+}
+
+.friend-rank-index.is-top,
+.friend-topic-index.is-top {
+  color: #f97316;
+}
+
+.friend-rank-body,
+.friend-topic-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.friend-rank-name,
+.friend-topic-name {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.friend-rank-desc,
+.friend-topic-desc {
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.friend-rank-value {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.friend-side-empty {
+  padding: 24px 0 8px;
+  color: #94a3b8;
+  font-size: 13px;
+  text-align: center;
+}
+
+.author-filter-bar {
+  margin-top: 10px;
+}
+
 @media (max-width: 1200px) {
   .forum-layout {
     grid-template-columns: 1fr;
@@ -3236,6 +4842,41 @@ onUnmounted(() => {
 
   .content {
     font-size: 16px;
+  }
+
+  .search-summary-head {
+    flex-direction: column;
+  }
+
+  .friend-search-shell {
+    padding: 18px;
+  }
+
+  .friend-search-hero,
+  .friend-list-head,
+  .friend-list-item,
+  .friend-item-topline,
+  .friend-search-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .friend-search-metrics {
+    min-width: 0;
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .friend-item-name {
+    font-size: 24px;
+  }
+
+  .friend-item-actions {
+    width: 100%;
+  }
+
+  .friend-action-btn {
+    flex: 1;
   }
 }
 </style>
