@@ -663,13 +663,20 @@ onMounted(loadData)
   width: 220px;
 }
 
+/* el-select 输入框圆角 */
 :deep(.filter-select .el-input__wrapper) {
-  border-radius: 20px;
+  border-radius: 20px !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(8px);
   padding: 4px 16px;
   border: none;
+}
+
+/* el-select 下拉菜单圆角 */
+:deep(.el-select-dropdown) {
+  border-radius: 18px !important;
+  overflow: hidden;
 }
 
 :deep(.filter-select .el-input__wrapper.is-focus),
