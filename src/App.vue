@@ -165,7 +165,7 @@ const positionTextAnalysisMenu = async (rect) => {
 const handleSelectionChange = () => {
   const selection = window.getSelection()
   const selectedTextValue = selection?.toString().trim() || ''
-  
+
   if (selectedTextValue && selectedTextValue.length > 0) {
     selectedText.value = selectedTextValue
     const range = selection.getRangeAt(0)
@@ -193,9 +193,9 @@ const aiAssistantRef = ref(null)
 // 分析选中文本
 const analyzeSelectedText = (type) => {
   if (!selectedText.value || !aiAssistantRef.value) return
-  
+
   aiAssistantRef.value.analyzeSelectedText(selectedText.value, type)
-  
+
   hideTextAnalysisMenu(true)
 }
 
@@ -280,9 +280,9 @@ const toggleTheme = () => {
         <el-menu class="main-menu" :default-active="activePath" mode="horizontal" @select="handleMenuSelect">
           <el-menu-item index="/home">首页</el-menu-item>
           <el-sub-menu index="courses-group">
-            <template #title>网课</template>
+            <template #title>知识专区</template>
             <el-menu-item index="/courses">网课</el-menu-item>
-            <el-menu-item index="/knowledge-base">知识专区</el-menu-item>
+            <el-menu-item index="/knowledge-base">知识库</el-menu-item>
           </el-sub-menu>
           <el-menu-item index="/projects">项目实战</el-menu-item>
           <el-menu-item index="/forum">论坛</el-menu-item>
@@ -376,16 +376,13 @@ const toggleTheme = () => {
 
     <!-- 文本分析浮动菜单 -->
     <transition name="menu-fade">
-      <div 
-        v-if="showTextAnalysisMenu && selectedText" 
-        ref="textAnalysisMenuRef"
-        class="text-analysis-menu"
+      <div v-if="showTextAnalysisMenu && selectedText" ref="textAnalysisMenuRef" class="text-analysis-menu"
         :style="{ left: textAnalysisMenuPosition.x + 'px', top: textAnalysisMenuPosition.y + 'px' }"
-        @pointerdown="handleTextAnalysisMenuPointerDown"
-      >
+        @pointerdown="handleTextAnalysisMenuPointerDown">
         <div class="selected-text-preview">
           <span class="preview-label">已选中：</span>
-          <span class="preview-text">{{ selectedText.length > 50 ? selectedText.substring(0, 50) + '...' : selectedText }}</span>
+          <span class="preview-text">{{ selectedText.length > 50 ? selectedText.substring(0, 50) + '...' : selectedText
+          }}</span>
         </div>
         <div class="menu-divider"></div>
         <button @click="analyzeSelectedText('correctness')" class="analysis-btn">
