@@ -8,7 +8,8 @@
         </div>
 
         <div class="message-categories">
-          <div class="category-item active">
+          <div class="category-item" :class="{ active: activeItem === 'sys-notice' }"
+            @click="activeItem = 'sys-notice'">
             <div class="icon-box sys-notice">
               <div class="red-dot"></div>
               <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff">
@@ -18,7 +19,7 @@
             </div>
             <span class="category-name">系统通知</span>
           </div>
-          <div class="category-item">
+          <div class="category-item" :class="{ active: activeItem === 'likes' }" @click="activeItem = 'likes'">
             <div class="icon-box likes">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff">
                 <path
@@ -27,7 +28,7 @@
             </div>
             <span class="category-name">赞和收藏</span>
           </div>
-          <div class="category-item">
+          <div class="category-item" :class="{ active: activeItem === 'comments' }" @click="activeItem = 'comments'">
             <div class="icon-box comments">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff">
                 <path d="M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4-.01-18z" />
@@ -35,7 +36,7 @@
             </div>
             <span class="category-name">评论和 @</span>
           </div>
-          <div class="category-item">
+          <div class="category-item" :class="{ active: activeItem === 'follows' }" @click="activeItem = 'follows'">
             <div class="icon-box follows">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff">
                 <path
@@ -51,7 +52,7 @@
         </div>
 
         <div class="contact-list">
-          <div class="contact-item">
+          <div class="contact-item" :class="{ active: activeItem === 'bot' }" @click="activeItem = 'bot'">
             <div class="avatar-wrap">
               <img class="avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=bot" alt="avatar" />
               <span class="badge">官方</span>
@@ -65,7 +66,7 @@
             </div>
           </div>
 
-          <div class="contact-item">
+          <div class="contact-item" :class="{ active: activeItem === 'hua' }" @click="activeItem = 'hua'">
             <div class="avatar-wrap">
               <img class="avatar" src="https://api.dicebear.com/7.x/identicon/svg?seed=hua" alt="avatar" />
             </div>
@@ -83,7 +84,7 @@
       <!-- 右侧：消息内容列表 -->
       <div class="message-content-area">
         <div class="content-header">
-          <h2 class="content-title">系统通知</h2>
+          <h2 class="content-title">{{ getTitle() }}</h2>
           <div class="header-actions">
             <button class="action-btn" title="标记已读">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
@@ -103,7 +104,7 @@
           </div>
         </div>
 
-        <div class="system-msg-list">
+        <div v-if="activeItem === 'sys-notice'" class="system-msg-list">
           <div class="sys-msg-item">
             <div class="sys-msg-time">昨天 10:39</div>
             <div class="sys-msg-card">
@@ -124,13 +125,66 @@
             </div>
           </div>
         </div>
+
+        <div v-else-if="activeItem === 'likes'" class="empty-state">
+          <div class="empty-icon">👍</div>
+          <p>暂无收到的赞和收藏</p>
+        </div>
+
+        <div v-else-if="activeItem === 'comments'" class="empty-state">
+          <div class="empty-icon">💬</div>
+          <p>暂无评论或 @ 你的消息</p>
+        </div>
+
+        <div v-else-if="activeItem === 'follows'" class="empty-state">
+          <div class="empty-icon">👥</div>
+          <p>暂无新增关注</p>
+        </div>
+
+        <div v-else-if="activeItem === 'bot'" class="chat-area">
+          <div class="chat-message received">
+            <div class="chat-avatar"><img src="https://api.dicebear.com/7.x/bottts/svg?seed=bot" alt="avatar" /></div>
+            <div class="chat-bubble">你的简历上写 AI了吗 <span class="emoji">❓</span></div>
+          </div>
+          <div class="chat-input-area">
+            <input type="text" placeholder="回复 创作小助手..." class="chat-input" />
+            <button class="send-btn">发送</button>
+          </div>
+        </div>
+
+        <div v-else-if="activeItem === 'hua'" class="chat-area">
+          <div class="chat-message received">
+            <div class="chat-avatar"><img src="https://api.dicebear.com/7.x/identicon/svg?seed=hua" alt="avatar" />
+            </div>
+            <div class="chat-bubble">还没有收到小红花，要相信好人有好报</div>
+          </div>
+          <div class="chat-input-area">
+            <input type="text" placeholder="回复 花和人品值..." class="chat-input" />
+            <button class="send-btn">发送</button>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-// UI实现
+import { ref } from 'vue'
+
+const activeItem = ref('sys-notice')
+
+const getTitle = () => {
+  const titles = {
+    'sys-notice': '系统通知',
+    'likes': '赞和收藏',
+    'comments': '评论和 @',
+    'follows': '新增关注',
+    'bot': '创作小助手',
+    'hua': '花和人品值'
+  }
+  return titles[activeItem.value] || '消息'
+}
 </script>
 
 <style scoped>
@@ -473,6 +527,104 @@
 
 .sys-msg-link:hover {
   opacity: 0.8;
+}
+
+/* 新增的空状态与聊天样式 */
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: var(--text-sub, #94a3b8);
+  font-size: 15px;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.chat-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+}
+
+.chat-message {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.chat-message.received .chat-bubble {
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text-title, #1e293b);
+  border-radius: 2px 16px 16px 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.chat-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  margin-right: 12px;
+  overflow: hidden;
+  background: #f1f5f9;
+  flex-shrink: 0;
+  border: 2px solid #fff;
+}
+
+.chat-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chat-bubble {
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  max-width: 70%;
+}
+
+.chat-input-area {
+  margin-top: auto;
+  display: flex;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
+}
+
+.chat-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  color: var(--text-title, #1e293b);
+}
+
+.send-btn {
+  border: none;
+  background: var(--brand-blue, #3b82f6);
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.send-btn:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
 }
 
 /* 适配移动端 */
