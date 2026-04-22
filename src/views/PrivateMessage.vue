@@ -52,30 +52,19 @@
         </div>
 
         <div class="contact-list">
-          <div class="contact-item" :class="{ active: activeItem === 'bot' }" @click="activeItem = 'bot'">
+          <div class="contact-item" v-for="contact in chatContacts" :key="contact.sender_id"
+            :class="{ active: activeItem === contact.sender_id }" @click="activeItem = contact.sender_id">
             <div class="avatar-wrap">
-              <img class="avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=bot" alt="avatar" />
-              <span class="badge">官方</span>
+              <img class="avatar"
+                :src="contact.sender_avatar || 'https://api.dicebear.com/7.x/identicon/svg?seed=' + contact.sender_id"
+                alt="avatar" />
             </div>
             <div class="contact-info">
               <div class="contact-top">
-                <span class="contact-name">创作小助手</span>
-                <span class="contact-time">昨天</span>
+                <span class="contact-name">{{ contact.sender_name }}</span>
+                <span class="contact-time">{{ formatTime(contact.last_msg_time) }}</span>
               </div>
-              <p class="contact-desc">你的简历上写 AI了吗 <span class="emoji">❓</span></p>
-            </div>
-          </div>
-
-          <div class="contact-item" :class="{ active: activeItem === 'hua' }" @click="activeItem = 'hua'">
-            <div class="avatar-wrap">
-              <img class="avatar" src="https://api.dicebear.com/7.x/identicon/svg?seed=hua" alt="avatar" />
-            </div>
-            <div class="contact-info">
-              <div class="contact-top">
-                <span class="contact-name">花和人品值</span>
-                <span class="contact-time">10:39</span>
-              </div>
-              <p class="contact-desc">还没有收到小红花，要相信好人有好报</p>
+              <p class="contact-desc">{{ contact.last_msg_content }}</p>
             </div>
           </div>
         </div>
@@ -105,24 +94,17 @@
         </div>
 
         <div v-if="activeItem === 'sys-notice'" class="system-msg-list">
-          <div class="sys-msg-item">
-            <div class="sys-msg-time">昨天 10:39</div>
-            <div class="sys-msg-card">
-              <h3 class="sys-msg-title">算法挑战赛获奖通知</h3>
-              <p class="sys-msg-detail">恭喜你在上周的「春季算法挑战赛」中获得第 3 名！你的积分奖励已经发放，请前往个人中心查看。</p>
-              <div class="sys-msg-link">查看详情 <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
-                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="9 18 15 12 9 6"></polyline>
-                </svg></div>
+          <div class="sys-msg-item" v-for="msg in sysNotices" :key="msg.id">
+            <div class="sys-msg-time">{{ formatTime(msg.created_at) }}</div>
+            <div class="sys-msg-card" :class="{ 'is-read': msg.is_read }">
+              <h3 class="sys-msg-title">{{ msg.title }}</h3>
+              <p class="sys-msg-detail">{{ msg.content }}</p>
             </div>
           </div>
 
-          <div class="sys-msg-item">
-            <div class="sys-msg-time">前天 14:20</div>
-            <div class="sys-msg-card">
-              <h3 class="sys-msg-title">系统升级维护通知</h3>
-              <p class="sys-msg-detail">尊敬的用户，为了提供更好的体验，我们将于本周五凌晨 02:00 - 04:00 进行系统升级维护。期间部分功能可能无法使用，给您带来的不便敬请谅解。</p>
-            </div>
+          <div v-if="sysNotices.length === 0" class="empty-state">
+            <div class="empty-icon">🔔</div>
+            <p>暂无系统通知</p>
           </div>
         </div>
 
@@ -141,25 +123,21 @@
           <p>暂无新增关注</p>
         </div>
 
-        <div v-else-if="activeItem === 'bot'" class="chat-area">
-          <div class="chat-message received">
-            <div class="chat-avatar"><img src="https://api.dicebear.com/7.x/bottts/svg?seed=bot" alt="avatar" /></div>
-            <div class="chat-bubble">你的简历上写 AI了吗 <span class="emoji">❓</span></div>
+        <div v-else class="chat-area">
+          <div class="chat-message received" v-for="msg in currentChatMessages" :key="msg.id">
+            <div class="chat-avatar"><img
+                :src="msg.sender_avatar || 'https://api.dicebear.com/7.x/identicon/svg?seed=' + msg.sender_id"
+                alt="avatar" /></div>
+            <div class="chat-bubble">{{ msg.content }}</div>
           </div>
-          <div class="chat-input-area">
-            <input type="text" placeholder="回复 创作小助手..." class="chat-input" />
-            <button class="send-btn">发送</button>
-          </div>
-        </div>
 
-        <div v-else-if="activeItem === 'hua'" class="chat-area">
-          <div class="chat-message received">
-            <div class="chat-avatar"><img src="https://api.dicebear.com/7.x/identicon/svg?seed=hua" alt="avatar" />
-            </div>
-            <div class="chat-bubble">还没有收到小红花，要相信好人有好报</div>
+          <div v-if="currentChatMessages.length === 0" class="empty-state">
+            <div class="empty-icon">💬</div>
+            <p>点击左侧联系人开始聊天</p>
           </div>
-          <div class="chat-input-area">
-            <input type="text" placeholder="回复 花和人品值..." class="chat-input" />
+
+          <div class="chat-input-area" v-if="activeItem && typeof activeItem === 'number'">
+            <input type="text" :placeholder="'回复 ' + getTitle() + '...'" class="chat-input" />
             <button class="send-btn">发送</button>
           </div>
         </div>
@@ -170,20 +148,91 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, watch } from 'vue'
+import { messageApi } from '@/api/message'
 
 const activeItem = ref('sys-notice')
+const sysNotices = ref([])
+const chatContacts = ref([])
+const allChatMessages = ref([])
+const currentChatMessages = ref([])
+
+onMounted(() => {
+  fetchMessages()
+})
+
+watch(activeItem, (newVal) => {
+  if (typeof newVal === 'number') {
+    // 过滤出所选联系人的消息 (将最新的消息放在最下面，需要 reverse)
+    currentChatMessages.value = allChatMessages.value
+      .filter(msg => msg.sender_id === newVal)
+      .reverse()
+  }
+})
+
+const fetchMessages = async () => {
+  try {
+    // 获取通知列表
+    const noticeRes = await messageApi.getMessages('sys-notice')
+    if (noticeRes.data?.code === 0 || noticeRes.data?.code === 200) {
+      sysNotices.value = noticeRes.data.data
+    }
+
+    // 获取联系人列表
+    const contactsRes = await messageApi.getContacts()
+    if (contactsRes.data?.code === 0 || contactsRes.data?.code === 200) {
+      chatContacts.value = contactsRes.data.data
+    }
+
+    // 获取所有的私信对话列表，为了演示直接拉取所有聊天再过滤
+    const chatRes = await messageApi.getMessages('chat')
+    if (chatRes.data?.code === 0 || chatRes.data?.code === 200) {
+      allChatMessages.value = chatRes.data.data
+
+      // 如果当前展开的是联系人，立刻更新一遍列表
+      if (typeof activeItem.value === 'number') {
+        currentChatMessages.value = allChatMessages.value
+          .filter(msg => msg.sender_id === activeItem.value)
+          .reverse()
+      }
+    }
+  } catch (err) {
+    console.error('获取消息失败', err)
+  }
+}
+
+// 简单的日期格式化函数
+const formatTime = (timeStr) => {
+  if (!timeStr) return ''
+  const date = new Date(timeStr)
+  const now = new Date()
+  const diff = now - date
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
+  if (diff < 172800000) return '昨天'
+  return `${date.getMonth() + 1}月${date.getDate()}日`
+}
 
 const getTitle = () => {
   const titles = {
     'sys-notice': '系统通知',
     'likes': '赞和收藏',
     'comments': '评论和 @',
-    'follows': '新增关注',
-    'bot': '创作小助手',
-    'hua': '花和人品值'
+    'follows': '新增关注'
   }
-  return titles[activeItem.value] || '消息'
+
+  if (titles[activeItem.value]) {
+    return titles[activeItem.value]
+  }
+
+  // 判断是否是私信联系人
+  const contact = chatContacts.value.find(c => c.sender_id === activeItem.value)
+  if (contact) {
+    return contact.sender_name
+  }
+
+  return '消息'
 }
 </script>
 
