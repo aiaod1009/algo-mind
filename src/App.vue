@@ -20,6 +20,7 @@ const menuItems = [
   { path: '/courses', label: '网课' },
   { path: '/projects', label: '项目实战' },
   { path: '/forum', label: '论坛' },
+  { path: '/private-message', label: '用户私信' },
   { path: '/ranking', label: '积分排行' },
   { path: '/errors', label: '错题本' },
 ]
@@ -286,6 +287,7 @@ const toggleTheme = () => {
           </el-sub-menu>
           <el-menu-item index="/projects">项目实战</el-menu-item>
           <el-menu-item index="/forum">论坛</el-menu-item>
+          <el-menu-item index="/private-message">用户私信</el-menu-item>
           <el-menu-item index="/ranking">积分排行</el-menu-item>
           <el-menu-item index="/errors">错题本</el-menu-item>
         </el-menu>

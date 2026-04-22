@@ -98,6 +98,12 @@ const router = createRouter({
       component: KnowledgeBase,
       meta: { requiresAuth: true },
     },
+    {
+      path: '/private-message',
+      name: 'private-message',
+      component: () => import('../views/PrivateMessage.vue'),
+      meta: { requiresAuth: true },
+    },
   ],
 })
 
