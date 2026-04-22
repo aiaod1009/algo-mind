@@ -81,7 +81,7 @@
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
             </button>
-            <button class="action-btn" title="消息设置">
+            <button class="action-btn" title="消息设置" @click="showSettingsModal = true">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"></circle>
@@ -144,12 +144,189 @@
 
       </div>
     </div>
+
+    <!-- 消息设置模态窗口 -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div v-if="showSettingsModal" class="modal-overlay" @click.self="closeSettingsModal">
+          <div class="modal-container">
+            <div class="modal-header">
+              <h3 class="modal-title">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                消息设置
+              </h3>
+              <button class="modal-close" @click="closeSettingsModal">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6L6 18M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+
+            <div class="modal-body">
+              <!-- 通知类型设置 -->
+              <div class="settings-section">
+                <h4 class="section-title">通知类型</h4>
+                <div class="setting-items">
+                  <div class="setting-item">
+                    <div class="setting-info">
+                      <span class="setting-label">系统通知</span>
+                      <span class="setting-desc">接收平台重要公告和更新</span>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" v-model="settings.systemNotice.enabled">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div class="setting-item" v-if="settings.systemNotice.enabled">
+                    <div class="setting-info">
+                      <span class="setting-label">通知频率</span>
+                    </div>
+                    <select v-model="settings.systemNotice.frequency" class="setting-select">
+                      <option value="immediate">即时通知</option>
+                      <option value="hourly">每小时汇总</option>
+                      <option value="daily">每日汇总</option>
+                    </select>
+                  </div>
+
+                  <div class="setting-item">
+                    <div class="setting-info">
+                      <span class="setting-label">邮件提醒</span>
+                      <span class="setting-desc">通过邮件接收消息通知</span>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" v-model="settings.email.enabled">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div class="setting-item" v-if="settings.email.enabled">
+                    <div class="setting-info">
+                      <span class="setting-label">邮件频率</span>
+                    </div>
+                    <select v-model="settings.email.frequency" class="setting-select">
+                      <option value="immediate">即时发送</option>
+                      <option value="hourly">每小时汇总</option>
+                      <option value="daily">每日摘要</option>
+                      <option value="weekly">每周摘要</option>
+                    </select>
+                  </div>
+
+                  <div class="setting-item">
+                    <div class="setting-info">
+                      <span class="setting-label">应用内消息</span>
+                      <span class="setting-desc">在应用内显示消息提示</span>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" v-model="settings.inApp.enabled">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div class="setting-item sub-item" v-if="settings.inApp.enabled">
+                    <div class="setting-info">
+                      <span class="setting-label">显示消息预览</span>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" v-model="settings.inApp.showPreview">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 优先级设置 -->
+              <div class="settings-section">
+                <h4 class="section-title">优先级设置</h4>
+                <div class="priority-options">
+                  <label class="priority-option" :class="{ active: settings.priority === 'all' }">
+                    <input type="radio" v-model="settings.priority" value="all">
+                    <span class="priority-badge all">全部</span>
+                    <span class="priority-desc">接收所有消息</span>
+                  </label>
+                  <label class="priority-option" :class="{ active: settings.priority === 'important' }">
+                    <input type="radio" v-model="settings.priority" value="important">
+                    <span class="priority-badge important">重要</span>
+                    <span class="priority-desc">仅重要消息</span>
+                  </label>
+                  <label class="priority-option" :class="{ active: settings.priority === 'urgent' }">
+                    <input type="radio" v-model="settings.priority" value="urgent">
+                    <span class="priority-badge urgent">紧急</span>
+                    <span class="priority-desc">仅紧急消息</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- 免打扰设置 -->
+              <div class="settings-section">
+                <h4 class="section-title">免打扰模式</h4>
+                <div class="setting-items">
+                  <div class="setting-item">
+                    <div class="setting-info">
+                      <span class="setting-label">开启免打扰</span>
+                      <span class="setting-desc">在指定时间段内静音通知</span>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" v-model="settings.dnd.enabled">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div class="dnd-time-settings" v-if="settings.dnd.enabled">
+                    <div class="time-input-group">
+                      <label>开始时间</label>
+                      <input type="time" v-model="settings.dnd.startTime" class="time-input">
+                    </div>
+                    <div class="time-input-group">
+                      <label>结束时间</label>
+                      <input type="time" v-model="settings.dnd.endTime" class="time-input">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 声音设置 -->
+              <div class="settings-section">
+                <h4 class="section-title">声音设置</h4>
+                <div class="setting-items">
+                  <div class="setting-item">
+                    <div class="setting-info">
+                      <span class="setting-label">消息提示音</span>
+                      <span class="setting-desc">收到新消息时播放声音</span>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" v-model="settings.sound.enabled">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                  <div class="setting-item" v-if="settings.sound.enabled">
+                    <div class="setting-info">
+                      <span class="setting-label">音量</span>
+                    </div>
+                    <input type="range" v-model="settings.sound.volume" min="0" max="100" class="volume-slider">
+                    <span class="volume-value">{{ settings.sound.volume }}%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button class="btn btn-secondary" @click="closeSettingsModal">取消</button>
+              <button class="btn btn-primary" @click="saveSettings" :disabled="isSaving">
+                <span v-if="isSaving" class="loading-spinner"></span>
+                {{ isSaving ? '保存中...' : '保存设置' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { messageApi } from '@/api/message'
+import { ElMessage } from 'element-plus'
 
 const activeItem = ref('sys-notice')
 const sysNotices = ref([])
@@ -157,8 +334,80 @@ const chatContacts = ref([])
 const allChatMessages = ref([])
 const currentChatMessages = ref([])
 
+// 消息设置模态窗口
+const showSettingsModal = ref(false)
+const isSaving = ref(false)
+
+// 默认设置
+const defaultSettings = {
+  systemNotice: {
+    enabled: true,
+    frequency: 'immediate'
+  },
+  email: {
+    enabled: false,
+    frequency: 'daily'
+  },
+  inApp: {
+    enabled: true,
+    showPreview: true
+  },
+  priority: 'all',
+  dnd: {
+    enabled: false,
+    startTime: '22:00',
+    endTime: '08:00'
+  },
+  sound: {
+    enabled: true,
+    volume: 70
+  }
+}
+
+// 当前设置（从本地存储加载或使用默认）
+const settings = ref({ ...defaultSettings })
+
+// 加载设置
+const loadSettings = () => {
+  const saved = localStorage.getItem('messageSettings')
+  if (saved) {
+    try {
+      settings.value = { ...defaultSettings, ...JSON.parse(saved) }
+    } catch (e) {
+      console.error('加载设置失败', e)
+    }
+  }
+}
+
+// 关闭设置模态窗口
+const closeSettingsModal = () => {
+  showSettingsModal.value = false
+  // 重置为已保存的设置
+  loadSettings()
+}
+
+// 保存设置
+const saveSettings = async () => {
+  isSaving.value = true
+  try {
+    // 保存到本地存储
+    localStorage.setItem('messageSettings', JSON.stringify(settings.value))
+    
+    // 这里可以添加API调用保存到服务器
+    // await messageApi.updateSettings(settings.value)
+    
+    ElMessage.success('设置已保存')
+    showSettingsModal.value = false
+  } catch (error) {
+    ElMessage.error('保存失败，请重试')
+  } finally {
+    isSaving.value = false
+  }
+}
+
 onMounted(() => {
   fetchMessages()
+  loadSettings()
 })
 
 watch(activeItem, (newVal) => {
@@ -676,6 +925,424 @@ const getTitle = () => {
   transform: translateY(-1px);
 }
 
+/* 模态窗口样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-container {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.modal-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-title, #1e293b);
+}
+
+.modal-title svg {
+  color: var(--brand-blue, #3b82f6);
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-sub, #64748b);
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-title, #1e293b);
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* 设置区块 */
+.settings-section {
+  margin-bottom: 28px;
+}
+
+.settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-title, #1e293b);
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+/* 设置项 */
+.setting-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.setting-item.sub-item {
+  margin-left: 24px;
+  background: rgba(248, 250, 252, 0.8);
+}
+
+.setting-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.setting-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-title, #1e293b);
+}
+
+.setting-desc {
+  font-size: 12px;
+  color: var(--text-sub, #94a3b8);
+}
+
+/* 开关样式 */
+.toggle-switch {
+  position: relative;
+  width: 48px;
+  height: 26px;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #e2e8f0;
+  border-radius: 26px;
+  transition: 0.3s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--brand-blue, #3b82f6);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(22px);
+}
+
+/* 下拉选择 */
+.setting-select {
+  padding: 8px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  background: white;
+  font-size: 13px;
+  color: var(--text-title, #1e293b);
+  cursor: pointer;
+  outline: none;
+  min-width: 120px;
+}
+
+.setting-select:focus {
+  border-color: var(--brand-blue, #3b82f6);
+}
+
+/* 优先级选项 */
+.priority-options {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.priority-option {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.priority-option:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.priority-option.active {
+  border-color: var(--brand-blue, #3b82f6);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.priority-option input {
+  display: none;
+}
+
+.priority-badge {
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.priority-badge.all {
+  background: linear-gradient(135deg, #84fab0, #8fd3f4);
+  color: #0f766e;
+}
+
+.priority-badge.important {
+  background: linear-gradient(135deg, #ffecd2, #fcb69f);
+  color: #9a3412;
+}
+
+.priority-badge.urgent {
+  background: linear-gradient(135deg, #ff9a9e, #fecfef);
+  color: #9f1239;
+}
+
+.priority-desc {
+  font-size: 12px;
+  color: var(--text-sub, #64748b);
+}
+
+/* 免打扰时间设置 */
+.dnd-time-settings {
+  display: flex;
+  gap: 16px;
+  margin-left: 24px;
+  padding: 12px 16px;
+  background: rgba(248, 250, 252, 0.8);
+  border-radius: 12px;
+}
+
+.time-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.time-input-group label {
+  font-size: 12px;
+  color: var(--text-sub, #64748b);
+}
+
+.time-input {
+  padding: 8px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-title, #1e293b);
+  outline: none;
+}
+
+.time-input:focus {
+  border-color: var(--brand-blue, #3b82f6);
+}
+
+/* 音量滑块 */
+.volume-slider {
+  flex: 1;
+  max-width: 150px;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #e2e8f0;
+  border-radius: 3px;
+  outline: none;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--brand-blue, #3b82f6);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: var(--brand-blue, #3b82f6);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.volume-value {
+  font-size: 13px;
+  color: var(--text-sub, #64748b);
+  min-width: 40px;
+  text-align: right;
+}
+
+/* 按钮样式 */
+.btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: var(--brand-blue, #3b82f6);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-title, #1e293b);
+}
+
+.btn-secondary:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+/* 加载动画 */
+.loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 模态窗口动画 */
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-fade-enter-active .modal-container,
+.modal-fade-leave-active .modal-container {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.modal-fade-enter-from .modal-container,
+.modal-fade-leave-to .modal-container {
+  transform: scale(0.95);
+  opacity: 0;
+}
+
 /* 适配移动端 */
 @media (max-width: 768px) {
   .message-page {
@@ -705,6 +1372,30 @@ const getTitle = () => {
 
   .sys-msg-card {
     padding: 16px;
+  }
+
+  .modal-container {
+    max-height: 90vh;
+    margin: 10px;
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .priority-options {
+    flex-direction: column;
+  }
+
+  .priority-option {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 12px;
+  }
+
+  .dnd-time-settings {
+    flex-direction: column;
+    gap: 12px;
   }
 }
 </style>

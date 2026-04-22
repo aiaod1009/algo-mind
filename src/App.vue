@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from './stores/user'
 import { getTrackLabel } from './constants'
@@ -14,6 +14,7 @@ const userStore = useUserStore()
 const isAuthPage = computed(() => ['/', '/register'].includes(route.path))
 const showTopbar = computed(() => !isAuthPage.value)
 const showFloatingAssistant = computed(() => !!userStore.userInfo?.token && !isAuthPage.value)
+const canUseTextAnalysis = computed(() => !!userStore.userInfo?.token && !isAuthPage.value)
 
 const menuItems = [
   { path: '/home', label: '学习计划' },
@@ -164,6 +165,11 @@ const positionTextAnalysisMenu = async (rect) => {
 
 // 文本选择监听器
 const handleSelectionChange = () => {
+  if (!canUseTextAnalysis.value) {
+    hideTextAnalysisMenu()
+    return
+  }
+
   const selection = window.getSelection()
   const selectedTextValue = selection?.toString().trim() || ''
 
@@ -193,7 +199,7 @@ const aiAssistantRef = ref(null)
 
 // 分析选中文本
 const analyzeSelectedText = (type) => {
-  if (!selectedText.value || !aiAssistantRef.value) return
+  if (!canUseTextAnalysis.value || !selectedText.value || !aiAssistantRef.value) return
 
   aiAssistantRef.value.analyzeSelectedText(selectedText.value, type)
 
@@ -205,7 +211,7 @@ const handleTextAnalysisMenuPointerDown = (event) => {
 }
 
 const handleDocumentPointerDown = (event) => {
-  if (!showTextAnalysisMenu.value) {
+  if (!canUseTextAnalysis.value || !showTextAnalysisMenu.value) {
     return
   }
 
@@ -218,7 +224,7 @@ const handleDocumentPointerDown = (event) => {
 }
 
 const handleWindowResize = () => {
-  if (!showTextAnalysisMenu.value || !textAnalysisMenuAnchorRect.value) {
+  if (!canUseTextAnalysis.value || !showTextAnalysisMenu.value || !textAnalysisMenuAnchorRect.value) {
     return
   }
   positionTextAnalysisMenu(textAnalysisMenuAnchorRect.value)
@@ -226,6 +232,10 @@ const handleWindowResize = () => {
 
 // 快捷键处理
 const handleKeyDown = (e) => {
+  if (!canUseTextAnalysis.value) {
+    return
+  }
+
   if (e.ctrlKey && showTextAnalysisMenu.value) {
     if (e.key === '1') {
       e.preventDefault()
@@ -250,6 +260,12 @@ onUnmounted(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown, true)
   document.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('resize', handleWindowResize)
+})
+
+watch(canUseTextAnalysis, (enabled) => {
+  if (!enabled) {
+    hideTextAnalysisMenu(true)
+  }
 })
 
 const toggleTheme = () => {
@@ -378,7 +394,7 @@ const toggleTheme = () => {
 
     <!-- 文本分析浮动菜单 -->
     <transition name="menu-fade">
-      <div v-if="showTextAnalysisMenu && selectedText" ref="textAnalysisMenuRef" class="text-analysis-menu"
+      <div v-if="canUseTextAnalysis && showTextAnalysisMenu && selectedText" ref="textAnalysisMenuRef" class="text-analysis-menu"
         :style="{ left: textAnalysisMenuPosition.x + 'px', top: textAnalysisMenuPosition.y + 'px' }"
         @pointerdown="handleTextAnalysisMenuPointerDown">
         <div class="selected-text-preview">
@@ -1085,7 +1101,7 @@ const toggleTheme = () => {
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 679px) {
   .topbar {
     position: fixed;
     top: 0;
@@ -1095,18 +1111,23 @@ const toggleTheme = () => {
   }
 
   .topbar-inner {
-    height: 56px;
+    height: 52px;
     flex-wrap: nowrap;
-    padding: 0 12px;
-    gap: 8px;
+    padding: 0 10px;
+    gap: 6px;
   }
 
   .brand {
     flex-shrink: 0;
   }
 
+  .brand-icon svg {
+    width: 28px;
+    height: 28px;
+  }
+
   .brand-text {
-    font-size: 18px;
+    font-size: 16px;
   }
 
   .main-menu {
@@ -1119,21 +1140,34 @@ const toggleTheme = () => {
   }
 
   .nav-search-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+  }
+
+  .nav-search-btn svg {
+    width: 16px;
+    height: 16px;
   }
 
   .nav-search-input-wrap {
     position: absolute;
-    right: 12px;
-    top: 50px;
+    right: 10px;
+    top: 46px;
     z-index: 100;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    max-width: calc(100vw - 20px);
   }
 
   .nav-search-input {
-    width: 140px;
+    width: 120px;
+    min-width: 100px;
+    max-width: calc(100vw - 120px);
+  }
+
+  .nav-go-btn {
+    padding: 5px 10px;
+    font-size: 12px;
   }
 
   .hidden-on-desktop {
@@ -1142,7 +1176,7 @@ const toggleTheme = () => {
 
   .mobile-menu-wrapper {
     position: fixed;
-    top: 56px;
+    top: 52px;
     left: 0;
     right: 0;
     z-index: 19;
@@ -1163,20 +1197,21 @@ const toggleTheme = () => {
   .mobile-menu {
     display: flex;
     flex-wrap: nowrap;
-    padding: 8px 12px;
-    gap: 4px;
+    padding: 6px 10px;
+    gap: 3px;
     min-width: min-content;
   }
 
   .mobile-menu-item {
     flex-shrink: 0;
-    padding: 8px 16px;
-    font-size: 14px;
+    padding: 6px 12px;
+    font-size: 13px;
     color: var(--text-sub);
     cursor: pointer;
-    border-radius: 20px;
+    border-radius: 16px;
     white-space: nowrap;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
+    line-height: 1.4;
   }
 
   .mobile-menu-item:hover {
@@ -1187,22 +1222,127 @@ const toggleTheme = () => {
   .mobile-menu-item.active {
     background: var(--brand-blue);
     color: #fff;
+    box-shadow: 0 2px 8px rgba(74, 111, 157, 0.3);
   }
 
   .actions {
-    gap: 4px;
+    gap: 3px;
   }
 
   .actions :deep(.el-tag) {
     display: none;
   }
 
+  .theme-toggle-btn {
+    width: 32px;
+    height: 32px;
+    margin-right: 4px;
+  }
+
+  .theme-toggle-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .user-entry {
+    padding: 3px;
+    gap: 0;
+  }
+
   .user-name {
     display: none;
   }
 
+  .avatar-with-pendant .el-avatar {
+    --el-avatar-size: 30px !important;
+  }
+
+  .avatar-pendant {
+    width: 14px;
+    height: 14px;
+    top: -4px;
+    right: -4px;
+  }
+
   .app-main.with-topbar {
-    padding-top: 112px;
+    padding-top: 104px;
+  }
+}
+
+/* 超小屏幕适配 (320px - 480px) */
+@media (max-width: 480px) {
+  .topbar-inner {
+    padding: 0 8px;
+    gap: 4px;
+  }
+
+  .brand-text {
+    font-size: 14px;
+  }
+
+  .brand-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .mobile-menu {
+    padding: 5px 8px;
+    gap: 2px;
+  }
+
+  .mobile-menu-item {
+    padding: 5px 10px;
+    font-size: 12px;
+    border-radius: 14px;
+  }
+
+  .nav-search-input {
+    width: 100px;
+    min-width: 80px;
+  }
+
+  .nav-go-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .avatar-with-pendant .el-avatar {
+    --el-avatar-size: 28px !important;
+  }
+
+  .avatar-pendant {
+    width: 12px;
+    height: 12px;
+  }
+
+  .app-main.with-topbar {
+    padding-top: 98px;
+  }
+}
+
+/* 极小屏幕适配 (320px以下) */
+@media (max-width: 360px) {
+  .topbar-inner {
+    padding: 0 6px;
+  }
+
+  .brand-text {
+    font-size: 13px;
+  }
+
+  .mobile-menu-item {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .nav-search-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .nav-search-input {
+    width: 80px;
+    min-width: 60px;
   }
 }
 </style>
