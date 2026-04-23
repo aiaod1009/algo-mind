@@ -124,7 +124,7 @@
         </div>
 
         <div v-else class="chat-area">
-          <div class="chat-message received" v-for="msg in currentChatMessages" :key="msg.id">
+          <div class="chat-message" :class="getMessageClass(msg)" v-for="msg in currentChatMessages" :key="msg.id">
             <div class="chat-avatar"><img
                 :src="msg.sender_avatar || 'https://api.dicebear.com/7.x/identicon/svg?seed=' + msg.sender_id"
                 alt="avatar" /></div>
@@ -137,8 +137,10 @@
           </div>
 
           <div class="chat-input-area" v-if="activeItem && typeof activeItem === 'number'">
-            <input type="text" :placeholder="'回复 ' + getTitle() + '...'" class="chat-input" />
-            <button class="send-btn">发送</button>
+            <input type="text" v-model.trim="chatInput" :placeholder="'回复 ' + getTitle() + '...'" class="chat-input"
+              maxlength="1000" @keyup.enter="sendMessage" />
+            <button class="send-btn" :disabled="isSending || !chatInput" @click="sendMessage">{{ isSending ? '发送中...' :
+              '发送' }}</button>
           </div>
         </div>
 
@@ -154,7 +156,9 @@
               <h3 class="modal-title">
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="3"></circle>
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                  </path>
                 </svg>
                 消息设置
               </h3>
@@ -331,8 +335,11 @@ import { ElMessage } from 'element-plus'
 const activeItem = ref('sys-notice')
 const sysNotices = ref([])
 const chatContacts = ref([])
-const allChatMessages = ref([])
 const currentChatMessages = ref([])
+const chatInput = ref('')
+const isSending = ref(false)
+
+const currentUserId = ref(null)
 
 // 消息设置模态窗口
 const showSettingsModal = ref(false)
@@ -392,10 +399,10 @@ const saveSettings = async () => {
   try {
     // 保存到本地存储
     localStorage.setItem('messageSettings', JSON.stringify(settings.value))
-    
+
     // 这里可以添加API调用保存到服务器
     // await messageApi.updateSettings(settings.value)
-    
+
     ElMessage.success('设置已保存')
     showSettingsModal.value = false
   } catch (error) {
@@ -406,18 +413,60 @@ const saveSettings = async () => {
 }
 
 onMounted(() => {
+  const userRaw = localStorage.getItem('user')
+  if (userRaw) {
+    try {
+      const user = JSON.parse(userRaw)
+      currentUserId.value = Number(user?.id) || null
+    } catch (error) {
+      currentUserId.value = null
+    }
+  }
+
   fetchMessages()
   loadSettings()
 })
 
-watch(activeItem, (newVal) => {
+watch(activeItem, async (newVal) => {
   if (typeof newVal === 'number') {
-    // 过滤出所选联系人的消息 (将最新的消息放在最下面，需要 reverse)
-    currentChatMessages.value = allChatMessages.value
-      .filter(msg => msg.sender_id === newVal)
-      .reverse()
+    await fetchConversation(newVal)
   }
 })
+
+const fetchConversation = async (contactId) => {
+  try {
+    const res = await messageApi.getConversation(contactId)
+    if (res.data?.code === 0 || res.data?.code === 200) {
+      currentChatMessages.value = res.data.data || []
+    }
+  } catch (error) {
+    console.error('获取会话失败', error)
+  }
+}
+
+const sendMessage = async () => {
+  if (typeof activeItem.value !== 'number') return
+  if (!chatInput.value) return
+
+  isSending.value = true
+  const content = chatInput.value
+
+  try {
+    const res = await messageApi.sendChatMessage(activeItem.value, content)
+    if (res.data?.code === 0 || res.data?.code === 200) {
+      chatInput.value = ''
+      await fetchConversation(activeItem.value)
+      await fetchMessages()
+      ElMessage.success('发送成功')
+      return
+    }
+    ElMessage.error(res.data?.message || '发送失败')
+  } catch (error) {
+    ElMessage.error('发送失败，请稍后重试')
+  } finally {
+    isSending.value = false
+  }
+}
 
 const fetchMessages = async () => {
   try {
@@ -433,17 +482,9 @@ const fetchMessages = async () => {
       chatContacts.value = contactsRes.data.data
     }
 
-    // 获取所有的私信对话列表，为了演示直接拉取所有聊天再过滤
-    const chatRes = await messageApi.getMessages('chat')
-    if (chatRes.data?.code === 0 || chatRes.data?.code === 200) {
-      allChatMessages.value = chatRes.data.data
-
-      // 如果当前展开的是联系人，立刻更新一遍列表
-      if (typeof activeItem.value === 'number') {
-        currentChatMessages.value = allChatMessages.value
-          .filter(msg => msg.sender_id === activeItem.value)
-          .reverse()
-      }
+    // 如果当前展开的是联系人，立刻更新会话
+    if (typeof activeItem.value === 'number') {
+      await fetchConversation(activeItem.value)
     }
   } catch (err) {
     console.error('获取消息失败', err)
@@ -482,6 +523,13 @@ const getTitle = () => {
   }
 
   return '消息'
+}
+
+const getMessageClass = (msg) => {
+  if (currentUserId.value && Number(msg.sender_id) === Number(currentUserId.value)) {
+    return 'sent'
+  }
+  return 'received'
 }
 </script>
 
@@ -857,12 +905,32 @@ const getTitle = () => {
   margin-bottom: 24px;
 }
 
+.chat-message.sent {
+  justify-content: flex-end;
+}
+
+.chat-message.sent .chat-avatar {
+  order: 2;
+  margin-right: 0;
+  margin-left: 12px;
+}
+
+.chat-message.sent .chat-bubble {
+  order: 1;
+}
+
 .chat-message.received .chat-bubble {
   background: rgba(255, 255, 255, 0.8);
   color: var(--text-title, #1e293b);
   border-radius: 2px 16px 16px 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.chat-message.sent .chat-bubble {
+  background: var(--brand-blue, #3b82f6);
+  color: #fff;
+  border-radius: 16px 2px 16px 16px;
 }
 
 .chat-avatar {
@@ -923,6 +991,12 @@ const getTitle = () => {
 .send-btn:hover {
   background: #2563eb;
   transform: translateY(-1px);
+}
+
+.send-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* 模态窗口样式 */
@@ -1106,11 +1180,11 @@ const getTitle = () => {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.toggle-switch input:checked + .toggle-slider {
+.toggle-switch input:checked+.toggle-slider {
   background: var(--brand-blue, #3b82f6);
 }
 
-.toggle-switch input:checked + .toggle-slider::before {
+.toggle-switch input:checked+.toggle-slider::before {
   transform: translateX(22px);
 }
 
