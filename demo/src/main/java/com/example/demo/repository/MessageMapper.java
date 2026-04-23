@@ -21,7 +21,9 @@ public interface MessageMapper extends JpaRepository<Message, Long> {
     // 获取有聊天记录的联系人列表
     @Query(value = "SELECT u.id as sender_id, u.name as sender_name, u.avatar as sender_avatar, " +
             "MAX(m.created_at) as last_msg_time, " +
-            "(SELECT content FROM t_message m2 WHERE m2.sender_id = u.id AND m2.user_id = ?1 AND m2.type = 'chat' ORDER BY m2.created_at DESC LIMIT 1) as last_msg_content "
+            "(SELECT content FROM t_message m2 WHERE m2.sender_id = u.id AND m2.user_id = ?1 AND m2.type = 'chat' ORDER BY m2.created_at DESC LIMIT 1) as last_msg_content, "
+            +
+            "SUM(CASE WHEN m.is_read = 0 THEN 1 ELSE 0 END) as unread_count "
             +
             "FROM t_message m JOIN t_user u ON m.sender_id = u.id " +
             "WHERE m.user_id = ?1 AND m.type = 'chat' " +

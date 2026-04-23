@@ -11,7 +11,7 @@
           <div class="category-item" :class="{ active: activeItem === 'sys-notice' }"
             @click="activeItem = 'sys-notice'">
             <div class="icon-box sys-notice">
-              <div class="red-dot"></div>
+              <div v-if="hasUnreadSystemNotice" class="red-dot"></div>
               <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff">
                 <path
                   d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
@@ -58,6 +58,7 @@
               <img class="avatar"
                 :src="contact.sender_avatar || 'https://api.dicebear.com/7.x/identicon/svg?seed=' + contact.sender_id"
                 alt="avatar" />
+              <span v-if="getContactUnreadCount(contact) > 0" class="unread-badge">{{ getUnreadText(contact) }}</span>
             </div>
             <div class="contact-info">
               <div class="contact-top">
@@ -328,7 +329,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { messageApi } from '@/api/message'
 import { ElMessage } from 'element-plus'
 
@@ -340,6 +341,10 @@ const chatInput = ref('')
 const isSending = ref(false)
 
 const currentUserId = ref(null)
+
+const hasUnreadSystemNotice = computed(() => {
+  return (sysNotices.value || []).some(item => Number(item?.is_read) === 0)
+})
 
 // 消息设置模态窗口
 const showSettingsModal = ref(false)
@@ -438,9 +443,38 @@ const fetchConversation = async (contactId) => {
     const res = await messageApi.getConversation(contactId)
     if (res.data?.code === 0 || res.data?.code === 200) {
       currentChatMessages.value = res.data.data || []
+      await markConversationRead(contactId)
     }
   } catch (error) {
     console.error('获取会话失败', error)
+  }
+}
+
+const markConversationRead = async (contactId) => {
+  const unreadIncoming = currentChatMessages.value.filter(msg => {
+    const isUnread = Number(msg?.is_read) === 0
+    const isIncoming = Number(msg?.sender_id) === Number(contactId)
+    const belongsToCurrentUser = Number(msg?.user_id) === Number(currentUserId.value)
+    return isUnread && isIncoming && belongsToCurrentUser
+  })
+
+  if (unreadIncoming.length === 0) {
+    return
+  }
+
+  try {
+    await Promise.all(unreadIncoming.map(msg => messageApi.markAsRead(msg.id)))
+    currentChatMessages.value = currentChatMessages.value.map(msg => {
+      const matched = unreadIncoming.find(item => Number(item.id) === Number(msg.id))
+      if (!matched) return msg
+      return {
+        ...msg,
+        is_read: 1,
+      }
+    })
+    await fetchMessages()
+  } catch (error) {
+    console.error('会话已读更新失败', error)
   }
 }
 
@@ -530,6 +564,15 @@ const getMessageClass = (msg) => {
     return 'sent'
   }
   return 'received'
+}
+
+const getContactUnreadCount = (contact) => {
+  return Number(contact?.unread_count || 0)
+}
+
+const getUnreadText = (contact) => {
+  const count = getContactUnreadCount(contact)
+  return count > 99 ? '99+' : String(count)
 }
 </script>
 
@@ -695,6 +738,23 @@ const getMessageClass = (msg) => {
   object-fit: cover;
   background: #f1f5f9;
   border: 2px solid #fff;
+}
+
+.unread-badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ff4d4f;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  border: 2px solid #fff;
+  box-sizing: border-box;
 }
 
 .badge {
