@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/user'
 import { useLevelStore } from '../stores/level'
@@ -11,6 +12,59 @@ import { normalizeAuthorLevelProfile } from '../constants/authorLevelThemes'
 
 const userStore = useUserStore()
 const levelStore = useLevelStore()
+const route = useRoute()
+
+const publicUserInfo = ref(null)
+const isLoadingPublicProfile = ref(false)
+
+const targetUserId = computed(() => {
+  const rawId = route.query.userId || route.params.id
+  const parsed = Number(rawId)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+})
+
+const isViewingOtherUser = computed(() => {
+  if (!targetUserId.value || !userStore.userInfo?.id) {
+    return false
+  }
+  return Number(targetUserId.value) !== Number(userStore.userInfo.id)
+})
+
+const publicAvatar = computed(() => {
+  const id = targetUserId.value || 'guest'
+  const avatar = getFullFileUrl(publicUserInfo.value?.avatar || '')
+  return avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${id}`
+})
+
+const publicAuthorLevelProfile = computed(() =>
+  normalizeAuthorLevelProfile(
+    publicUserInfo.value?.authorLevelProfile,
+    publicUserInfo.value?.authorLevelCode || 'Lv.1',
+  ),
+)
+
+const fetchPublicProfile = async () => {
+  if (!targetUserId.value) {
+    publicUserInfo.value = null
+    return
+  }
+
+  isLoadingPublicProfile.value = true
+  try {
+    const response = await api.get(`/users/${targetUserId.value}/public`)
+    if (response.data?.code === 0 || response.data?.code === 200) {
+      publicUserInfo.value = response.data?.data || {}
+      return
+    }
+    publicUserInfo.value = null
+    ElMessage.error(response.data?.message || '获取用户主页失败')
+  } catch (error) {
+    publicUserInfo.value = null
+    ElMessage.error('获取用户主页失败')
+  } finally {
+    isLoadingPublicProfile.value = false
+  }
+}
 
 const TRACK_LABEL_MAP = {
   algo: '算法思维赛道',
@@ -818,7 +872,12 @@ const handleUploadClick = () => {
   showDetailEdit.value = true
 }
 
-onMounted(async () => {
+const loadProfilePage = async () => {
+  if (isViewingOtherUser.value) {
+    await fetchPublicProfile()
+    return
+  }
+
   if (!levelStore.levels.length) {
     try {
       await levelStore.fetchLevels()
@@ -826,17 +885,63 @@ onMounted(async () => {
       console.error('加载关卡失败:', error)
     }
   }
+
   await fetchAuthorLevel()
   await fetchMyProblems()
   await fetchProblemStats()
   await fetchProblemHeatmap(contributionYear.value)
   await fetchActivities(1)
   checkBusyStatus()
+}
+
+onMounted(async () => {
+  await loadProfilePage()
+})
+
+watch(targetUserId, async () => {
+  await loadProfilePage()
 })
 </script>
 
 <template>
-  <div class="github-profile-page">
+  <div v-if="isViewingOtherUser" class="public-profile-page">
+    <div class="public-profile-card">
+      <div v-if="isLoadingPublicProfile" class="public-profile-loading">加载中...</div>
+      <template v-else-if="publicUserInfo">
+        <div class="public-profile-header">
+          <img :src="publicAvatar" alt="avatar" class="public-profile-avatar" />
+          <div class="public-profile-meta">
+            <h1 class="public-profile-name">{{ publicUserInfo.name || '用户' }}</h1>
+            <p class="public-profile-bio">{{ publicUserInfo.bio || '这个人很神秘，还没有留下简介。' }}</p>
+          </div>
+        </div>
+
+        <div class="public-profile-level">
+          <AuthorLevelBadge :profile="publicAuthorLevelProfile" size="lg" :show-score="true" />
+        </div>
+
+        <div class="public-profile-stats">
+          <div class="public-profile-stat-item">
+            <span class="public-profile-stat-label">积分</span>
+            <strong>{{ Number(publicUserInfo.points || 0) }}</strong>
+          </div>
+          <div class="public-profile-stat-item">
+            <span class="public-profile-stat-label">创作者成长值</span>
+            <strong>{{ Number(publicUserInfo.authorScore || 0) }}</strong>
+          </div>
+        </div>
+
+        <div class="public-profile-links" v-if="publicUserInfo.github || publicUserInfo.website">
+          <a v-if="publicUserInfo.github" :href="publicUserInfo.github" target="_blank" rel="noopener">GitHub</a>
+          <a v-if="publicUserInfo.website" :href="publicUserInfo.website" target="_blank" rel="noopener">个人网站</a>
+        </div>
+      </template>
+
+      <div v-else class="public-profile-loading">用户不存在或无权限访问</div>
+    </div>
+  </div>
+
+  <div v-else class="github-profile-page">
     <div class="profile-container">
       <!-- 左侧个人信息 -->
       <aside class="profile-sidebar">
@@ -1474,6 +1579,96 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.public-profile-page {
+  min-height: calc(100vh - 72px);
+  padding: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.public-profile-card {
+  width: min(760px, 100%);
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  padding: 24px;
+}
+
+.public-profile-loading {
+  text-align: center;
+  color: #64748b;
+  padding: 36px 0;
+}
+
+.public-profile-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.public-profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #fff;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+}
+
+.public-profile-name {
+  margin: 0;
+  color: #0f172a;
+}
+
+.public-profile-bio {
+  margin: 8px 0 0;
+  color: #475569;
+}
+
+.public-profile-level {
+  margin-top: 18px;
+}
+
+.public-profile-stats {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.public-profile-stat-item {
+  padding: 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.public-profile-stat-label {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.public-profile-links {
+  margin-top: 18px;
+  display: flex;
+  gap: 14px;
+}
+
+.public-profile-links a {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.public-profile-links a:hover {
+  text-decoration: underline;
+}
+
 .streak-cards {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

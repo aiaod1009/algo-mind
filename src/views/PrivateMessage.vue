@@ -580,7 +580,7 @@ const getUnreadText = (contact) => {
 
 const goToUserHome = (userId) => {
   if (!userId) return
-  router.push(`/user/${userId}`)
+  router.push(`/profile?userId=${userId}`)
 }
 </script>
 
