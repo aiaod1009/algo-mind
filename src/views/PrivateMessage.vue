@@ -57,7 +57,7 @@
             <div class="avatar-wrap">
               <img class="avatar"
                 :src="contact.sender_avatar || 'https://api.dicebear.com/7.x/identicon/svg?seed=' + contact.sender_id"
-                alt="avatar" />
+                @click.stop="goToUserHome(contact.sender_id)" alt="avatar" />
               <span v-if="getContactUnreadCount(contact) > 0" class="unread-badge">{{ getUnreadText(contact) }}</span>
             </div>
             <div class="contact-info">
@@ -128,7 +128,7 @@
           <div class="chat-message" :class="getMessageClass(msg)" v-for="msg in currentChatMessages" :key="msg.id">
             <div class="chat-avatar"><img
                 :src="msg.sender_avatar || 'https://api.dicebear.com/7.x/identicon/svg?seed=' + msg.sender_id"
-                alt="avatar" /></div>
+                @click.stop="goToUserHome(msg.sender_id)" alt="avatar" /></div>
             <div class="chat-bubble">{{ msg.content }}</div>
           </div>
 
@@ -330,8 +330,11 @@
 
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { messageApi } from '@/api/message'
 import { ElMessage } from 'element-plus'
+
+const router = useRouter()
 
 const activeItem = ref('sys-notice')
 const sysNotices = ref([])
@@ -574,6 +577,11 @@ const getUnreadText = (contact) => {
   const count = getContactUnreadCount(contact)
   return count > 99 ? '99+' : String(count)
 }
+
+const goToUserHome = (userId) => {
+  if (!userId) return
+  router.push(`/user/${userId}`)
+}
 </script>
 
 <style scoped>
@@ -738,6 +746,7 @@ const getUnreadText = (contact) => {
   object-fit: cover;
   background: #f1f5f9;
   border: 2px solid #fff;
+  cursor: pointer;
 }
 
 .unread-badge {
@@ -1008,6 +1017,7 @@ const getUnreadText = (contact) => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  cursor: pointer;
 }
 
 .chat-bubble {

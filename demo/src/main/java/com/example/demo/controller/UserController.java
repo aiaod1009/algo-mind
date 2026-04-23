@@ -112,6 +112,34 @@ public class UserController {
         return Result.success(updatedUser);
     }
 
+    @GetMapping("/{id}/public")
+    public Result<Map<String, Object>> getPublicUserProfile(@PathVariable Long id) {
+        Long currentUserId = currentUserService.requireCurrentUserId();
+        if (currentUserId == null) {
+            return Result.fail(40101, "未登录");
+        }
+
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null) {
+            return Result.fail(40401, "用户不存在");
+        }
+
+        Map<String, Object> profile = new HashMap<>();
+        profile.put("id", user.getId());
+        profile.put("name", user.getName());
+        profile.put("avatar", user.getAvatar());
+        profile.put("bio", user.getBio());
+        profile.put("points", user.getPoints() == null ? 0 : user.getPoints());
+        profile.put("authorScore", user.getAuthorScore() == null ? 0 : user.getAuthorScore());
+        profile.put("authorLevelCode", user.getAuthorLevelCode());
+        profile.put("authorLevelProfile", authorLevelService.attachProfile(user));
+        profile.put("github", user.getGithub());
+        profile.put("website", user.getWebsite());
+        profile.put("createdAt", user.getCreatedAt() == null ? null : user.getCreatedAt().toString());
+
+        return Result.success(profile);
+    }
+
     @GetMapping("/me/heatmap")
     public Result<Map<String, Object>> getUserHeatmap(
             @RequestParam(required = false) Integer year) {
@@ -221,7 +249,8 @@ public class UserController {
         stats.put("monthlySolved", monthlySolved);
         stats.put("authorScore", user != null ? user.getAuthorScore() : 0);
         stats.put("authorLevelCode", user != null ? user.getAuthorLevelCode() : "seed");
-        stats.put("authorLevelProfile", user != null ? user.getAuthorLevelProfile() : authorLevelService.buildFallbackProfile(null));
+        stats.put("authorLevelProfile",
+                user != null ? user.getAuthorLevelProfile() : authorLevelService.buildFallbackProfile(null));
 
         return Result.success(stats);
     }
