@@ -1,6 +1,8 @@
 FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /app
 
+ENV MAVEN_OPTS="-Xmx512m -XX:+UseSerialGC"
+
 COPY demo/pom.xml .
 COPY demo/.mvn/ .mvn/
 COPY demo/mvnw .
@@ -23,4 +25,4 @@ USER appuser
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar app.jar"]
