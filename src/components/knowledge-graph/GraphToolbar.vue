@@ -212,6 +212,7 @@ defineEmits([
 .toolbar-actions {
   display: flex;
   gap: 6px;
+  margin-right: 40px;
 }
 
 .toolbar-btn {

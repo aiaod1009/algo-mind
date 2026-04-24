@@ -1,10 +1,9 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<script setup>
+﻿﻿<script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '../api'
 import { useUserStore } from '../stores/user'
-import FlowerPagination from '../components/FlowerPagination.vue'
 import CodeBlock from '../components/CodeBlock.vue'
 import AlgorithmKnowledgeGraph from '../components/AlgorithmKnowledgeGraph.vue'
 import {
@@ -148,8 +147,104 @@ const loadingCatalog = ref(false)
 const loadingArticle = ref(false)
 const errorMessage = ref('')
 const showRelatedPanel = ref(false)
-let relatedPanelTimer = null
 const graphOverlayOpen = ref(false)
+const graphOverlayStyle = ref({
+  top: 100,
+  left: 320,
+  width: 700,
+  height: 500
+})
+const graphResizing = ref(false)
+const graphDragging = ref(false)
+
+const GRAPH_MIN_SIZE = 300
+let graphResizeState = null
+
+function graphOverlayInset() {
+  const s = graphOverlayStyle.value
+  return {
+    top: `${s.top}px`,
+    left: `${s.left}px`,
+    width: `${s.width}px`,
+    height: `${s.height}px`
+  }
+}
+
+function startGraphResize(direction, event) {
+  event.preventDefault()
+  event.stopPropagation()
+  graphResizing.value = true
+  const startX = event.clientX
+  const startY = event.clientY
+  const startStyle = { ...graphOverlayStyle.value }
+
+  graphResizeState = { direction, startX, startY, startStyle }
+
+  const onMove = (e) => {
+    if (!graphResizeState) return
+    const dx = e.clientX - graphResizeState.startX
+    const dy = e.clientY - graphResizeState.startY
+    const s = graphResizeState.startStyle
+
+    const next = { ...s }
+
+    if (graphResizeState.direction.includes('top')) {
+      next.top = s.top + dy
+      next.height = Math.max(GRAPH_MIN_SIZE, s.height - dy)
+    }
+    if (graphResizeState.direction.includes('bottom')) {
+      next.height = Math.max(GRAPH_MIN_SIZE, s.height + dy)
+    }
+    if (graphResizeState.direction.includes('left')) {
+      next.left = s.left + dx
+      next.width = Math.max(GRAPH_MIN_SIZE, s.width - dx)
+    }
+    if (graphResizeState.direction.includes('right')) {
+      next.width = Math.max(GRAPH_MIN_SIZE, s.width + dx)
+    }
+
+    graphOverlayStyle.value = next
+  }
+
+  const onUp = () => {
+    graphResizing.value = false
+    graphResizeState = null
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
+function startGraphDrag(event) {
+  if (graphResizing.value) return
+  event.preventDefault()
+  graphDragging.value = true
+  const startX = event.clientX
+  const startY = event.clientY
+  const startStyle = { ...graphOverlayStyle.value }
+
+  const onMove = (e) => {
+    const dx = e.clientX - startX
+    const dy = e.clientY - startY
+
+    graphOverlayStyle.value = {
+      ...startStyle,
+      top: startStyle.top + dy,
+      left: startStyle.left + dx
+    }
+  }
+
+  const onUp = () => {
+    graphDragging.value = false
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
 
 const articleCache = new Map()
 let catalogRequestId = 0
@@ -221,8 +316,6 @@ const KNOWLEDGE_PATH_STAGES = [
   },
 ]
 const knowledgeMapSort = ref('path')
-const SIDEBAR_PAGE_SIZE = 5
-const sidebarPage = ref(1)
 const visibleArticleCount = computed(() =>
   sections.value.reduce((total, section) => total + (section.articles?.length || 0), 0),
 )
@@ -236,76 +329,6 @@ const sidebarItems = computed(() =>
     })),
   ),
 )
-const totalSidebarPages = computed(() =>
-  Math.max(1, Math.ceil(sidebarItems.value.length / SIDEBAR_PAGE_SIZE)),
-)
-const hasSidebarPagination = computed(() => visibleArticleCount.value > SIDEBAR_PAGE_SIZE)
-const sidebarVisibleRange = computed(() => {
-  if (!sidebarItems.value.length) {
-    return { start: 0, end: 0 }
-  }
-
-  const start = (sidebarPage.value - 1) * SIDEBAR_PAGE_SIZE + 1
-  const end = Math.min(sidebarPage.value * SIDEBAR_PAGE_SIZE, sidebarItems.value.length)
-  return { start, end }
-})
-const sidebarRemainingCount = computed(() =>
-  Math.max(visibleArticleCount.value - sidebarVisibleRange.value.end, 0),
-)
-const pagedSidebarSections = computed(() => {
-  const startIndex = (sidebarPage.value - 1) * SIDEBAR_PAGE_SIZE
-  const pagedItems = sidebarItems.value.slice(startIndex, startIndex + SIDEBAR_PAGE_SIZE)
-  const groupedSections = []
-  const sectionMap = new Map()
-
-  for (const item of pagedItems) {
-    if (!sectionMap.has(item.sectionId)) {
-      const sectionGroup = {
-        id: item.sectionId,
-        title: item.sectionTitle,
-        description: item.sectionDescription,
-        articles: [],
-      }
-      sectionMap.set(item.sectionId, sectionGroup)
-      groupedSections.push(sectionGroup)
-    }
-
-    sectionMap.get(item.sectionId).articles.push(item)
-  }
-
-  return groupedSections
-})
-const sidebarPageItems = computed(() => {
-  const total = totalSidebarPages.value
-  const current = sidebarPage.value
-
-  if (total <= 7) {
-    return Array.from({ length: total }, (_, index) => ({
-      type: 'page',
-      value: index + 1,
-      key: `page-${index + 1}`,
-    }))
-  }
-
-  const items = [{ type: 'page', value: 1, key: 'page-1' }]
-  const start = Math.max(2, current - 1)
-  const end = Math.min(total - 1, current + 1)
-
-  if (start > 2) {
-    items.push({ type: 'ellipsis', value: 'start', key: 'ellipsis-start' })
-  }
-
-  for (let page = start; page <= end; page += 1) {
-    items.push({ type: 'page', value: page, key: `page-${page}` })
-  }
-
-  if (end < total - 1) {
-    items.push({ type: 'ellipsis', value: 'end', key: 'ellipsis-end' })
-  }
-
-  items.push({ type: 'page', value: total, key: `page-${total}` })
-  return items
-})
 const activeNavItem = computed(() =>
   allNavItems.value.find((item) => item.slug === currentSlug.value) || null,
 )
@@ -704,40 +727,10 @@ const articleChecklist = computed(() => currentArticle.value?.checklist || [])
 const articleRelated = computed(() => currentArticle.value?.relatedArticles || [])
 
 watch(articleRelated, (related) => {
-  if (relatedPanelTimer) {
-    clearTimeout(relatedPanelTimer)
-    relatedPanelTimer = null
-  }
-  if (related?.length) {
-    showRelatedPanel.value = true
-    relatedPanelTimer = setTimeout(() => {
-      showRelatedPanel.value = false
-    }, 10000)
-  } else {
+  if (!related?.length) {
     showRelatedPanel.value = false
   }
 })
-
-const getSidebarPageForSlug = (slug) => {
-  const itemIndex = sidebarItems.value.findIndex((item) => item.slug === slug)
-  return itemIndex >= 0 ? Math.floor(itemIndex / SIDEBAR_PAGE_SIZE) + 1 : 1
-}
-
-const setSidebarPage = (page) => {
-  sidebarPage.value = Math.min(Math.max(page, 1), totalSidebarPages.value)
-}
-
-const goToSidebarPage = (page) => {
-  setSidebarPage(page)
-}
-
-const goToPreviousSidebarPage = () => {
-  setSidebarPage(sidebarPage.value - 1)
-}
-
-const goToNextSidebarPage = () => {
-  setSidebarPage(sidebarPage.value + 1)
-}
 
 const buildQuery = (keyword, articleSlug) => {
   const nextQuery = { ...route.query }
@@ -872,10 +865,6 @@ const applyQuickSearch = (term) => {
 
 const openRelatedArticle = (slug) => {
   showRelatedPanel.value = false
-  if (relatedPanelTimer) {
-    clearTimeout(relatedPanelTimer)
-    relatedPanelTimer = null
-  }
   void replaceQuery('', slug)
 }
 
@@ -1095,32 +1084,6 @@ watch(
 )
 
 watch(
-  visibleArticleCount,
-  (count) => {
-    if (!count) {
-      sidebarPage.value = 1
-      return
-    }
-
-    setSidebarPage(sidebarPage.value)
-  },
-  { immediate: true },
-)
-
-watch(
-  [currentSlug, sidebarItems],
-  ([slug]) => {
-    if (!slug) return
-
-    const targetPage = getSidebarPageForSlug(slug)
-    if (targetPage !== sidebarPage.value) {
-      sidebarPage.value = targetPage
-    }
-  },
-  { immediate: true },
-)
-
-watch(
   isAdmin,
   (value) => {
     if (!value) {
@@ -1204,22 +1167,11 @@ watch(
           <span class="sidebar-count">{{ visibleArticleCount }} 篇</span>
         </div>
 
-        <div v-if="hasSidebarPagination && sections.length" class="sidebar-pagination-summary">
-          <div class="sidebar-pagination-copy">
-            <strong>当前展示第 {{ sidebarVisibleRange.start }} - {{ sidebarVisibleRange.end }} 条</strong>
-            <p>
-              共 {{ visibleArticleCount }} 条内容
-              <template v-if="sidebarRemainingCount > 0">，还有 {{ sidebarRemainingCount }} 条可继续浏览</template>
-            </p>
-          </div>
-          <span class="sidebar-page-progress">第 {{ sidebarPage }} / {{ totalSidebarPages }} 页</span>
-        </div>
-
         <div v-if="loadingCatalog && !sections.length" class="sidebar-state">正在整理知识目录...</div>
         <div v-else-if="!sections.length" class="sidebar-state">{{ catalog.emptyStateTitle }}</div>
 
         <div v-else class="sidebar-sections">
-          <section v-for="section in pagedSidebarSections" :key="section.id" class="sidebar-section">
+          <section v-for="section in sections" :key="section.id" class="sidebar-section">
             <header class="sidebar-section-head">
               <div class="sidebar-section-title-row">
                 <h3>{{ section.title }}</h3>
@@ -1249,14 +1201,6 @@ watch(
               </div>
             </button>
           </section>
-        </div>
-
-        <div v-if="hasSidebarPagination && sections.length" class="sidebar-pagination">
-          <FlowerPagination
-            :total="totalSidebarPages"
-            :defaultPage="sidebarPage"
-            @change="goToSidebarPage"
-          />
         </div>
       </aside>
 
@@ -1290,6 +1234,19 @@ watch(
             <div class="article-meta-pills">
               <span class="meta-pill">{{ currentArticle.readTime }}</span>
               <span class="meta-pill accent">{{ currentArticle.complexity }}</span>
+              <button
+                v-if="articleRelated.length"
+                type="button"
+                class="meta-pill toggle-related-btn"
+                :class="{ active: showRelatedPanel }"
+                @click="showRelatedPanel = !showRelatedPanel"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                </svg>
+                延伸阅读
+              </button>
             </div>
           </header>
 
@@ -1406,10 +1363,27 @@ watch(
             <line x1="16.2" y1="7.5" x2="13.5" y2="16"/>
             <line x1="8.5" y1="6" x2="15.5" y2="6"/>
           </svg>
+          <span class="trigger-text">知识图谱</span>
         </button>
 
         <Transition name="graph-overlay">
-          <div v-if="graphOverlayOpen" class="graph-overlay">
+          <div
+            v-if="graphOverlayOpen"
+            class="graph-overlay"
+            :class="{ 'is-resizing': graphResizing, 'is-dragging': graphDragging }"
+            :style="graphOverlayInset()"
+          >
+            <div class="graph-drag-bar" @mousedown="startGraphDrag">
+              <span class="drag-indicator"></span>
+            </div>
+            <div class="graph-resize-handle top" @mousedown="startGraphResize('top', $event)"></div>
+            <div class="graph-resize-handle bottom" @mousedown="startGraphResize('bottom', $event)"></div>
+            <div class="graph-resize-handle left" @mousedown="startGraphResize('left', $event)"></div>
+            <div class="graph-resize-handle right" @mousedown="startGraphResize('right', $event)"></div>
+            <div class="graph-resize-handle top-left" @mousedown="startGraphResize('topleft', $event)"></div>
+            <div class="graph-resize-handle top-right" @mousedown="startGraphResize('topright', $event)"></div>
+            <div class="graph-resize-handle bottom-left" @mousedown="startGraphResize('bottomleft', $event)"></div>
+            <div class="graph-resize-handle bottom-right" @mousedown="startGraphResize('bottomright', $event)"></div>
             <button class="graph-overlay-close" type="button" @click="graphOverlayOpen = false">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="6" y1="6" x2="18" y2="18"/>
@@ -1424,6 +1398,11 @@ watch(
 
       <aside class="kb-aside">
         <div v-if="articleRelated.length && showRelatedPanel" class="aside-card kb-panel">
+          <button class="aside-minimize-btn" type="button" @click="showRelatedPanel = false" title="最小化">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
+            </svg>
+          </button>
           <span class="sidebar-eyebrow">延伸阅读</span>
           <h3>继续往下看</h3>
           <button
@@ -2045,6 +2024,7 @@ watch(
   top: 96px;
   max-height: calc(100vh - 120px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -2146,36 +2126,6 @@ watch(
   gap: 22px;
 }
 
-.sidebar-pagination-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 18px;
-  padding: 14px 16px;
-  border: 1px solid rgba(132, 156, 176, 0.16);
-  border-radius: 18px;
-  background:
-    linear-gradient(135deg, rgba(30, 169, 124, 0.08), rgba(31, 148, 168, 0.03)),
-    rgba(255, 255, 255, 0.74);
-  width: 240px;
-}
-
-.sidebar-pagination-copy strong {
-  display: block;
-  font-size: 14px;
-  color: var(--kb-text);
-  width: 120px;
-}
-
-.sidebar-pagination-copy p {
-  margin: 6px 0 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--kb-muted);
-}
-
-.sidebar-page-progress,
 .sidebar-section-count {
   display: inline-flex;
   align-items: center;
@@ -2210,69 +2160,6 @@ watch(
 .sidebar-section {
   display: grid;
   gap: 14px;
-}
-
-.sidebar-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(132, 156, 176, 0.14);
-}
-
-.sidebar-page-list {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.sidebar-page-btn {
-  border: 1px solid rgba(132, 156, 176, 0.2);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--kb-muted);
-  min-width: 40px;
-  height: 40px;
-  padding: 0 14px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease, background 0.2s ease;
-}
-
-.sidebar-page-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: rgba(30, 169, 124, 0.28);
-  color: var(--kb-text);
-  box-shadow: 0 10px 24px rgba(18, 48, 71, 0.08);
-}
-
-.sidebar-page-btn.active {
-  border-color: rgba(30, 169, 124, 0.4);
-  background: linear-gradient(135deg, rgba(30, 169, 124, 0.16), rgba(31, 148, 168, 0.08));
-  color: var(--kb-emerald);
-  box-shadow: 0 12px 24px rgba(30, 169, 124, 0.12);
-}
-
-.sidebar-page-btn.nav {
-  min-width: 82px;
-}
-
-.sidebar-page-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-  box-shadow: none;
-}
-
-.sidebar-page-ellipsis {
-  color: var(--kb-muted);
-  font-size: 18px;
-  line-height: 1;
-  padding: 0 4px;
 }
 
 .nav-item,
@@ -2429,6 +2316,25 @@ watch(
 .meta-pill.accent {
   background: rgba(30, 169, 124, 0.12);
   color: var(--kb-emerald);
+}
+
+.toggle-related-btn {
+  gap: 5px;
+  cursor: pointer;
+  border: none;
+  background: rgba(31, 148, 168, 0.1);
+  color: var(--kb-cyan);
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+
+.toggle-related-btn:hover {
+  background: rgba(31, 148, 168, 0.2);
+}
+
+.toggle-related-btn.active {
+  background: var(--kb-cyan);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(31, 148, 168, 0.3);
 }
 
 .article-summary {
@@ -2603,6 +2509,33 @@ watch(
 .aside-card h3 {
   margin-top: 10px;
   font-size: 22px;
+}
+
+.aside-minimize-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 8px;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.2s;
+}
+
+.aside-minimize-btn:hover {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.aside-card {
+  position: relative;
 }
 
 .aside-kv {
@@ -2844,20 +2777,6 @@ watch(
     position: static;
   }
 
-  .sidebar-pagination-summary,
-  .sidebar-pagination {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .sidebar-page-progress {
-    align-self: flex-start;
-  }
-
-  .sidebar-page-list {
-    justify-content: flex-start;
-  }
-
   .kb-aside {
     display: grid;
     grid-template-columns: 1fr;
@@ -2895,10 +2814,6 @@ watch(
 
   .sidebar-section-title-row {
     align-items: flex-start;
-  }
-
-  .sidebar-page-btn.nav {
-    width: 100%;
   }
 
   .hero-search {
@@ -3010,17 +2925,15 @@ watch(
 
 .graph-trigger-bar {
   position: absolute;
-  right: -25px;
-  top: 50%;
-  transform: translateY(-50%);
+  right: -30px;
+  top: 100px;
+  transform: none;
   z-index: 10;
   width: 30px;
-  height: 72px;
+  height: 200px;
   border: none;
   border-radius: 6px 0 0 6px;
-  background: rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.85);
   box-shadow: -2px 0 12px rgba(16, 42, 67, 0.08);
   cursor: pointer;
   display: flex;
@@ -3037,9 +2950,7 @@ watch(
 .graph-trigger-bar:hover,
 .graph-trigger-bar.is-active {
   width: 32px;
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background: rgba(255, 255, 255, 0.9);
   box-shadow: -4px 0 20px rgba(16, 42, 67, 0.12);
   color: var(--kb-emerald, #1ea97c);
 }
@@ -3054,16 +2965,124 @@ watch(
   opacity: 1;
 }
 
+.trigger-text {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  margin-top: 8px;
+}
+
 .graph-overlay {
   position: absolute;
-  inset: 0;
   z-index: 20;
   border-radius: 26px;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  box-shadow: inset 0 0 0 1px rgba(154, 178, 196, 0.18);
+  border: 2px solid rgba(59, 130, 246, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(154, 178, 196, 0.18), 0 0 20px rgba(59, 130, 246, 0.1);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.graph-overlay.is-resizing,
+.graph-overlay.is-dragging {
+  transition: none;
+  user-select: none;
+}
+
+.graph-drag-bar {
+  flex-shrink: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  background: rgba(59, 130, 246, 0.06);
+  border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+.graph-drag-bar:active {
+  cursor: grabbing;
+}
+
+.drag-indicator {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(59, 130, 246, 0.25);
+}
+
+.graph-resize-handle {
+  position: absolute;
+  z-index: 25;
+}
+
+.graph-resize-handle.top {
+  top: -4px;
+  left: 20px;
+  right: 20px;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.graph-resize-handle.bottom {
+  bottom: -4px;
+  left: 20px;
+  right: 20px;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.graph-resize-handle.left {
+  top: 20px;
+  bottom: 20px;
+  left: -4px;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.graph-resize-handle.right {
+  top: 20px;
+  bottom: 20px;
+  right: -4px;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.graph-resize-handle.top-left {
+  top: -4px;
+  left: -4px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+
+.graph-resize-handle.top-right {
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  cursor: nesw-resize;
+}
+
+.graph-resize-handle.bottom-left {
+  bottom: -4px;
+  left: -4px;
+  width: 16px;
+  height: 16px;
+  cursor: nesw-resize;
+}
+
+.graph-resize-handle.bottom-right {
+  bottom: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
 }
 
 .graph-overlay-close {

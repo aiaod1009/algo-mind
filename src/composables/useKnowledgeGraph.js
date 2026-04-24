@@ -403,7 +403,7 @@ export function useKnowledgeGraph() {
           show: true,
           fontSize: node.isRoot ? 14 : 12,
           fontWeight: node.isRoot ? 800 : 600,
-          color: '#fff',
+          color: '#1e293b',
           position: 'inside',
           opacity: isSearchFiltered || isDimmed ? 0.15 : 1
         },
