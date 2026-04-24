@@ -43,7 +43,14 @@ public class SecurityConfig {
                                                 .accessDeniedHandler(accessDeniedHandler))
                                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                                 .authorizeHttpRequests(authorize -> authorize
-                                .anyRequest().permitAll())
+                                                .requestMatchers("/login", "/register", "/uploads/**", "/api/uploads/**", "/api/ai/**", "/ai/**", "/h2-console/**",
+                                                "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/run-code")
+                                                .permitAll()
+                                                .requestMatchers(HttpMethod.GET, "/levels", "/ranking",
+                                                                "/hot-questions", "/bilibili/**", "/courses/**",
+                                                                "/forum-posts/**")
+                                                .permitAll()
+                                                .anyRequest().authenticated())
                                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
                 return http.build();

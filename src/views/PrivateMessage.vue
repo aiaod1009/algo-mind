@@ -19,7 +19,7 @@
             </div>
             <span class="category-name">系统通知</span>
           </div>
-          <div class="category-item" :class="{ active: activeItem === 'likes' }" @click="activeItem = 'likes'">
+          <div class="category-item _target" :class="{ active: activeItem === 'likes' }" @click="activeItem = 'likes'">
             <div class="icon-box likes">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff">
                 <path
@@ -28,7 +28,7 @@
             </div>
             <span class="category-name">赞和收藏</span>
           </div>
-          <div class="category-item" :class="{ active: activeItem === 'comments' }" @click="activeItem = 'comments'">
+          <div class="category-item _target" :class="{ active: activeItem === 'comments' }" @click="activeItem = 'comments'">
             <div class="icon-box comments">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff">
                 <path d="M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4-.01-18z" />
@@ -36,7 +36,7 @@
             </div>
             <span class="category-name">评论和 @</span>
           </div>
-          <div class="category-item" :class="{ active: activeItem === 'follows' }" @click="activeItem = 'follows'">
+          <div class="category-item _target" :class="{ active: activeItem === 'follows' }" @click="activeItem = 'follows'">
             <div class="icon-box follows">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff">
                 <path

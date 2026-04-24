@@ -965,7 +965,7 @@ watch(targetUserId, async () => {
           <p class="profile-bio">{{ userStore.userInfo?.bio || '先把基础打扎实，再冲更高难度。' }}</p>
         </div>
 
-        <button class="edit-profile-btn" @click="openEditModal">
+        <button class="edit-profile-btn _target" @click="openEditModal">
           编辑个人资料
         </button>
 
@@ -1115,7 +1115,7 @@ watch(targetUserId, async () => {
                 </span>
               </div>
             </div>
-            <button v-if="hasMoreMyProblems" class="show-more-btn" @click="showAllMyProblems = !showAllMyProblems">
+            <button v-if="hasMoreMyProblems" class="show-more-btn _target" @click="showAllMyProblems = !showAllMyProblems">
               {{ showAllMyProblems ? '收起记录' : `展开其余 ${myProblems.length - 4} 条` }}
             </button>
           </div>
@@ -1224,7 +1224,7 @@ watch(targetUserId, async () => {
             <div class="year-selector">
               <button
                 v-for="year in [new Date().getFullYear(), new Date().getFullYear() - 1, new Date().getFullYear() - 2, new Date().getFullYear() - 3, new Date().getFullYear() - 4]"
-                :key="year" class="year-btn" :class="{ active: contributionYear === year }" @click="changeYear(year)">
+                :key="year" class="year-btn _target" :class="{ active: contributionYear === year }" @click="changeYear(year)">
                 {{ year }}
               </button>
             </div>
@@ -1261,7 +1261,7 @@ watch(targetUserId, async () => {
               </div>
             </div>
           </div>
-          <button v-if="canLoadMoreActivities" class="show-more-btn" @click="loadMoreActivities">显示更多活动</button>
+          <button v-if="canLoadMoreActivities" class="show-more-btn _target" @click="loadMoreActivities">显示更多活动</button>
         </section>
       </main>
     </div>
@@ -1278,7 +1278,7 @@ watch(targetUserId, async () => {
               </svg>
             </div>
             <h3>编辑个人资料</h3>
-            <button class="close-btn glass-close" @click="showEditModal = false">
+            <button class="close-btn glass-close _target" @click="showEditModal = false">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
@@ -1380,7 +1380,7 @@ watch(targetUserId, async () => {
           </div>
 
           <div class="edit-footer glass-footer">
-            <button class="detail-btn glass-secondary" @click="showDetailEdit = true; showEditModal = false">
+            <button class="detail-btn glass-secondary _target" @click="showDetailEdit = true; showEditModal = false">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3" />
                 <path
@@ -1388,8 +1388,7 @@ watch(targetUserId, async () => {
               </svg>
               更多设置
             </button>
-            <button class="save-btn glass-primary" @click="handleSave">
-              <img src="../assets/mini_icons/保存.png" alt="save" style="width: 16px; height: 16px; margin-right: 4px; border-radius: 3px; object-fit: cover;" />
+            <button class="save-btn glass-primary _target" @click="handleSave">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
@@ -1406,7 +1405,7 @@ watch(targetUserId, async () => {
         <div class="detail-edit-container">
           <div class="detail-edit-header">
             <h2>编辑个人资料</h2>
-            <button class="close-btn" @click="showDetailEdit = false">
+            <button class="close-btn _target" @click="showDetailEdit = false">
               <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
@@ -1421,7 +1420,7 @@ watch(targetUserId, async () => {
                 :formats="['jpg', 'png', 'gif', 'webp']" @upload-success="handleAvatarUploadSuccess"
                 @upload-error="handleAvatarUploadError" />
               <div class="avatar-actions">
-                <button class="avatar-btn secondary" @click="editForm.avatar = ''">恢复默认头像</button>
+                <button class="avatar-btn secondary _target" @click="editForm.avatar = ''">恢复默认头像</button>
               </div>
             </div>
 
@@ -1482,11 +1481,8 @@ watch(targetUserId, async () => {
           </div>
 
           <div class="detail-edit-footer">
-            <button class="cancel-btn" @click="showDetailEdit = false">取消</button>
-            <button class="save-btn large" @click="handleSave">
-              <img src="../assets/微信图片_20260422225456_55_112.jpg" alt="save" style="width: 18px; height: 18px; margin-right: 6px; border-radius: 4px; object-fit: cover;" />
-              保存更改
-            </button>
+            <button class="cancel-btn _target" @click="showDetailEdit = false">取消</button>
+            <button class="save-btn large _target" @click="handleSave">保存更改</button>
           </div>
         </div>
       </div>

@@ -102,5 +102,6 @@ api.updateKnowledgeAdminConfig = (payload) => api.put('/knowledge-base/admin/con
 api.uploadChatFile = userApi.uploadChatFile
 api.aiChatMultimodal = userApi.aiChatMultimodal
 api.aiChatMultimodalStream = userApi.aiChatMultimodalStream
+api.aiChatWebSocket = userApi.aiChatWebSocket
 
 export default api

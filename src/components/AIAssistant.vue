@@ -485,25 +485,8 @@ const loadErrorAnalysis = async () => {
     const response = await api.get('/errors', withNonBlockingAuth())
     errorAnalysis.value = buildErrorAnalysisFromItems(response.data?.data)
   } catch (error) {
-    await finalizeStreamingMessage(assistantMessageIndex, '抱歉，服务暂时不可用，请稍后再试。')
-    return
+    console.warn('获取错误分析失败:', error)
     errorAnalysis.value = buildFallbackErrorAnalysis()
-    return
-    errorAnalysis.value = {
-      totalErrors: 23,
-      categories: [
-        { name: '动态规划', count: 8 },
-        { name: '图论', count: 6 },
-        { name: '二叉树', count: 5 },
-        { name: '字符串', count: 4 },
-      ],
-      recentErrors: [
-        { title: '背包问题', reason: '状态转移方程错误', time: '2小时前' },
-        { title: '最短路径', reason: '边界条件遗漏', time: '昨天' },
-        { title: '二叉树遍历', reason: '递归终止条件错误', time: '2天前' },
-      ],
-      improvementTrend: '近期在动态规划方面有进步，但图论仍需加强',
-    }
   }
 }
 
@@ -517,16 +500,8 @@ const loadStudyHabits = async () => {
     const response = await api.get('/users/me/stats', withNonBlockingAuth())
     studyHabits.value = buildStudyHabitsFromStats(response.data?.data)
   } catch (error) {
+    console.warn('获取学习习惯数据失败:', error)
     studyHabits.value = buildFallbackStudyHabits()
-    return
-    studyHabits.value = {
-      weeklyStudyTime: 12.5,
-      averageTimePerQuestion: 25,
-      preferredTimeSlot: '晚上',
-      consistencyScore: 78,
-      strongTopics: ['数组', '字符串', '链表'],
-      weakTopics: ['动态规划', '图论'],
-    }
   }
 }
 
@@ -621,8 +596,6 @@ const generateLearningPlan = async (forceRegenerate = false) => {
       errorTopics: errorAnalysis.value.categories.map((category) => category.name),
     })
 
-    return
-
     if (response.data?.data) {
       learningPlan.value = response.data.data
       isGenerated.value = true
@@ -636,6 +609,7 @@ const generateLearningPlan = async (forceRegenerate = false) => {
       emit('planGenerated', learningPlan.value)
     }
   } catch (error) {
+    console.warn('生成学习计划失败:', error)
     learningPlan.value = {
       weekGoals: [
         { title: '基础巩固练习', target: 4, current: 0 },
@@ -1046,8 +1020,8 @@ const sendMessage = async () => {
         }
       })
     } else {
-      // 无文件，使用普通接口
-      await api.aiChatStream({
+      // 无文件，使用WebSocket接口
+      await api.aiChatWebSocket({
         message: userMessageContent,
         messages: historyMessages,
         context: buildChatContext(),
@@ -1086,19 +1060,12 @@ const sendMessage = async () => {
       })
     }
 
-    return
-
     const aiContent = extractAIResponseContent(response, '抱歉，我现在无法回答，请稍后再试。')
 
 
   } catch (error) {
+    console.warn('发送消息失败:', error)
     await finalizeStreamingMessage(assistantMessageIndex, '抱歉，服务暂时不可用，请稍后再试。')
-    return
-    chatMessages.value.push({
-      role: 'assistant',
-      content: '抱歉，服务暂时不可用，请稍后再试。',
-      time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-    })
   } finally {
     if (chatMessages.value[assistantMessageIndex]) {
       chatMessages.value[assistantMessageIndex].streaming = false
@@ -1170,7 +1137,7 @@ watch(inputMessage, () => {
           { key: 'errors', label: '错题' },
           { key: 'plan', label: '计划' },
           { key: 'chat', label: '对话' },
-        ]" :key="tab.key" class="tab" :class="{ active: activeSection === tab.key }"
+        ]" :key="tab.key" class="tab _target" :class="{ active: activeSection === tab.key }"
           @click.stop="switchSection(tab.key)">
           {{ tab.label }}
         </button>
@@ -1246,16 +1213,16 @@ watch(inputMessage, () => {
         <div class="quick-actions">
           <h4><img src="../assets/mini_icons/快速开始.png" alt="快速开始" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;" />快速开始</h4>
           <div class="action-buttons">
-            <button class="action-btn" @click.stop="switchSection('errors')">
-              <span class="action-icon"><img :src="errorAnalysisIcon" alt="" /></span>
+            <button class="action-btn _target" @click.stop="switchSection('errors')">
+              <span class="action-icon">📊</span>
               <span>查看错题分析</span>
             </button>
-            <button class="action-btn" @click.stop="switchSection('plan')">
-              <span class="action-icon"><img :src="studyPlanIcon" alt="" /></span>
+            <button class="action-btn _target" @click.stop="switchSection('plan')">
+              <span class="action-icon">📋</span>
               <span>生成学习计划</span>
             </button>
-            <button class="action-btn" @click.stop="switchSection('chat')">
-              <span class="action-icon"><img :src="startChatIcon" alt="" /></span>
+            <button class="action-btn _target" @click.stop="switchSection('chat')">
+              <span class="action-icon">💬</span>
               <span>开始对话</span>
             </button>
           </div>
@@ -1357,18 +1324,20 @@ watch(inputMessage, () => {
           </div>
 
           <div class="plan-actions">
-            <button class="plan-btn primary" @click.stop="saveLearningPlan">
-              <img src="../assets/mini_icons/保存.png" alt="save" style="width: 16px; height: 16px; margin-right: 4px; border-radius: 3px; object-fit: cover;" />
+            <button class="plan-btn primary _target" @click.stop="saveLearningPlan">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 4v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6a2 2 0 0 0-2 2z" />
+              </svg>
               保存计划
             </button>
-            <button class="plan-btn secondary" @click.stop="generateLearningPlan(true)">
+            <button class="plan-btn secondary _target" @click.stop="generateLearningPlan(true)">
               重新生成
             </button>
           </div>
         </div>
 
         <div v-else class="generate-prompt">
-          <button class="generate-btn" @click.stop="generateLearningPlan">
+          <button class="generate-btn _target" @click.stop="generateLearningPlan">
             <span class="btn-icon">✨</span>
             生成学习计划
           </button>
@@ -1416,7 +1385,7 @@ watch(inputMessage, () => {
         </div>
 
         <div class="quick-prompts">
-          <button v-for="prompt in quickPrompts" :key="prompt.text" class="prompt-btn"
+          <button v-for="prompt in quickPrompts" :key="prompt.text" class="prompt-btn _target"
             @click.stop="useQuickPrompt(prompt)">
             <span>{{ prompt.icon }}</span>
             {{ prompt.text }}
@@ -1427,7 +1396,7 @@ watch(inputMessage, () => {
         <div v-if="selectedFiles.length > 0" class="selected-files-area">
           <div class="selected-files-header">
             <span class="selected-files-title">已选择 {{ selectedFiles.length }} 个文件</span>
-            <button class="clear-files-btn" @click.stop="clearAllFiles">
+            <button class="clear-files-btn _target" @click.stop="clearAllFiles">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
@@ -1446,7 +1415,7 @@ watch(inputMessage, () => {
                 <span class="selected-file-name">{{ file.name }}</span>
                 <span class="selected-file-size">{{ formatFileSize(file.size) }}</span>
               </div>
-              <button class="remove-file-btn" @click.stop="removeFile(index)">
+              <button class="remove-file-btn _target" @click.stop="removeFile(index)">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
@@ -1467,7 +1436,7 @@ watch(inputMessage, () => {
             @change="handleFileSelect"
           />
           <button 
-            class="upload-btn" 
+            class="upload-btn _target" 
             :disabled="isTyping || isUploading || selectedFiles.length >= 5"
             @click.stop="triggerFileInput"
             title="上传文件或图片"
@@ -1479,7 +1448,7 @@ watch(inputMessage, () => {
           
           <textarea ref="textareaRef" v-model="inputMessage" rows="1" class="chat-input" placeholder="输入你的问题，或上传文件..."
             @keydown="handleInputKeyDown" @click.stop></textarea>
-          <button class="send-btn" :disabled="(!inputMessage.trim() && selectedFiles.length === 0) || isTyping || isUploading" @click.stop="sendMessage">
+          <button class="send-btn _target" :disabled="(!inputMessage.trim() && selectedFiles.length === 0) || isTyping || isUploading" @click.stop="sendMessage">
             <svg v-if="!isUploading" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="22" y1="2" x2="11" y2="13" />
               <polygon points="22 2 15 22 11 13 2 9 22 2" />

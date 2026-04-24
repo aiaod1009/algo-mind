@@ -49,11 +49,7 @@ const streamRequest = async (url, data, onMessage, onComplete, onError) => {
   let hasDeliveredContent = false
 
   try {
-    // 构建完整的HTTPS URL
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
-    const fullUrl = url.startsWith('/') ? baseUrl + url.replace(/^\/api/, '') : url
-    
-    const response = await fetch(fullUrl, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: getStreamHeaders(),
       body: JSON.stringify(data),
@@ -127,6 +123,149 @@ const streamRequest = async (url, data, onMessage, onComplete, onError) => {
       return
     }
     await onError?.(error)
+  }
+}
+
+// WebSocket 连接管理
+class WebSocketManager {
+  constructor() {
+    this.socket = null
+    this.connected = false
+    this.reconnectAttempts = 0
+    this.maxReconnectAttempts = 3
+    this.reconnectDelay = 1000
+    this.callbacks = new Map()
+    this.messageId = 0
+  }
+
+  connect() {
+    return new Promise((resolve, reject) => {
+      if (this.connected && this.socket) {
+        resolve()
+        return
+      }
+
+      // 构建 WebSocket URL
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsUrl = `${wsProtocol}//${window.location.host}/ws/ai/chat`
+
+      this.socket = new WebSocket(wsUrl)
+
+      this.socket.onopen = () => {
+        console.log('WebSocket 连接成功')
+        this.connected = true
+        this.reconnectAttempts = 0
+        resolve()
+      }
+
+      this.socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          this.handleMessage(data)
+        } catch (error) {
+          console.error('WebSocket 消息解析失败：', error)
+        }
+      }
+
+      this.socket.onclose = () => {
+        console.log('WebSocket 连接关闭')
+        this.connected = false
+        this.attemptReconnect()
+      }
+
+      this.socket.onerror = (error) => {
+        console.error('WebSocket 错误：', error)
+        reject(error)
+      }
+    })
+  }
+
+  attemptReconnect() {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++
+      console.log(`尝试重连 WebSocket (${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
+      setTimeout(() => {
+        this.connect().catch(err => console.error('重连失败：', err))
+      }, this.reconnectDelay * this.reconnectAttempts)
+    }
+  }
+
+  handleMessage(data) {
+    // 处理 WebSocket 消息
+    console.log('收到 WebSocket 消息：', data)
+    
+    // 这里可以根据需要处理不同类型的消息
+    // 目前我们只处理 AI 聊天消息
+    if (data.type === 'message') {
+      // 调用回调函数处理消息
+      this.callbacks.forEach(callback => {
+        callback(data)
+      })
+    }
+  }
+
+  send(message) {
+    return new Promise((resolve, reject) => {
+      const sendMessage = async () => {
+        if (!this.connected) {
+          await this.connect()
+        }
+
+        if (this.socket && this.connected) {
+          this.socket.send(JSON.stringify(message))
+          resolve()
+        } else {
+          reject(new Error('WebSocket 未连接'))
+        }
+      }
+
+      sendMessage().catch(reject)
+    })
+  }
+
+  registerCallback(callback) {
+    const id = this.messageId++
+    this.callbacks.set(id, callback)
+    return id
+  }
+
+  unregisterCallback(id) {
+    this.callbacks.delete(id)
+  }
+
+  close() {
+    if (this.socket) {
+      this.socket.close()
+      this.connected = false
+    }
+  }
+}
+
+// 创建单例实例
+const wsManager = new WebSocketManager()
+
+// WebSocket AI 对话
+const wsAiChat = async (data, onMessage, onComplete, onError) => {
+  try {
+    // 注册回调
+    const callbackId = wsManager.registerCallback((message) => {
+      if (message.type === 'message') {
+        onMessage?.(message.content)
+        if (message.finished) {
+          onComplete?.()
+          wsManager.unregisterCallback(callbackId)
+        }
+      } else if (message.type === 'error') {
+        onError?.(new Error(message.content))
+        wsManager.unregisterCallback(callbackId)
+      }
+    })
+
+    // 发送消息
+    await wsManager.send(data)
+  } catch (error) {
+    console.error('WebSocket AI 对话失败：', error)
+    onError?.(error)
   }
 }
 
@@ -241,6 +380,11 @@ export const userApi = {
 
   aiChatStream(data, onMessage, onComplete, onError) {
     return streamRequest('/api/ai/chat/stream', data, onMessage, onComplete, onError)
+  },
+
+  // WebSocket AI 对话
+  aiChatWebSocket(data, onMessage, onComplete, onError) {
+    return wsAiChat(data, onMessage, onComplete, onError)
   },
 
   evaluateCode(data) {

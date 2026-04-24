@@ -48,6 +48,12 @@ public class User {
     private String github;
     private String website;
 
+    @Column(name = "followers_count")
+    private Integer followersCount = 0;
+
+    @Column(name = "following_count")
+    private Integer followingCount = 0;
+
     @Column(name = "is_admin")
     private Boolean isAdmin;
 
@@ -56,14 +62,22 @@ public class User {
 
     public String getLevel() {
         int p = points != null ? points : 0;
-        if (p >= 3601) return "Lv.9";
-        if (p >= 2801) return "Lv.8";
-        if (p >= 2101) return "Lv.7";
-        if (p >= 1501) return "Lv.6";
-        if (p >= 1001) return "Lv.5";
-        if (p >= 601) return "Lv.4";
-        if (p >= 301) return "Lv.3";
-        if (p >= 101) return "Lv.2";
+        if (p >= 3601)
+            return "Lv.9";
+        if (p >= 2801)
+            return "Lv.8";
+        if (p >= 2101)
+            return "Lv.7";
+        if (p >= 1501)
+            return "Lv.6";
+        if (p >= 1001)
+            return "Lv.5";
+        if (p >= 601)
+            return "Lv.4";
+        if (p >= 301)
+            return "Lv.3";
+        if (p >= 101)
+            return "Lv.2";
         return "Lv.1";
     }
 

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿<script setup>
+﻿﻿<script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -1231,17 +1231,9 @@ onUnmounted(() => {
     <h2 class="section-title"> </h2>
 
     <Transition name="search-slide">
-      <SearchBar
-        v-if="!searchBarAtBottom"
-        placeholder="搜索帖子、题目、鱼友或知识点..."
-        :is-sticky="false"
-        :keyword="searchFilters.keyword"
-        :active-tab="currentSearchTab"
-        :sort-value="searchFilters.sort"
-        :category-value="searchFilters.category"
-        :time-value="searchFilters.time"
-        @search="handleSearch"
-      />
+      <SearchBar v-if="!searchBarAtBottom" placeholder="搜索帖子、题目、鱼友或知识点..." :is-sticky="false"
+        :keyword="searchFilters.keyword" :active-tab="currentSearchTab" :sort-value="searchFilters.sort"
+        :category-value="searchFilters.category" :time-value="searchFilters.time" @search="handleSearch" />
     </Transition>
 
     <div class="composer-wrapper">
@@ -1456,7 +1448,8 @@ onUnmounted(() => {
             <div>
               <h3 class="search-summary-title">搜索结果</h3>
               <p class="search-summary-subtitle">
-                当前搜索域：{{ currentSearchTab === 'all' ? '综合' : currentSearchTab === 'questions' ? '题库' : currentSearchTab === 'friends' ? '鱼友' : '知识库' }}
+                当前搜索域：{{ currentSearchTab === 'all' ? '综合' : currentSearchTab === 'questions' ? '题库' : currentSearchTab
+                  === 'friends' ? '鱼友' : '知识库' }}
               </p>
             </div>
             <span v-if="hasSearchKeyword" class="search-summary-keyword">“{{ searchFilters.keyword }}”</span>
@@ -1488,12 +1481,8 @@ onUnmounted(() => {
                 <span class="search-group-meta">{{ questionSearchResults.length }} 条</span>
               </div>
               <div class="mini-result-list">
-                <button
-                  v-for="item in comprehensiveSearchResult.questions"
-                  :key="`question-${item.id}`"
-                  class="mini-result-card"
-                  @click="goToChallenge(item.id)"
-                >
+                <button v-for="item in comprehensiveSearchResult.questions" :key="`question-${item.id}`"
+                  class="mini-result-card" @click="goToChallenge(item.id)">
                   <span class="mini-result-title">{{ item.title }}</span>
                   <span class="mini-result-desc">{{ item.trackName }}</span>
                 </button>
@@ -1506,12 +1495,8 @@ onUnmounted(() => {
                 <span class="search-group-meta">{{ friendSearchResults.length }} 位</span>
               </div>
               <div class="mini-result-list">
-                <button
-                  v-for="friend in comprehensiveSearchResult.friends"
-                  :key="`friend-${friend.name}`"
-                  class="mini-result-card"
-                  @click="focusFriendPosts(friend.name)"
-                >
+                <button v-for="friend in comprehensiveSearchResult.friends" :key="`friend-${friend.name}`"
+                  class="mini-result-card" @click="focusFriendPosts(friend.name)">
                   <span class="mini-result-title">{{ friend.name }}</span>
                   <span class="mini-result-desc">{{ friend.postsCount }} 篇帖子 · {{ friend.totalLikes }} 获赞</span>
                 </button>
@@ -1524,12 +1509,8 @@ onUnmounted(() => {
                 <span class="search-group-meta">{{ knowledgeSearchResults.length }} 条</span>
               </div>
               <div class="mini-result-list">
-                <button
-                  v-for="article in comprehensiveSearchResult.knowledge"
-                  :key="article.id"
-                  class="mini-result-card"
-                  @click="router.push('/knowledge-base')"
-                >
+                <button v-for="article in comprehensiveSearchResult.knowledge" :key="article.id"
+                  class="mini-result-card" @click="router.push('/knowledge-base')">
                   <span class="mini-result-title">{{ article.title }}</span>
                   <span class="mini-result-desc">{{ article.tags.join(' / ') }}</span>
                 </button>
@@ -1538,12 +1519,8 @@ onUnmounted(() => {
           </div>
 
           <div v-if="currentSearchTab === 'questions'" class="result-grid">
-            <button
-              v-for="item in questionSearchResults"
-              :key="`question-grid-${item.id}`"
-              class="result-card question-result-card"
-              @click="goToChallenge(item.id)"
-            >
+            <button v-for="item in questionSearchResults" :key="`question-grid-${item.id}`"
+              class="result-card question-result-card" @click="goToChallenge(item.id)">
               <div class="result-card-head">
                 <span class="result-type-chip">题库</span>
                 <span class="result-track">{{ item.trackName }}</span>
@@ -1559,12 +1536,8 @@ onUnmounted(() => {
           </div>
 
           <div v-if="currentSearchTab === 'knowledge'" class="result-grid">
-            <button
-              v-for="article in knowledgeSearchResults"
-              :key="`knowledge-grid-${article.id}`"
-              class="result-card knowledge-result-card"
-              @click="router.push('/knowledge-base')"
-            >
+            <button v-for="article in knowledgeSearchResults" :key="`knowledge-grid-${article.id}`"
+              class="result-card knowledge-result-card" @click="router.push('/knowledge-base')">
               <div class="result-card-head">
                 <span class="result-type-chip">知识库</span>
                 <span class="result-track">{{ article.category }}</span>
@@ -1594,32 +1567,18 @@ onUnmounted(() => {
               <div class="friend-filter-pills">
                 <label class="friend-scope-picker">
                   <span class="friend-scope-label">社区作者库</span>
-                  <select
-                    class="friend-scope-select"
-                    :value="currentUserType"
-                    @change="handleCurrentUserTypeChange"
-                  >
-                    <option
-                      v-for="option in Object.entries(USER_TYPE_LABELS)"
-                      :key="option[0]"
-                      :value="option[0]"
-                    >
+                  <select class="friend-scope-select" :value="currentUserType" @change="handleCurrentUserTypeChange">
+                    <option v-for="option in Object.entries(USER_TYPE_LABELS)" :key="option[0]" :value="option[0]">
                       {{ option[1] }}
                     </option>
                   </select>
                 </label>
                 <label class="friend-scope-picker activity-scope-picker">
                   <span class="friend-scope-label">活跃度</span>
-                  <select
-                    class="friend-scope-select"
-                    :value="currentActivityFilter"
-                    @change="handleActivityFilterChange"
-                  >
-                    <option
-                      v-for="option in Object.entries(ACTIVITY_FILTER_LABELS)"
-                      :key="option[0]"
-                      :value="option[0]"
-                    >
+                  <select class="friend-scope-select" :value="currentActivityFilter"
+                    @change="handleActivityFilterChange">
+                    <option v-for="option in Object.entries(ACTIVITY_FILTER_LABELS)" :key="option[0]"
+                      :value="option[0]">
                       {{ option[1] }}
                     </option>
                   </select>
@@ -1648,11 +1607,8 @@ onUnmounted(() => {
               </div>
 
               <div class="friend-list">
-                <article
-                  v-for="friend in displayedFriendSearchResults"
-                  :key="`friend-row-${friend.name}`"
-                  class="friend-list-item"
-                >
+                <article v-for="friend in displayedFriendSearchResults" :key="`friend-row-${friend.name}`"
+                  class="friend-list-item">
                   <div class="friend-item-main">
                     <el-avatar class="friend-item-avatar" :size="72" :src="friend.avatar || ''">
                       {{ friend.name.slice(0, 1) }}
@@ -1664,9 +1620,7 @@ onUnmounted(() => {
                           <h4 class="friend-item-name">{{ friend.name }}</h4>
                           <AuthorLevelBadge
                             :profile="normalizeAuthorLevelProfile(friend.authorLevelProfile, friend.authorLevel || 'Lv.1')"
-                            :raw-label="friend.authorLevel || 'Lv.1'"
-                            size="sm"
-                          />
+                            :raw-label="friend.authorLevel || 'Lv.1'" size="sm" />
                         </div>
                         <span class="friend-item-hotness">热度 {{ formatCompactNumber(friend.hotness) }}</span>
                       </div>
@@ -1680,12 +1634,8 @@ onUnmounted(() => {
                       </div>
 
                       <div v-if="friend.tags.length" class="friend-item-tags">
-                        <button
-                          v-for="tag in friend.tags"
-                          :key="`${friend.name}-${tag}`"
-                          class="friend-tag-chip"
-                          @click.stop="searchFriendByTag(tag)"
-                        >
+                        <button v-for="tag in friend.tags" :key="`${friend.name}-${tag}`" class="friend-tag-chip"
+                          @click.stop="searchFriendByTag(tag)">
                           {{ tag }}
                         </button>
                       </div>
@@ -1711,158 +1661,148 @@ onUnmounted(() => {
         </div>
 
         <template v-if="currentSearchTab === 'all'">
-        <div v-if="searchFilters.tag" class="tag-filter-bar">
-          <span class="tag-filter-label">筛选标签：</span>
-          <span class="tag-filter-value">{{ searchFilters.tag }}</span>
-          <span class="tag-filter-count">{{ filteredSource.length }} 篇帖子</span>
-          <span class="tag-filter-clear" @click="clearTagFilter">✕ 清除筛选</span>
-        </div>
-        <div v-if="searchFilters.author" class="tag-filter-bar author-filter-bar">
-          <span class="tag-filter-label">鱼友筛选：</span>
-          <span class="tag-filter-value">{{ searchFilters.author }}</span>
-          <span class="tag-filter-count">{{ filteredSource.length }} 篇相关帖子</span>
-          <span class="tag-filter-clear" @click="clearAuthorFilter">清除鱼友筛选</span>
-        </div>
-        <div v-if="forumStore.isFromCache" class="cache-warning">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          <span>当前展示的是本地缓存数据，服务器连接失败</span>
-        </div>
-        <el-card v-for="item in paginatedPosts" :key="item.id" class="feed-card"
-          :class="{ 'is-highlighted': highlightedPost === item.id }" shadow="never">
-          <div class="head-row">
-            <div class="user-wrap">
-              <el-avatar :size="44" :src="resolvePostAvatar(item)">{{ resolvePostAuthor(item).slice(0, 1) }}</el-avatar>
-              <div>
-                <div class="name-row">
-                  <span class="name">{{ resolvePostAuthor(item) }}</span>
-                  <AuthorLevelBadge :profile="item.authorLevelProfile" :raw-label="item.authorLevel || 'Lv.1'"
-                    size="sm" />
-                </div>
-                <div class="meta">算法社区 · {{ formatTime(item.createdAt) }}</div>
-              </div>
-            </div>
-            <div class="post-menu-wrapper" v-if="isCurrentUsersPost(item)">
-              <el-button link type="info" @click.stop="showPostMenu(item.id)">···</el-button>
-              <Transition name="menu-dropdown">
-                <div v-if="activePostMenu === item.id" class="post-menu-dropdown">
-                  <div class="menu-item delete" @click.stop="handleDeletePost(item)">
-                    <span class="menu-icon">🗑️</span>
-                    <span class="menu-text">删除帖子</span>
+          <div v-if="searchFilters.tag" class="tag-filter-bar">
+            <span class="tag-filter-label">筛选标签：</span>
+            <span class="tag-filter-value">{{ searchFilters.tag }}</span>
+            <span class="tag-filter-count">{{ filteredSource.length }} 篇帖子</span>
+            <span class="tag-filter-clear" @click="clearTagFilter">✕ 清除筛选</span>
+          </div>
+          <div v-if="searchFilters.author" class="tag-filter-bar author-filter-bar">
+            <span class="tag-filter-label">鱼友筛选：</span>
+            <span class="tag-filter-value">{{ searchFilters.author }}</span>
+            <span class="tag-filter-count">{{ filteredSource.length }} 篇相关帖子</span>
+            <span class="tag-filter-clear" @click="clearAuthorFilter">清除鱼友筛选</span>
+          </div>
+          <div v-if="forumStore.isFromCache" class="cache-warning">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>当前展示的是本地缓存数据，服务器连接失败</span>
+          </div>
+          <el-card v-for="item in paginatedPosts" :key="item.id" class="feed-card"
+            :class="{ 'is-highlighted': highlightedPost === item.id }" shadow="never">
+            <div class="head-row">
+              <div class="user-wrap">
+                <el-avatar :size="44" :src="resolvePostAvatar(item)"
+                  @click="router.push(`/user/${item.userId || item.authorId}`)" style="cursor: pointer;">
+                  {{ resolvePostAuthor(item).slice(0, 1) }}
+                </el-avatar>
+                <div>
+                  <div class="name-row">
+                    <span class="name" @click="router.push(`/user/${item.userId || item.authorId}`)"
+                      style="cursor: pointer;">{{ resolvePostAuthor(item) }}</span>
+                    <AuthorLevelBadge :profile="item.authorLevelProfile" :raw-label="item.authorLevel || 'Lv.1'"
+                      size="sm" />
                   </div>
+                  <div class="meta">算法社区 · {{ formatTime(item.createdAt) }}</div>
                 </div>
-              </Transition>
-            </div>
-          </div>
-
-          <h3 class="topic topic-link" @click="goToPost(item.id)">{{ item.topic }}</h3>
-
-          <div class="content-wrap">
-            <p class="content" :class="{ 'is-expanded': expandedPosts[item.id] }">
-              <span v-if="!expandedPosts[item.id] && item.content.length > 80" class="content-spacer"></span>
-              <span v-if="!expandedPosts[item.id] && item.content.length > 80" class="full"
-                @click.stop="toggleExpand(item.id)">...全文</span>
-              {{ item.content }}
-            </p>
-            <span v-if="expandedPosts[item.id]" class="collapse" @click.stop="toggleExpand(item.id)">收起</span>
-          </div>
-
-          <div class="quote" v-if="item.quote">{{ item.quote }}</div>
-          <div class="hash"
-            :class="{ 'is-active': searchFilters.tag && item.tag && item.tag.toLowerCase() === searchFilters.tag.toLowerCase() }"
-            @click.stop="filterByTag(item.tag)">{{ item.tag }}</div>
-
-          <div v-if="item.comments > 0" class="hot-comments-section">
-            <div v-if="postHotComments[item.id]?.length > 0" class="hot-comments-carousel">
-              <div class="hot-comment-wrapper">
-                <Transition name="hot-comment-slide" mode="out-in">
-                  <div :key="hotCommentIndex[item.id] || 0" class="hot-comment-item"
-                    @click.stop="goToPostWithComment(item.id, postHotComments[item.id][hotCommentIndex[item.id] || 0]?.id)">
-                    <div class="hot-comment-header">
-                      <el-avatar :size="24"
-                        :src="resolveAvatar(postHotComments[item.id][hotCommentIndex[item.id] || 0]?.avatar) || ''">
-                        {{ (postHotComments[item.id][hotCommentIndex[item.id] || 0]?.author || '匿').slice(0, 1) }}
-                      </el-avatar>
-                      <span class="hot-comment-author">{{ postHotComments[item.id][hotCommentIndex[item.id] ||
-                        0]?.author }}</span>
-                      <span class="hot-comment-likes">👍 {{ postHotComments[item.id][hotCommentIndex[item.id] ||
-                        0]?.likes || 0 }}</span>
+              </div>
+              <div class="post-menu-wrapper" v-if="isCurrentUsersPost(item)">
+                <el-button link type="info" @click.stop="showPostMenu(item.id)">···</el-button>
+                <Transition name="menu-dropdown">
+                  <div v-if="activePostMenu === item.id" class="post-menu-dropdown">
+                    <div class="menu-item delete" @click.stop="handleDeletePost(item)">
+                      <span class="menu-icon">🗑️</span>
+                      <span class="menu-text">删除帖子</span>
                     </div>
-                    <div class="hot-comment-content">{{ postHotComments[item.id][hotCommentIndex[item.id] || 0]?.content
-                    }}</div>
                   </div>
                 </Transition>
               </div>
-              <div v-if="postHotComments[item.id].length > 1" class="hot-comment-dots">
-                <span v-for="(_, idx) in postHotComments[item.id]" :key="idx" class="dot"
-                  :class="{ active: idx === (hotCommentIndex[item.id] || 0) }"
-                  @click.stop="hotCommentIndex[item.id] = idx"></span>
+            </div>
+
+            <h3 class="topic topic-link" @click="goToPost(item.id)">{{ item.topic }}</h3>
+
+            <div class="content-wrap">
+              <p class="content" :class="{ 'is-expanded': expandedPosts[item.id] }">
+                <span v-if="!expandedPosts[item.id] && item.content.length > 80" class="content-spacer"></span>
+                <span v-if="!expandedPosts[item.id] && item.content.length > 80" class="full"
+                  @click.stop="toggleExpand(item.id)">...全文</span>
+                {{ item.content }}
+              </p>
+              <span v-if="expandedPosts[item.id]" class="collapse" @click.stop="toggleExpand(item.id)">收起</span>
+            </div>
+
+            <div class="quote" v-if="item.quote">{{ item.quote }}</div>
+            <div class="hash"
+              :class="{ 'is-active': searchFilters.tag && item.tag && item.tag.toLowerCase() === searchFilters.tag.toLowerCase() }"
+              @click.stop="filterByTag(item.tag)">{{ item.tag }}</div>
+
+            <div v-if="item.comments > 0" class="hot-comments-section">
+              <div v-if="postHotComments[item.id]?.length > 0" class="hot-comments-carousel">
+                <div class="hot-comment-wrapper">
+                  <Transition name="hot-comment-slide" mode="out-in">
+                    <div :key="hotCommentIndex[item.id] || 0" class="hot-comment-item"
+                      @click.stop="goToPostWithComment(item.id, postHotComments[item.id][hotCommentIndex[item.id] || 0]?.id)">
+                      <div class="hot-comment-header">
+                        <el-avatar :size="24"
+                          :src="resolveAvatar(postHotComments[item.id][hotCommentIndex[item.id] || 0]?.avatar) || ''">
+                          {{ (postHotComments[item.id][hotCommentIndex[item.id] || 0]?.author || '匿').slice(0, 1) }}
+                        </el-avatar>
+                        <span class="hot-comment-author">{{ postHotComments[item.id][hotCommentIndex[item.id] ||
+                          0]?.author }}</span>
+                        <span class="hot-comment-likes">👍 {{ postHotComments[item.id][hotCommentIndex[item.id] ||
+                          0]?.likes || 0 }}</span>
+                      </div>
+                      <div class="hot-comment-content">{{ postHotComments[item.id][hotCommentIndex[item.id] ||
+                        0]?.content
+                      }}</div>
+                    </div>
+                  </Transition>
+                </div>
+                <div v-if="postHotComments[item.id].length > 1" class="hot-comment-dots">
+                  <span v-for="(_, idx) in postHotComments[item.id]" :key="idx" class="dot"
+                    :class="{ active: idx === (hotCommentIndex[item.id] || 0) }"
+                    @click.stop="hotCommentIndex[item.id] = idx"></span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="action-row">
-            <button class="action-btn like-btn" :class="{ 'is-liked': item.liked }"
-              @click.stop="handleLike(item, $event)">
-              <img class="btn-icon like-icon" :src="likeIcon" alt="点赞" />
-              <span class="btn-count">{{ item.likes }}</span>
-            </button>
-            <button class="action-btn comment-btn" :class="{ 'is-active': quickReplyPostId === item.id }"
-              @click.stop="toggleQuickReply(item.id)">
-              <span class="btn-icon">💬</span>
-              <span class="btn-count">{{ item.comments }}</span>
-            </button>
-          </div>
-
-          <Transition name="quick-reply">
-            <div v-if="quickReplyPostId === item.id" class="quick-reply" @click.stop>
-              <el-avatar :size="28" :src="resolveAvatar(userStore.userInfo?.avatar) || ''">
-                {{ (userStore.userInfo?.name || '匿').slice(0, 1) }}
-              </el-avatar>
-              <input v-model="quickReplyContent" class="quick-reply-input" type="text" placeholder="写下你的评论..."
-                maxlength="500" @keyup.enter="submitQuickReply(item.id)" />
-              <button class="quick-reply-btn" :disabled="quickReplySubmitting || !quickReplyContent.trim()"
-                @click.stop="submitQuickReply(item.id)">
-                {{ quickReplySubmitting ? '发送中...' : '发送' }}
+            <div class="action-row">
+              <button class="action-btn like-btn" :class="{ 'is-liked': item.liked }"
+                @click.stop="handleLike(item, $event)">
+                <img class="btn-icon like-icon" :src="likeIcon" alt="点赞" />
+                <span class="btn-count">{{ item.likes }}</span>
+              </button>
+              <button class="action-btn comment-btn" :class="{ 'is-active': quickReplyPostId === item.id }"
+                @click.stop="toggleQuickReply(item.id)">
+                <span class="btn-icon">💬</span>
+                <span class="btn-count">{{ item.comments }}</span>
               </button>
             </div>
+
+            <Transition name="quick-reply">
+              <div v-if="quickReplyPostId === item.id" class="quick-reply" @click.stop>
+                <el-avatar :size="28" :src="resolveAvatar(userStore.userInfo?.avatar) || ''">
+                  {{ (userStore.userInfo?.name || '匿').slice(0, 1) }}
+                </el-avatar>
+                <input v-model="quickReplyContent" class="quick-reply-input" type="text" placeholder="写下你的评论..."
+                  maxlength="500" @keyup.enter="submitQuickReply(item.id)" />
+                <button class="quick-reply-btn" :disabled="quickReplySubmitting || !quickReplyContent.trim()"
+                  @click.stop="submitQuickReply(item.id)">
+                  {{ quickReplySubmitting ? '发送中...' : '发送' }}
+                </button>
+              </div>
+            </Transition>
+          </el-card>
+
+          <Transition name="search-slide">
+            <SearchBar v-if="searchBarAtBottom" placeholder="搜索帖子、题目、鱼友或知识点..." :is-sticky="false"
+              :keyword="searchFilters.keyword" :active-tab="currentSearchTab" :sort-value="searchFilters.sort"
+              :category-value="searchFilters.category" :time-value="searchFilters.time" @search="handleSearch" />
           </Transition>
-        </el-card>
 
-        <Transition name="search-slide">
-          <SearchBar
-            v-if="searchBarAtBottom"
-            placeholder="搜索帖子、题目、鱼友或知识点..."
-            :is-sticky="false"
-            :keyword="searchFilters.keyword"
-            :active-tab="currentSearchTab"
-            :sort-value="searchFilters.sort"
-            :category-value="searchFilters.category"
-            :time-value="searchFilters.time"
-            @search="handleSearch"
-          />
-        </Transition>
-
-        <div v-if="totalPages > 1" class="pagination-wrapper">
-          <FlowerPagination :total="totalPages" :defaultPage="currentPage" @change="handlePageChange" />
-        </div>
+          <div v-if="totalPages > 1" class="pagination-wrapper">
+            <FlowerPagination :total="totalPages" :defaultPage="currentPage" @change="handlePageChange" />
+          </div>
         </template>
 
         <Transition name="search-slide">
-          <SearchBar
-            v-if="searchBarAtBottom && currentSearchTab !== 'all'"
-            placeholder="搜索帖子、题目、鱼友或知识点..."
-            :is-sticky="false"
-            :keyword="searchFilters.keyword"
-            :active-tab="currentSearchTab"
-            :sort-value="searchFilters.sort"
-            :category-value="searchFilters.category"
-            :time-value="searchFilters.time"
-            @search="handleSearch"
-          />
+          <SearchBar v-if="searchBarAtBottom && currentSearchTab !== 'all'" placeholder="搜索帖子、题目、鱼友或知识点..."
+            :is-sticky="false" :keyword="searchFilters.keyword" :active-tab="currentSearchTab"
+            :sort-value="searchFilters.sort" :category-value="searchFilters.category" :time-value="searchFilters.time"
+            @search="handleSearch" />
         </Transition>
       </section>
 

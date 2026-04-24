@@ -6,6 +6,7 @@ import { getTrackLabel } from './constants'
 import AppFooter from './components/AppFooter.vue'
 import AIAssistant from './components/AIAssistant.vue'
 import FloatingAIAssistant from './components/FloatingAIAssistant.vue'
+import MagneticPointer from './components/MagneticPointer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,32 +19,14 @@ const canUseTextAnalysis = computed(() => !!userStore.userInfo?.token && !isAuth
 
 const menuItems = [
   { path: '/home', label: '学习计划' },
-  {
-    path: '/courses',
-    label: '知识专区',
-    children: [
-      { path: '/courses', label: '网课' },
-      { path: '/knowledge-base', label: '知识库' },
-    ],
-  },
+  { path: '/courses', label: '网课' },
   { path: '/projects', label: '项目实战' },
   { path: '/forum', label: '论坛' },
   { path: '/private-message', label: '消息' },
   { path: '/ranking', label: '积分排行' },
   { path: '/errors', label: '错题本' },
+  { path: '/code-history', label: '历史提交' },
 ]
-
-const expandedMobileMenus = ref(new Set())
-
-const toggleMobileSubmenu = (path) => {
-  if (expandedMobileMenus.value.has(path)) {
-    expandedMobileMenus.value.delete(path)
-  } else {
-    expandedMobileMenus.value.add(path)
-  }
-}
-
-const isMobileSubmenuExpanded = (path) => expandedMobileMenus.value.has(path)
 
 const activePath = computed(() => {
   if (route.path.startsWith('/challenge/') || route.path.startsWith('/levels')) {
@@ -297,7 +280,7 @@ const toggleTheme = () => {
   <div :class="['app-shell', `theme-${themeIndex}`]">
     <header v-if="showTopbar" class="topbar">
       <div class="page-container topbar-inner">
-        <div class="brand" @click="handleMenuSelect('/home')">
+        <div class="brand _target" @click="handleMenuSelect('/home')">
           <div class="brand-icon">
             <svg viewBox="0 0 32 32" width="32" height="32" fill="none">
               <defs>
@@ -314,21 +297,22 @@ const toggleTheme = () => {
           <span class="brand-text"><span class="brand-algo">Algo</span><span class="brand-mind">Mind</span></span>
         </div>
         <el-menu class="main-menu" :default-active="activePath" mode="horizontal" @select="handleMenuSelect">
-          <el-menu-item index="/home">首页</el-menu-item>
-          <el-sub-menu index="courses-group">
+          <el-menu-item class="_target" index="/home">首页</el-menu-item>
+          <el-sub-menu class="_target" index="courses-group">
             <template #title>知识专区</template>
-            <el-menu-item index="/courses">网课</el-menu-item>
-            <el-menu-item index="/knowledge-base">知识库</el-menu-item>
+            <el-menu-item class="_target" index="/courses">网课</el-menu-item>
+            <el-menu-item class="_target" index="/knowledge-base">知识库</el-menu-item>
           </el-sub-menu>
-          <el-menu-item index="/projects">项目实战</el-menu-item>
-          <el-menu-item index="/forum">论坛</el-menu-item>
-          <el-menu-item index="/private-message">消息</el-menu-item>
-          <el-menu-item index="/ranking">积分排行</el-menu-item>
-          <el-menu-item index="/errors">错题本</el-menu-item>
+          <el-menu-item class="_target" index="/projects">项目实战</el-menu-item>
+          <el-menu-item class="_target" index="/forum">论坛</el-menu-item>
+          <el-menu-item class="_target" index="/private-message">消息</el-menu-item>
+          <el-menu-item class="_target" index="/ranking">积分排行</el-menu-item>
+          <el-menu-item class="_target" index="/errors">错题本</el-menu-item>
+          <el-menu-item class="_target" index="/code-history">历史提交</el-menu-item>
         </el-menu>
         <div class="nav-search-wrapper" :class="{ 'is-expanded': navSearchExpanded }">
           <div class="nav-search-box">
-            <button class="nav-search-btn" @click="toggleNavSearch">
+            <button class="nav-search-btn _target" @click="toggleNavSearch">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"
                 stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="8" />
@@ -339,13 +323,13 @@ const toggleTheme = () => {
               <div v-if="navSearchExpanded" class="nav-search-input-wrap">
                 <input v-model="navSearchKeyword" type="text" class="nav-search-input" placeholder="搜索帖子..."
                   @keyup.enter="handleNavSearch" @keyup.esc="collapseNavSearch" />
-                <button v-if="navSearchKeyword" class="nav-clear-btn" @click.stop="clearNavSearch">
+                <button v-if="navSearchKeyword" class="nav-clear-btn _target" @click.stop="clearNavSearch">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"
                     stroke-linecap="round">
                     <path d="M18 6 6 18M6 6l12 12" />
                   </svg>
                 </button>
-                <button class="nav-go-btn" @click="handleNavSearch">
+                <button class="nav-go-btn _target" @click="handleNavSearch">
                   搜索
                 </button>
               </div>
@@ -353,7 +337,7 @@ const toggleTheme = () => {
           </div>
         </div>
         <div class="actions">
-          <button class="theme-toggle-btn" @click="toggleTheme" title="切换背景主题">
+          <button class="theme-toggle-btn _target" @click="toggleTheme" title="切换背景主题">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -363,7 +347,7 @@ const toggleTheme = () => {
           </button>
           <el-tag type="success" effect="light">积分 {{ userStore.points }}</el-tag>
           <el-dropdown trigger="click" @command="handleUserCommand">
-            <div class="user-entry">
+            <div class="user-entry _target">
               <div class="avatar-with-pendant">
                 <el-avatar :size="34" :src="userStore.avatar" :key="userStore.avatar" class="animated-avatar">
                   {{ (userStore.userInfo?.name || '同学').slice(0, 1) }}
@@ -386,8 +370,8 @@ const toggleTheme = () => {
             </div>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="profile">个人主页</el-dropdown-item>
-                <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+                <el-dropdown-item class="_target" command="profile">个人主页</el-dropdown-item>
+                <el-dropdown-item class="_target" command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -397,29 +381,10 @@ const toggleTheme = () => {
 
     <div v-if="showTopbar" class="mobile-menu-wrapper hidden-on-desktop">
       <div class="mobile-menu">
-        <template v-for="item in menuItems" :key="item.path">
-          <div v-if="!item.children" :class="['mobile-menu-item', { active: activePath === item.path }]"
-            @click="handleMenuSelect(item.path)">
-            {{ item.label }}
-          </div>
-          <div v-else class="mobile-menu-item-has-children">
-            <div :class="['mobile-menu-item', { active: activePath.startsWith(item.path), expanded: isMobileSubmenuExpanded(item.path) }]"
-              @click="toggleMobileSubmenu(item.path)">
-              {{ item.label }}
-              <svg class="submenu-arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </div>
-            <div v-show="isMobileSubmenuExpanded(item.path)" class="mobile-submenu">
-              <div v-for="child in item.children" :key="child.path"
-                :class="['mobile-menu-item mobile-submenu-item', { active: activePath === child.path }]"
-                @click="handleMenuSelect(child.path)">
-                {{ child.label }}
-              </div>
-            </div>
-          </div>
-        </template>
+        <div v-for="item in menuItems" :key="item.path"
+          :class="['mobile-menu-item', '_target', { active: activePath === item.path }]" @click="handleMenuSelect(item.path)">
+          {{ item.label }}
+        </div>
       </div>
     </div>
 
@@ -441,12 +406,12 @@ const toggleTheme = () => {
           }}</span>
         </div>
         <div class="menu-divider"></div>
-        <button @click="analyzeSelectedText('correctness')" class="analysis-btn">
+        <button @click="analyzeSelectedText('correctness')" class="analysis-btn _target">
           <span class="btn-icon">🤔</span>
           <span class="btn-label">分析对错</span>
           <span class="btn-shortcut">Ctrl+1</span>
         </button>
-        <button @click="analyzeSelectedText('meaning')" class="analysis-btn">
+        <button @click="analyzeSelectedText('meaning')" class="analysis-btn _target">
           <span class="btn-icon">💡</span>
           <span class="btn-label">解释含义</span>
           <span class="btn-shortcut">Ctrl+2</span>
@@ -457,6 +422,7 @@ const toggleTheme = () => {
     <!-- WebSocket AI悬浮窗助手 - 仅登录后显示 -->
     <FloatingAIAssistant v-if="showFloatingAssistant" ref="aiAssistantRef" />
   </div>
+  <MagneticPointer />
 </template>
 
 <style scoped>
@@ -639,6 +605,8 @@ const toggleTheme = () => {
   padding: 0 !important;
   pointer-events: none !important;
 }
+
+
 
 .nav-search-wrapper {
   position: relative;
@@ -1261,40 +1229,6 @@ const toggleTheme = () => {
     background: var(--brand-blue);
     color: #fff;
     box-shadow: 0 2px 8px rgba(74, 111, 157, 0.3);
-  }
-
-  .mobile-menu-item-has-children {
-    position: relative;
-    flex-shrink: 0;
-  }
-
-  .mobile-menu-item.expanded {
-    background: rgba(64, 158, 255, 0.15);
-    color: var(--brand-blue);
-  }
-
-  .mobile-menu-item .submenu-arrow {
-    margin-left: 4px;
-    transition: transform 0.2s ease;
-  }
-
-  .mobile-menu-item.expanded .submenu-arrow {
-    transform: rotate(180deg);
-  }
-
-  .mobile-submenu {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 4px 0 4px 12px;
-    margin-top: 2px;
-    border-left: 2px solid rgba(64, 158, 255, 0.2);
-  }
-
-  .mobile-submenu-item {
-    padding: 5px 10px;
-    font-size: 12px;
-    border-radius: 12px;
   }
 
   .actions {

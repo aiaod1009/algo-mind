@@ -107,14 +107,14 @@ const goLogin = () => {
             size="large" />
         </el-form-item>
 
-        <el-button class="next-btn" :loading="loading" @click="handleRegister">
+        <el-button class="next-btn _target" :loading="loading" @click="handleRegister">
           {{ loading ? '注册中...' : '下一步' }}
         </el-button>
       </el-form>
 
       <p class="login-row">
         已有账户？
-        <a href="#" @click.prevent="goLogin">立即登录</a>
+        <a href="#" @click.prevent="goLogin" class="_target">立即登录</a>
       </p>
     </div>
   </div>
