@@ -164,7 +164,7 @@ onMounted(() => {
       </div>
       <div class="track-filter">
         <button v-for="opt in trackOptions" :key="opt.value"
-          :class="['filter-btn', { active: activeTrack === opt.value }]" @click="activeTrack = opt.value">
+          :class="['filter-btn _target', { active: activeTrack === opt.value }]" @click="activeTrack = opt.value">
           {{ opt.label }}
         </button>
       </div>
@@ -191,7 +191,7 @@ onMounted(() => {
             <span>已解锁 {{ item.unlocked }} 关</span>
           </div>
 
-          <div class="project-cta">进入项目关卡</div>
+          <div class="project-cta _target">进入项目关卡</div>
         </button>
       </section>
     </el-skeleton>

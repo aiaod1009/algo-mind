@@ -170,12 +170,12 @@ const goToNextDay = () => {
           </div>
         </div>
         <div class="nav-arrows">
-          <button class="nav-btn" @click="goToPrevDay">
+          <button class="nav-btn _target" @click="goToPrevDay">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"></polyline>
             </svg>
           </button>
-          <button class="nav-btn" @click="goToNextDay">
+          <button class="nav-btn _target" @click="goToNextDay">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
@@ -200,7 +200,7 @@ const goToNextDay = () => {
 
       <!-- 星期标签 -->
       <div class="weekday-tabs">
-        <button v-for="(day, index) in weekdays" :key="index" class="weekday-btn"
+        <button v-for="(day, index) in weekdays" :key="index" class="weekday-btn _target"
           :class="{ active: currentDayIndex === index }" @click="selectDay(index)">
           <span class="day-name">{{ day }}</span>
           <span v-if="currentDayIndex === index" class="active-indicator"></span>

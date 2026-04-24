@@ -964,17 +964,17 @@ onUnmounted(() => {
 
           <div class="helper-row">
             <el-checkbox v-model="form.remember">记住我 30 天</el-checkbox>
-            <a href="#" class="link" @click.prevent="handleForgetPassword">忘记密码？</a>
+            <a href="#" class="link _target" @click.prevent="handleForgetPassword">忘记密码？</a>
           </div>
 
-          <el-button type="primary" size="large" class="action-btn" :loading="loading" @click="handleLogin">
+          <el-button type="primary" size="large" class="action-btn _target" :loading="loading" @click="handleLogin">
             登录
           </el-button>
         </el-form>
 
         <p class="register-row">
           还没有账户？
-          <a href="#" class="register-link" @click.prevent="handleRegister">立即注册</a>
+          <a href="#" class="register-link _target" @click.prevent="handleRegister">立即注册</a>
         </p>
         <p class="demo-hint">演示账号：admin@example.com / 123456</p>
       </div>

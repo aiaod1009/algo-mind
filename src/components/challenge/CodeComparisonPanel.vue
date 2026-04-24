@@ -73,7 +73,7 @@ const formatTime = (value) => {
   <div class="comparison-panel">
     <div class="comparison-header">
       <h4>代码对比结果</h4>
-      <button class="clear-btn" @click="emit('clear')" title="关闭对比">
+      <button class="clear-btn _target" @click="emit('clear')" title="关闭对比">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M18 6L6 18M6 6l12 12" />
         </svg>

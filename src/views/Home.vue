@@ -100,7 +100,7 @@ if (!levelStore.levels.length) {
         <h2>欢迎回来，{{ userStore.userInfo?.name || '同学' }}</h2>
         <p>今天继续挑战算法关卡，稳步提升思维与代码实现能力。</p>
       </div>
-      <button class="start-project-btn" @click="goTo('/projects')">
+      <button class="start-project-btn _target" @click="goTo('/projects')">
         <span class="btn-content">
           <svg class="btn-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

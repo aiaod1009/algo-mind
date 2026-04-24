@@ -6,6 +6,16 @@ import finalFlagImage from '../assets/icons/final-flag.svg'
 import { useLevelStore } from '../stores/level'
 import { useUserStore } from '../stores/user'
 
+// 小车相关
+const truckRef = ref(null)
+const isMouseOver = ref(false)
+const mouseX = ref(0)
+const targetX = ref(0)
+const damping = 0.05 // 与Lenis阻尼一致
+let animationFrameId = null
+let lastMouseX = 0
+const isFlipped = ref(true)
+
 const route = useRoute()
 const router = useRouter()
 const levelStore = useLevelStore()
@@ -105,6 +115,14 @@ const nodeStyles = computed(() => {
 
 const progressTruckStyle = computed(() => {
   if (progressLevelIndex.value < 0) return null
+  // 如果mouseX大于0，使用鼠标位置
+  if (mouseX.value > 0) {
+    return {
+      left: `${mouseX.value}px`,
+      bottom: '104px'
+    }
+  }
+  // 否则使用默认位置
   return getTruckStyle(progressLevelIndex.value)
 })
 
@@ -171,6 +189,42 @@ const teardownMotionPreference = () => {
   motionListener = null
 }
 
+// 拖动滚动相关
+const isDragging = ref(false)
+const startX = ref(0)
+const startScrollLeft = ref(0)
+
+const handleMouseDown = (e) => {
+  if (e.button === 0) { // 只处理左键
+    isDragging.value = true
+  startX.value = e.clientX
+  const viewport = e.currentTarget
+  startScrollLeft.value = viewport.scrollLeft
+  
+  // 添加鼠标移动和释放事件监听
+  document.addEventListener('mousemove', handleDragMove)
+  document.addEventListener('mouseup', handleMouseUp)
+  }
+}
+
+const handleDragMove = (e) => {
+  if (!isDragging.value) return
+  
+  const deltaX = e.clientX - startX.value
+  const viewport = document.querySelector('.stage-viewport')
+  if (viewport) {
+    viewport.scrollLeft = startScrollLeft.value - deltaX
+  }
+}
+
+const handleMouseUp = () => {
+  isDragging.value = false
+  
+  // 移除事件监听
+  document.removeEventListener('mousemove', handleDragMove)
+  document.removeEventListener('mouseup', handleMouseUp)
+}
+
 const handleWheelScroll = (event) => {
   const viewport = event.currentTarget
   if (viewport.scrollWidth > viewport.clientWidth) {
@@ -203,13 +257,126 @@ watch(
   },
 )
 
+const handleMouseMove = (e) => {
+  if (!isMouseOver.value || !truckRef.value) return
+  
+  const viewport = document.querySelector('.stage-viewport')
+  if (!viewport) return
+  
+  const viewportRect = viewport.getBoundingClientRect()
+  const truckRect = truckRef.value.getBoundingClientRect()
+  
+  // 计算鼠标在视口内的相对位置
+  const relativeX = e.clientX - viewportRect.left
+  
+  // 限制小车在视口内移动
+  const minX = truckRect.width / 2
+  const maxX = viewportRect.width - truckRect.width / 2
+  const clampedX = Math.max(minX, Math.min(maxX, relativeX))
+  
+  // 更新目标位置，加上滚动条位置
+  targetX.value = clampedX + viewport.scrollLeft
+  
+  // 基于屏幕上鼠标与小车的相对位置判断是否翻转
+  // 鼠标在小车左侧 -> 翻转（面朝左）
+  // 鼠标在小车右侧 -> 不翻转（面朝右）
+  if (truckRef.value) {
+    const truckRect = truckRef.value.getBoundingClientRect()
+    // 计算小车中心点在屏幕上的X坐标
+    const truckCenterX = truckRect.left + truckRect.width / 2
+    // 鼠标在屏幕上的X坐标
+    const mouseScreenX = e.clientX
+    
+    // 判断鼠标是否在小车左侧
+    if (mouseScreenX < truckCenterX) {
+      isFlipped.value = true // 鼠标在左侧，翻转
+    } else {
+      isFlipped.value = false // 鼠标在右侧，不翻转
+    }
+  }
+  // 更新最后鼠标位置
+  lastMouseX = e.clientX
+  
+  // 启动动画循环
+  if (!animationFrameId) {
+    animationFrameId = requestAnimationFrame(animateTruck)
+  }
+  
+  // 控制滚动条位置，使滚动条随鼠标移动而移动
+  // 计算鼠标在视口中的位置占比
+  const mouseRatio = relativeX / viewportRect.width
+  // 计算滚动条的目标位置
+  const scrollWidth = viewport.scrollWidth - viewport.clientWidth
+  const targetScrollLeft = mouseRatio * scrollWidth
+  
+  // 直接设置滚动条位置，无阻尼
+  // 确保滚动条位置在有效范围内
+  viewport.scrollLeft = Math.max(0, Math.min(targetScrollLeft, scrollWidth))
+}
+
+const animateTruck = () => {
+  if (!truckRef.value) return
+  
+  // 计算当前位置与目标位置的差值
+  const delta = targetX.value - mouseX.value
+  
+  // 如果差值很小，就停止动画
+  if (Math.abs(delta) < 0.1) {
+    mouseX.value = targetX.value
+    truckRef.value.style.left = `${mouseX.value}px`
+    animationFrameId = null
+    return
+  }
+  
+  // 使用阻尼算法更新位置
+  mouseX.value += delta * damping
+  truckRef.value.style.left = `${mouseX.value}px`
+  
+  // 继续动画
+  animationFrameId = requestAnimationFrame(animateTruck)
+}
+
+const handleMouseEnter = () => {
+  isMouseOver.value = true
+}
+
+const handleMouseLeave = () => {
+  isMouseOver.value = false
+}
+
 onMounted(() => {
   setupMotionPreference()
   loadData()
+  
+  // 添加鼠标事件监听器
+  const viewport = document.querySelector('.stage-viewport')
+  if (viewport) {
+    viewport.addEventListener('mousemove', handleMouseMove)
+    viewport.addEventListener('mouseenter', handleMouseEnter)
+    viewport.addEventListener('mouseleave', handleMouseLeave)
+  }
 })
 
 onUnmounted(() => {
   teardownMotionPreference()
+  
+  // 清理鼠标事件监听器
+  const viewport = document.querySelector('.stage-viewport')
+  if (viewport) {
+    viewport.removeEventListener('mousemove', handleMouseMove)
+    viewport.removeEventListener('mouseenter', handleMouseEnter)
+    viewport.removeEventListener('mouseleave', handleMouseLeave)
+  }
+  
+  // 清理拖动事件监听器
+  document.removeEventListener('mousemove', handleDragMove)
+  document.removeEventListener('mouseup', handleMouseUp)
+  
+  // 清理动画帧
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
 })
 </script>
 
@@ -227,7 +394,7 @@ onUnmounted(() => {
 
     <el-skeleton :loading="loading" animated :rows="6">
       <section class="surface-card pixel-stage">
-        <div v-if="trackLevels.length" class="stage-viewport" @wheel.prevent="handleWheelScroll">
+        <div v-if="trackLevels.length" class="stage-viewport" @wheel.prevent="handleWheelScroll" @mousedown="handleMouseDown">
           <div class="map-world" :style="mapWorldStyle" :class="{ 'reduced-motion': prefersReducedMotion }">
             <div class="sky-pixels" aria-hidden="true"></div>
 
@@ -273,7 +440,7 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <div v-if="progressTruckStyle" class="progress-truck" :style="progressTruckStyle" aria-hidden="true">
+            <div v-if="progressTruckStyle" ref="truckRef" class="progress-truck" :class="{ 'truck-flipped': isFlipped }" :style="progressTruckStyle" aria-hidden="true">
               <span class="truck-body"></span>
               <span class="truck-cab"></span>
               <span class="truck-window"></span>
@@ -793,6 +960,20 @@ onUnmounted(() => {
 
 .wheel-back {
   left: 66px;
+}
+
+/* 水平翻转效果 */
+.progress-truck.truck-flipped {
+  transform: translateX(-50%) scaleX(-1);
+}
+
+/* 翻转时调整轮子位置，保持轮子在正确的位置 */
+.progress-truck.truck-flipped .wheel-front {
+  left: 66px;
+}
+
+.progress-truck.truck-flipped .wheel-back {
+  left: 14px;
 }
 
 @keyframes truck-drive {

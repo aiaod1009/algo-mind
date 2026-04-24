@@ -28,9 +28,9 @@
 
       <div class="links-row" v-if="profile.github || profile.website">
         <a v-if="profile.github" :href="profile.github" target="_blank" rel="noopener noreferrer"
-          class="link-item">GitHub</a>
+          class="link-item _target">GitHub</a>
         <a v-if="profile.website" :href="profile.website" target="_blank" rel="noopener noreferrer"
-          class="link-item">个人网站</a>
+          class="link-item _target">个人网站</a>
       </div>
     </div>
   </div>

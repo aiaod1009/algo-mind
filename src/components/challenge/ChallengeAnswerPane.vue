@@ -107,7 +107,7 @@ const toolbarRightText = computed(() => {
     <div class="pane-head">
       <h3>{{ title }}</h3>
       <div class="pane-actions">
-        <el-button :disabled="loading" @click="$emit('save-draft')">
+        <el-button :disabled="loading" @click="$emit('save-draft')" class="_target">
           <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
             <polyline points="17 21 17 13 7 13 7 21" />
@@ -115,20 +115,20 @@ const toolbarRightText = computed(() => {
           </svg>
           保存作答
         </el-button>
-        <el-button v-if="!isCodeChallenge" type="primary" :disabled="loading" @click="$emit('submit')">
+        <el-button v-if="!isCodeChallenge" type="primary" :disabled="loading" @click="$emit('submit')" class="_target">
           <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14" />
             <path d="M12 5l7 7-7 7" />
           </svg>
           提交答案
         </el-button>
-        <el-button v-if="isCodeChallenge" type="primary" :disabled="loading" @click="$emit('quick-run')">
+        <el-button v-if="isCodeChallenge" type="primary" :disabled="loading" @click="$emit('quick-run')" class="_target">
           <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="5 3 19 12 5 21 5 3" />
           </svg>
           开始测评
         </el-button>
-        <el-button v-if="isCodeChallenge" type="primary" :disabled="loading" @click="$emit('git-it')">
+        <el-button v-if="isCodeChallenge" type="primary" :disabled="loading" @click="$emit('git-it')" class="_target">
           <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14" />
             <path d="M12 5l7 7-7 7" />
