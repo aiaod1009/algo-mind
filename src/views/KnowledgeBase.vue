@@ -1,4 +1,4 @@
-﻿<script setup>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -146,6 +146,8 @@ const searchDraft = ref('')
 const loadingCatalog = ref(false)
 const loadingArticle = ref(false)
 const errorMessage = ref('')
+const showRelatedPanel = ref(false)
+let relatedPanelTimer = null
 
 const articleCache = new Map()
 let catalogRequestId = 0
@@ -172,6 +174,51 @@ const routeKeyword = computed(() => String(route.query.keyword || '').trim())
 const routeArticleSlug = computed(() => String(route.query.article || '').trim())
 const sections = computed(() => catalog.value.sections || [])
 const allNavItems = computed(() => sections.value.flatMap((section) => section.articles || []))
+const KNOWLEDGE_MAP_HISTORY_KEY = 'knowledge-base-recent-reads'
+const KNOWLEDGE_MAP_SORT_OPTIONS = [
+  { value: 'path', label: '学习路径' },
+  { value: 'recent', label: '最近阅读' },
+  { value: 'alpha', label: '字母排序' },
+]
+const KNOWLEDGE_PATH_STAGES = [
+  {
+    id: 'basics',
+    title: '基础入口',
+    subtitle: '数组、字符串、哈希与基础技巧',
+    accent: 'sunrise',
+  },
+  {
+    id: 'linear',
+    title: '线性结构',
+    subtitle: '链表、栈、队列与双指针',
+    accent: 'azure',
+  },
+  {
+    id: 'search',
+    title: '搜索遍历',
+    subtitle: '二分、滑窗、DFS 与 BFS',
+    accent: 'violet',
+  },
+  {
+    id: 'trees',
+    title: '树图结构',
+    subtitle: '树、图、堆与图论建模',
+    accent: 'mint',
+  },
+  {
+    id: 'strategy',
+    title: '策略模型',
+    subtitle: '递归、分治、贪心与动态规划',
+    accent: 'amber',
+  },
+  {
+    id: 'advanced',
+    title: '综合专题',
+    subtitle: '位运算、数学、状态与区间问题',
+    accent: 'ocean',
+  },
+]
+const knowledgeMapSort = ref('path')
 const SIDEBAR_PAGE_SIZE = 5
 const sidebarPage = ref(1)
 const visibleArticleCount = computed(() =>
@@ -260,6 +307,181 @@ const sidebarPageItems = computed(() => {
 const activeNavItem = computed(() =>
   allNavItems.value.find((item) => item.slug === currentSlug.value) || null,
 )
+const recentReadSlugs = ref([])
+
+const readKnowledgeMapHistory = () => {
+  if (typeof window === 'undefined') {
+    return []
+  }
+
+  try {
+    const raw = window.localStorage.getItem(KNOWLEDGE_MAP_HISTORY_KEY)
+    const parsed = JSON.parse(raw || '[]')
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string' && item.trim()) : []
+  } catch {
+    return []
+  }
+}
+
+const writeKnowledgeMapHistory = (slugs) => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.setItem(KNOWLEDGE_MAP_HISTORY_KEY, JSON.stringify(slugs))
+}
+
+recentReadSlugs.value = readKnowledgeMapHistory()
+
+const knowledgeMapSortLabel = computed(() =>
+  KNOWLEDGE_MAP_SORT_OPTIONS.find((option) => option.value === knowledgeMapSort.value)?.label || '学习路径',
+)
+
+// 将搜索词和文章节点整合成一份“知识地图”数据源，保持视觉地图与现有搜索/文章路由同步。
+const knowledgeMapCandidates = computed(() => {
+  const candidates = []
+  const seen = new Set()
+
+  const appendCandidate = (candidate) => {
+    const label = String(candidate.label || '').trim()
+    if (!label || seen.has(label)) {
+      return
+    }
+
+    seen.add(label)
+    candidates.push({
+      ...candidate,
+      label,
+      keyword: String(candidate.keyword || label).trim(),
+    })
+  }
+
+  catalog.value.quickSearches.forEach((quick, index) => {
+    appendCandidate({
+      id: `quick-${index}-${quick}`,
+      label: quick,
+      keyword: quick,
+      slug: '',
+      sectionTitle: '快捷检索',
+      priority: index,
+      source: 'quick',
+    })
+  })
+
+  sidebarItems.value.forEach((item, index) => {
+    appendCandidate({
+      id: `article-${item.slug}`,
+      label: item.title,
+      keyword: item.title,
+      slug: item.slug,
+      sectionTitle: item.sectionTitle,
+      priority: catalog.value.quickSearches.length + index,
+      source: 'article',
+    })
+  })
+
+  return candidates.slice(0, 18)
+})
+
+const includesAnyKeyword = (text, keywords) => keywords.some((keyword) => text.includes(keyword))
+
+// 按算法学习路径分层：先基础与线性结构，再到搜索、树图、策略模型，最后汇总到综合专题。
+const resolveKnowledgeStageId = (candidate) => {
+  const stageText = `${candidate.label} ${candidate.keyword} ${candidate.sectionTitle}`.toLowerCase()
+
+  if (includesAnyKeyword(stageText, ['位运算', '数学', '计数', '数位', '区间', '状态', '概率', '博弈'])) {
+    return 'advanced'
+  }
+
+  if (includesAnyKeyword(stageText, ['动态规划', '贪心', '递归', '分治', '背包'])) {
+    return 'strategy'
+  }
+
+  if (includesAnyKeyword(stageText, ['树形', '图论', '普通树', '树', '图', '堆', '最短路', '拓扑', '并查集', '线段树'])) {
+    return 'trees'
+  }
+
+  if (includesAnyKeyword(stageText, ['二分', '滑动窗口', '搜索', 'dfs', 'bfs', '深度优先', '广度优先'])) {
+    return 'search'
+  }
+
+  if (includesAnyKeyword(stageText, ['链表', '栈', '队列', '双指针', '指针'])) {
+    return 'linear'
+  }
+
+  return 'basics'
+}
+
+const sortKnowledgeStageNodes = (nodes) => {
+  const stageNodes = [...nodes]
+
+  if (knowledgeMapSort.value === 'alpha') {
+    return stageNodes.sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'))
+  }
+
+  if (knowledgeMapSort.value === 'recent') {
+    const historyRank = new Map(
+      [currentSlug.value, ...recentReadSlugs.value]
+        .filter(Boolean)
+        .map((slug, index) => [slug, index]),
+    )
+
+    return stageNodes.sort((left, right) => {
+      const leftRank = historyRank.has(left.slug) ? historyRank.get(left.slug) : Number.MAX_SAFE_INTEGER
+      const rightRank = historyRank.has(right.slug) ? historyRank.get(right.slug) : Number.MAX_SAFE_INTEGER
+
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank
+      }
+
+      if (left.source !== right.source) {
+        return left.source === 'article' ? -1 : 1
+      }
+
+      return left.priority - right.priority
+    })
+  }
+
+  return stageNodes.sort((left, right) => left.priority - right.priority)
+}
+
+const knowledgeMapStages = computed(() => {
+  const stageMap = new Map(
+    KNOWLEDGE_PATH_STAGES.map((stage, index) => [
+      stage.id,
+      {
+        ...stage,
+        stepLabel: `${index + 1}`.padStart(2, '0'),
+        nodes: [],
+      },
+    ]),
+  )
+
+  knowledgeMapCandidates.value.forEach((candidate) => {
+    const stageId = resolveKnowledgeStageId(candidate)
+    stageMap.get(stageId)?.nodes.push(candidate)
+  })
+
+  return KNOWLEDGE_PATH_STAGES
+    .map((stage, index) => {
+      const stageBucket = stageMap.get(stage.id)
+      return {
+        ...stageBucket,
+        stepLabel: `${index + 1}`.padStart(2, '0'),
+        nodes: sortKnowledgeStageNodes(stageBucket?.nodes || []),
+      }
+    })
+    .filter((stage) => stage.nodes.length)
+})
+
+const handleKnowledgeMapNodeClick = (node) => {
+  if (node.slug) {
+    selectArticle(node.slug)
+    return
+  }
+
+  applyQuickSearch(node.keyword)
+}
 const activeSection = computed(() =>
   sections.value.find((section) => section.id === currentArticle.value?.sectionId)
   || sections.value.find((section) => section.articles?.some((item) => item.slug === currentSlug.value))
@@ -479,6 +701,21 @@ const articleObjectives = computed(() => currentArticle.value?.learningObjective
 const articleChecklist = computed(() => currentArticle.value?.checklist || [])
 const articleRelated = computed(() => currentArticle.value?.relatedArticles || [])
 
+watch(articleRelated, (related) => {
+  if (relatedPanelTimer) {
+    clearTimeout(relatedPanelTimer)
+    relatedPanelTimer = null
+  }
+  if (related?.length) {
+    showRelatedPanel.value = true
+    relatedPanelTimer = setTimeout(() => {
+      showRelatedPanel.value = false
+    }, 10000)
+  } else {
+    showRelatedPanel.value = false
+  }
+})
+
 const getSidebarPageForSlug = (slug) => {
   const itemIndex = sidebarItems.value.findIndex((item) => item.slug === slug)
   return itemIndex >= 0 ? Math.floor(itemIndex / SIDEBAR_PAGE_SIZE) + 1 : 1
@@ -632,6 +869,11 @@ const applyQuickSearch = (term) => {
 }
 
 const openRelatedArticle = (slug) => {
+  showRelatedPanel.value = false
+  if (relatedPanelTimer) {
+    clearTimeout(relatedPanelTimer)
+    relatedPanelTimer = null
+  }
   void replaceQuery('', slug)
 }
 
@@ -895,6 +1137,20 @@ watch(
   },
   { immediate: true },
 )
+
+watch(
+  currentSlug,
+  (slug) => {
+    if (!slug) {
+      return
+    }
+
+    const nextHistory = [slug, ...recentReadSlugs.value.filter((item) => item !== slug)].slice(0, 8)
+    recentReadSlugs.value = nextHistory
+    writeKnowledgeMapHistory(nextHistory)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -929,42 +1185,11 @@ watch(
             </button>
             <div class="hero-admin-meta">
               <span class="admin-chip accent">独立路由</span>
-              <span class="admin-chip muted">Admin Console</span>
             </div>
           </div>
         </form>
 
-        <p v-if="isAdmin" class="hero-admin-feedback">
-          管理功能已迁移到独立页面，点击上方按钮后会跳转到单独的“知识库管理台”路由，而不会在当前知识库页面内联展开。
-        </p>
-
-        <div class="hero-chip-group">
-          <button
-            v-for="quick in catalog.quickSearches"
-            :key="quick"
-            type="button"
-            class="hero-chip"
-            @click="applyQuickSearch(quick)"
-          >
-            {{ quick }}
-          </button>
         </div>
-      </div>
-
-      <div class="hero-spotlights">
-        <button
-          v-for="card in catalog.spotlightCards"
-          :key="card.slug"
-          type="button"
-          class="spotlight-card"
-          :class="`is-${card.accent}`"
-          @click="openSpotlight(card.slug)"
-        >
-          <span class="spotlight-eyebrow">{{ card.eyebrow }}</span>
-          <h3>{{ card.title }}</h3>
-          <p>{{ card.description }}</p>
-        </button>
-      </div>
     </section>
 
     <div class="kb-shell">
@@ -1168,7 +1393,7 @@ watch(
       </main>
 
       <aside class="kb-aside">
-        <div v-if="articleRelated.length" class="aside-card kb-panel">
+        <div v-if="articleRelated.length && showRelatedPanel" class="aside-card kb-panel">
           <span class="sidebar-eyebrow">延伸阅读</span>
           <h3>继续往下看</h3>
           <button
@@ -1414,6 +1639,267 @@ watch(
 
 .hero-admin-feedback.error {
   color: #b84444;
+}
+
+.knowledge-map-card {
+  margin-top: 22px;
+  padding: 26px 28px 28px;
+  border-radius: 28px;
+  border: 1px solid rgba(28, 42, 66, 0.08);
+  width: 1025px;
+  background:
+    linear-gradient(rgba(107, 127, 152, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(107, 127, 152, 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 253, 0.92));
+  background-size: 28px 28px, 28px 28px, 100% 100%;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 20px 46px rgba(17, 38, 58, 0.08);
+  overflow: hidden;
+}
+
+.knowledge-map-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 26px;
+}
+
+.knowledge-map-copy h2 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  color: #161d29;
+}
+
+.knowledge-map-copy p {
+  margin: 14px 0 0;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #758295;
+}
+
+.knowledge-map-sort {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  min-width: 142px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(28, 42, 66, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  color: #1d2635;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 12px 24px rgba(18, 48, 71, 0.06);
+}
+
+.knowledge-map-sort select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.knowledge-map-sort svg {
+  color: #1d2635;
+}
+
+.knowledge-map-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 18px 26px;
+  align-items: stretch;
+}
+
+.knowledge-map-stage {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  --map-stage-accent: #4d82ff;
+  --map-stage-accent-soft: rgba(77, 130, 255, 0.12);
+  --map-stage-track: rgba(77, 130, 255, 0.28);
+}
+
+.knowledge-map-stage::after {
+  content: '';
+  position: absolute;
+  top: 42px;
+  right: -26px;
+  width: 26px;
+  border-top: 1px dashed var(--map-stage-track);
+}
+
+.knowledge-map-stage::before {
+  content: '';
+  position: absolute;
+  top: 38px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--map-stage-accent);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.9);
+}
+
+.knowledge-map-stage:last-child::before,
+.knowledge-map-stage:last-child::after {
+  display: none;
+}
+
+.knowledge-map-stage.is-sunrise {
+  --map-stage-accent: #ff8d6d;
+  --map-stage-accent-soft: rgba(255, 141, 109, 0.14);
+  --map-stage-track: rgba(255, 141, 109, 0.34);
+}
+
+.knowledge-map-stage.is-azure {
+  --map-stage-accent: #4d82ff;
+  --map-stage-accent-soft: rgba(77, 130, 255, 0.14);
+  --map-stage-track: rgba(77, 130, 255, 0.32);
+}
+
+.knowledge-map-stage.is-violet {
+  --map-stage-accent: #6653e7;
+  --map-stage-accent-soft: rgba(102, 83, 231, 0.14);
+  --map-stage-track: rgba(102, 83, 231, 0.3);
+}
+
+.knowledge-map-stage.is-mint {
+  --map-stage-accent: #2db57f;
+  --map-stage-accent-soft: rgba(45, 181, 127, 0.14);
+  --map-stage-track: rgba(45, 181, 127, 0.3);
+}
+
+.knowledge-map-stage.is-amber {
+  --map-stage-accent: #f0a227;
+  --map-stage-accent-soft: rgba(240, 162, 39, 0.16);
+  --map-stage-track: rgba(240, 162, 39, 0.3);
+}
+
+.knowledge-map-stage.is-ocean {
+  --map-stage-accent: #2faabd;
+  --map-stage-accent-soft: rgba(47, 170, 189, 0.14);
+  --map-stage-track: rgba(47, 170, 189, 0.3);
+}
+
+.knowledge-map-stage-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+}
+
+.knowledge-map-stage-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--map-stage-accent-soft);
+  color: var(--map-stage-accent);
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.knowledge-map-stage-copy {
+  min-width: 0;
+}
+
+.knowledge-map-stage-copy h3 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.2;
+  color: #16202d;
+}
+
+.knowledge-map-stage-copy p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #7c8797;
+}
+
+.knowledge-map-column {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding-left: 2px;
+}
+
+.knowledge-map-column::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 12px;
+  border-left: 1px dashed var(--map-stage-track);
+}
+
+.knowledge-map-node {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(28, 42, 66, 0.22);
+  background: rgba(255, 255, 255, 0.94);
+  color: #5f6b7b;
+  box-shadow: 0 8px 18px rgba(18, 48, 71, 0.05);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.knowledge-map-node-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--map-stage-accent);
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.92), 0 4px 10px var(--map-stage-accent-soft);
+}
+
+.knowledge-map-node-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.knowledge-map-node:hover {
+  transform: translateY(-2px);
+  border-color: var(--map-stage-track);
+  box-shadow: 0 14px 24px rgba(18, 48, 71, 0.08);
+  color: #2b3443;
+}
+
+.knowledge-map-node.active {
+  border-color: var(--map-stage-track);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), var(--map-stage-accent-soft));
+  color: #183041;
+  box-shadow: 0 16px 28px rgba(18, 48, 71, 0.08);
+}
+
+.knowledge-map-empty {
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 1px dashed rgba(120, 140, 160, 0.24);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--kb-muted);
+  font-size: 14px;
 }
 
 .hero-chip,
@@ -2346,6 +2832,16 @@ watch(
     display: grid;
     grid-template-columns: 1fr;
   }
+
+  .knowledge-map-board {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .knowledge-map-stage::before,
+  .knowledge-map-stage::after {
+    display: none;
+  }
 }
 
 @media (max-width: 768px) {
@@ -2378,6 +2874,63 @@ watch(
   .hero-search {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .knowledge-map-card {
+    padding: 20px 18px 22px;
+    border-radius: 24px;
+    background-size: 22px 22px, 22px 22px, 100% 100%;
+  }
+
+  .knowledge-map-heading {
+    flex-direction: column;
+    align-items: stretch;
+    margin-bottom: 20px;
+  }
+
+  .knowledge-map-copy h2 {
+    font-size: 24px;
+  }
+
+  .knowledge-map-sort {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .knowledge-map-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 14px;
+  }
+
+  .knowledge-map-stage {
+    gap: 12px;
+  }
+
+  .knowledge-map-stage-head {
+    min-height: auto;
+  }
+
+  .knowledge-map-stage-step {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .knowledge-map-stage-copy h3 {
+    font-size: 14px;
+  }
+
+  .knowledge-map-stage-copy p {
+    font-size: 11px;
+  }
+
+  .knowledge-map-column {
+    gap: 14px;
+  }
+
+  .knowledge-map-node {
+    min-height: 38px;
+    padding: 8px 12px;
   }
 
   .hero-admin-entry,
@@ -2413,5 +2966,10 @@ watch(
     border-radius: 16px;
   }
 }
-</style>
 
+@media (max-width: 560px) {
+  .knowledge-map-board {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

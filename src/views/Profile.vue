@@ -1389,6 +1389,7 @@ watch(targetUserId, async () => {
               更多设置
             </button>
             <button class="save-btn glass-primary" @click="handleSave">
+              <img src="../assets/mini_icons/保存.png" alt="save" style="width: 16px; height: 16px; margin-right: 4px; border-radius: 3px; object-fit: cover;" />
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
@@ -1482,7 +1483,10 @@ watch(targetUserId, async () => {
 
           <div class="detail-edit-footer">
             <button class="cancel-btn" @click="showDetailEdit = false">取消</button>
-            <button class="save-btn large" @click="handleSave">保存更改</button>
+            <button class="save-btn large" @click="handleSave">
+              <img src="../assets/微信图片_20260422225456_55_112.jpg" alt="save" style="width: 18px; height: 18px; margin-right: 6px; border-radius: 4px; object-fit: cover;" />
+              保存更改
+            </button>
           </div>
         </div>
       </div>
@@ -1556,7 +1560,10 @@ watch(targetUserId, async () => {
 
           <div class="status-modal-footer">
             <button class="cancel-btn" @click="showStatusModal = false">取消</button>
-            <button class="save-btn" @click="saveStatusSettings">保存设置</button>
+            <button class="save-btn" @click="saveStatusSettings">
+              <img src="../assets/微信图片_20260422225456_55_112.jpg" alt="save" style="width: 16px; height: 16px; margin-right: 4px; border-radius: 3px; object-fit: cover;" />
+              保存设置
+            </button>
           </div>
         </div>
       </div>

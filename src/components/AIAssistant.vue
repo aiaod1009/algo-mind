@@ -4,6 +4,9 @@ import { useUserStore } from '../stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
 import { withNonBlockingAuth } from '../api/requestOptions'
+import errorAnalysisIcon from '../assets/mini_icons/错题分析.png'
+import studyPlanIcon from '../assets/mini_icons/学习计划.png'
+import startChatIcon from '../assets/mini_icons/开始对话.png'
 
 const userStore = useUserStore()
 
@@ -403,22 +406,24 @@ const buildFallbackStudyHabits = () => ({
 })
 
 const formatRelativeTime = (value) => {
-  if (!value) return 'Just now'
+  if (!value) return '刚刚'
 
   const target = new Date(value)
   if (Number.isNaN(target.getTime())) {
-    return 'Just now'
+    return '刚刚'
   }
 
   const diffMs = Date.now() - target.getTime()
   const diffMinutes = Math.max(1, Math.floor(diffMs / 60000))
-  if (diffMinutes < 60) return `${diffMinutes}m ago`
+  if (diffMinutes < 60) return `${diffMinutes}分钟前`
 
   const diffHours = Math.floor(diffMinutes / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffHours < 24) return `${diffHours}小时前`
 
   const diffDays = Math.floor(diffHours / 24)
-  return `${diffDays}d ago`
+  if (diffDays === 1) return '昨天'
+  if (diffDays === 2) return '前天'
+  return `${diffDays}天前`
 }
 
 const buildErrorAnalysisFromItems = (items = []) => {
@@ -456,16 +461,17 @@ const buildStudyHabitsFromStats = (stats = {}) => {
   const accuracy = Number(stats?.accuracy || 0)
   const currentStreak = Number(stats?.currentStreak || 0)
   const weeklyProgress = Number(stats?.weeklyProgress || 0)
-  const derivedWeakTopics = errorAnalysis.value.categories
-    .slice(0, 2)
-    .map((category) => category.name)
-    .filter(Boolean)
+
+  // 使用后端返回的强弱项数据
+  const strongTopics = stats?.strongTopics?.length ? stats.strongTopics : fallback.strongTopics
+  const weakTopics = stats?.weakTopics?.length ? stats.weakTopics : fallback.weakTopics
 
   return {
     ...fallback,
     weeklyStudyTime: Math.max(fallback.weeklyStudyTime, Number((weeklyProgress * 1.5).toFixed(1))),
     consistencyScore: Math.min(100, Math.max(0, Math.round(accuracy * 0.7 + currentStreak * 3))),
-    weakTopics: derivedWeakTopics.length ? derivedWeakTopics : fallback.weakTopics,
+    strongTopics,
+    weakTopics,
   }
 }
 
@@ -1216,7 +1222,7 @@ watch(inputMessage, () => {
 
         <div class="overview-grid">
           <div class="overview-card weak-card">
-            <h4>⚠️ 薄弱环节</h4>
+            <h4><img src="../assets/mini_icons/薄弱.png" alt="薄弱环节" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;" />薄弱环节</h4>
             <div class="topic-list">
               <div v-for="topic in studyHabits.weakTopics" :key="topic" class="topic-item weak">
                 <span class="topic-dot"></span>
@@ -1226,7 +1232,7 @@ watch(inputMessage, () => {
             </div>
           </div>
           <div class="overview-card strong-card">
-            <h4>✨ 擅长领域</h4>
+            <h4><img src="../assets/mini_icons/擅长.png" alt="擅长领域" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;" />擅长领域</h4>
             <div class="topic-list">
               <div v-for="topic in studyHabits.strongTopics" :key="topic" class="topic-item strong">
                 <span class="topic-dot"></span>
@@ -1238,18 +1244,18 @@ watch(inputMessage, () => {
         </div>
 
         <div class="quick-actions">
-          <h4>🚀 快速开始</h4>
+          <h4><img src="../assets/mini_icons/快速开始.png" alt="快速开始" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;" />快速开始</h4>
           <div class="action-buttons">
             <button class="action-btn" @click.stop="switchSection('errors')">
-              <span class="action-icon">📊</span>
+              <span class="action-icon"><img :src="errorAnalysisIcon" alt="" /></span>
               <span>查看错题分析</span>
             </button>
             <button class="action-btn" @click.stop="switchSection('plan')">
-              <span class="action-icon">📋</span>
+              <span class="action-icon"><img :src="studyPlanIcon" alt="" /></span>
               <span>生成学习计划</span>
             </button>
             <button class="action-btn" @click.stop="switchSection('chat')">
-              <span class="action-icon">💬</span>
+              <span class="action-icon"><img :src="startChatIcon" alt="" /></span>
               <span>开始对话</span>
             </button>
           </div>
@@ -1263,7 +1269,7 @@ watch(inputMessage, () => {
           <p>找出薄弱环节，针对性提升</p>
         </div>
         <div class="error-categories">
-          <h4>错误类型分布</h4>
+          <h4><img src="../assets/mini_icons/错题分析.png" alt="错误类型分布" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;" />错误类型分布</h4>
           <div class="category-bars">
             <div v-for="cat in errorAnalysis.categories" :key="cat.name" class="category-bar">
               <div class="bar-header">
@@ -1277,7 +1283,7 @@ watch(inputMessage, () => {
           </div>
         </div>
         <div class="recent-errors">
-          <h4>最近错题</h4>
+          <h4><img src="../assets/mini_icons/待复盘.png" alt="最近错题" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;" />最近错题</h4>
           <div class="error-list">
             <div v-for="error in errorAnalysis.recentErrors" :key="error.title" class="error-item">
               <div class="error-main">
@@ -1311,7 +1317,7 @@ watch(inputMessage, () => {
 
         <div v-else-if="isGenerated" class="plan-content">
           <div class="week-goals">
-            <h4>本周目标</h4>
+            <h4><img src="../assets/mini_icons/学习计划.png" alt="本周目标" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;" />本周目标</h4>
             <div class="goal-list">
               <div v-for="(goal, index) in learningPlan.weekGoals" :key="goal.title" class="goal-item">
                 <div class="goal-check">
@@ -1334,7 +1340,7 @@ watch(inputMessage, () => {
           </div>
 
           <div class="daily-tasks">
-            <h4>每日安排</h4>
+            <h4><img src="../assets/mini_icons/学习计划.png" alt="每日安排" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;" />每日安排</h4>
             <div class="task-timeline">
               <div v-for="(day, index) in learningPlan.dailyTasks" :key="day.day" class="timeline-day">
                 <div class="day-marker" :style="getDayMarkerStyle(day.day, index)">{{ day.day }}</div>
@@ -1352,9 +1358,7 @@ watch(inputMessage, () => {
 
           <div class="plan-actions">
             <button class="plan-btn primary" @click.stop="saveLearningPlan">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 4v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6a2 2 0 0 0-2 2z" />
-              </svg>
+              <img src="../assets/mini_icons/保存.png" alt="save" style="width: 16px; height: 16px; margin-right: 4px; border-radius: 3px; object-fit: cover;" />
               保存计划
             </button>
             <button class="plan-btn secondary" @click.stop="generateLearningPlan(true)">
@@ -1737,14 +1741,28 @@ watch(inputMessage, () => {
   border-radius: 16px;
   border: 1px solid rgba(14, 165, 233, 0.1);
   backdrop-filter: blur(10px);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -2px rgba(0, 0, 0, 0.1),
+    0 10px 15px -3px rgba(0, 0, 0, 0.05);
+  transform: translateZ(0);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.overview-card:hover {
+  transform: translateY(-4px) translateZ(10px);
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1),
+    0 20px 30px -10px rgba(0, 0, 0, 0.08);
 }
 
 .weak-card {
-  border-left: 4px solid #ef4444;
+  border-left: none;
 }
 
 .strong-card {
-  border-left: 4px solid #10b981;
+  border-left: none;
 }
 
 .overview-card h4 {
@@ -1818,6 +1836,20 @@ watch(inputMessage, () => {
   color: #fff;
   box-shadow: 0 8px 24px rgba(14, 165, 233, 0.3);
   transform: translateY(-2px);
+}
+
+.action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+
+.action-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 /* 错题分析 */

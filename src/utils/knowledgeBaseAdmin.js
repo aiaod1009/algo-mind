@@ -1,4 +1,4 @@
-export const KNOWLEDGE_SPOTLIGHT_ACCENTS = ['emerald', 'cyan', 'amber']
+﻿export const KNOWLEDGE_SPOTLIGHT_ACCENTS = ['emerald', 'cyan', 'amber']
 export const KNOWLEDGE_ADMIN_DASHBOARD_CACHE_KEY = 'algo-mind:knowledge-admin-dashboard'
 export const KNOWLEDGE_ADMIN_DASHBOARD_CACHE_TTL = 60 * 1000
 
@@ -13,6 +13,31 @@ export const normalizeKnowledgeSlug = (value) => trimToEmpty(value)
   .replace(/[^a-z0-9-]+/g, '-')
   .replace(/-{2,}/g, '-')
   .replace(/(^-|-$)/g, '')
+
+const buildStableSectionHash = (value) => {
+  let hash = 0
+  const normalized = trimToEmpty(value).toLowerCase()
+
+  for (const char of normalized) {
+    hash = (hash * 131 + char.charCodeAt(0)) >>> 0
+  }
+
+  return hash.toString(36)
+}
+
+export const deriveKnowledgeSectionId = (sectionTitle, fallbackSectionId = '') => {
+  const normalizedTitle = normalizeKnowledgeSlug(sectionTitle)
+  if (normalizedTitle) {
+    return normalizedTitle
+  }
+
+  const rawTitle = trimToEmpty(sectionTitle)
+  if (rawTitle) {
+    return `section-${buildStableSectionHash(rawTitle)}`
+  }
+
+  return normalizeKnowledgeSlug(fallbackSectionId)
+}
 
 export const splitKnowledgeCommaItems = (value) => trimToEmpty(value)
   .split(/[,\n，]+/)
@@ -75,7 +100,7 @@ export const validateKnowledgeAdminArticle = (form = {}, articleSummaries = [], 
   const errors = []
   const warnings = []
   const normalizedSlug = normalizeKnowledgeSlug(form.slug || '')
-  const normalizedSectionId = normalizeKnowledgeSlug(form.sectionId || '')
+  const normalizedSectionId = deriveKnowledgeSectionId(form.sectionTitle || '', form.sectionId || '')
   const relatedSlugs = splitKnowledgeCommaItems(form.relatedSlugsText || '')
     .map(normalizeKnowledgeSlug)
     .filter(Boolean)
@@ -93,9 +118,6 @@ export const validateKnowledgeAdminArticle = (form = {}, articleSummaries = [], 
     errors.push('文章标题不能为空。')
   }
 
-  if (!normalizedSectionId) {
-    errors.push('栏目 ID 不能为空。')
-  }
 
   if (!trimToEmpty(form.sectionTitle)) {
     errors.push('栏目名称不能为空。')

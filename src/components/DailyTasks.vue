@@ -23,15 +23,24 @@ const colorSchemes = [
   { color: '#db2777', bgColor: '#fce7f3' }, // 粉色系（新增）
 ]
 
+import arrayIcon from '../assets/mini_icons/数组.png'
+import stringIcon from '../assets/mini_icons/字符串匹配-01.png'
+import dpIcon from '../assets/mini_icons/动态规划.png'
+import treeIcon from '../assets/mini_icons/二叉树.png'
+import graphIcon from '../assets/mini_icons/图论推理算法.png'
+import sortIcon from '../assets/mini_icons/指针.png'
+import greedyIcon from '../assets/mini_icons/贪心算法.png'
+import reviewIcon from '../assets/mini_icons/待复盘.png'
+
 const taskTypes = [
-  { key: 'array', label: '数组', icon: '🔢' },
-  { key: 'string', label: '字符串', icon: '📝' },
-  { key: 'dp', label: '动态规划', icon: '📈' },
-  { key: 'tree', label: '二叉树', icon: '🌳' },
-  { key: 'graph', label: '图论', icon: '🕸️' },
-  { key: 'sort', label: '排序', icon: '📊' },
-  { key: 'greedy', label: '贪心', icon: '💎' },
-  { key: 'review', label: '复盘', icon: '📋' },
+  { key: 'array', label: '数组', icon: arrayIcon, isImage: true },
+  { key: 'string', label: '字符串', icon: stringIcon, isImage: true },
+  { key: 'dp', label: '动态规划', icon: dpIcon, isImage: true },
+  { key: 'tree', label: '二叉树', icon: treeIcon, isImage: true },
+  { key: 'graph', label: '图论', icon: graphIcon, isImage: true },
+  { key: 'sort', label: '排序', icon: sortIcon, isImage: true },
+  { key: 'greedy', label: '贪心', icon: greedyIcon, isImage: true },
+  { key: 'review', label: '复盘', icon: reviewIcon, isImage: true },
 ]
 
 // 为每个任务随机分配配色
@@ -192,7 +201,10 @@ const goToNextDay = () => {
         <div class="type-tags">
           <div v-for="type in taskTypes" :key="type.key" class="type-tag"
             :style="{ '--tag-color': getTypeColor(type.key) }">
-            <span class="tag-icon">{{ type.icon }}</span>
+            <span class="tag-icon">
+              <img v-if="type.isImage" :src="type.icon" class="tag-icon-img" alt="" />
+              <template v-else>{{ type.icon }}</template>
+            </span>
             <span class="tag-label">{{ type.label }}</span>
           </div>
         </div>
@@ -227,7 +239,10 @@ const goToNextDay = () => {
           <div class="card-content">
             <div class="task-header-row">
               <div class="task-icon-wrapper" :style="{ backgroundColor: 'rgba(255,255,255,0.5)' }">
-                <span class="task-icon">{{ getTaskTypeInfo(task.type).icon }}</span>
+                <span class="task-icon">
+                  <img v-if="getTaskTypeInfo(task.type).isImage" :src="getTaskTypeInfo(task.type).icon" class="task-icon-img" alt="" />
+                  <template v-else>{{ getTaskTypeInfo(task.type).icon }}</template>
+                </span>
               </div>
               <span class="task-duration-badge">{{ task.duration }}</span>
             </div>
@@ -400,6 +415,15 @@ const goToNextDay = () => {
 .tag-icon {
   font-size: 16px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tag-icon-img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
 }
 
 .tag-label {
@@ -571,6 +595,15 @@ const goToNextDay = () => {
 
 .task-icon {
   font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.task-icon-img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 .task-duration-badge {

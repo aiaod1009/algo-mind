@@ -317,6 +317,7 @@
             <div class="modal-footer">
               <button class="btn btn-secondary" @click="closeSettingsModal">取消</button>
               <button class="btn btn-primary" @click="saveSettings" :disabled="isSaving">
+                <img v-if="!isSaving" src="../assets/mini_icons/保存.png" alt="save" style="width: 16px; height: 16px; margin-right: 4px; border-radius: 3px; object-fit: cover;" />
                 <span v-if="isSaving" class="loading-spinner"></span>
                 {{ isSaving ? '保存中...' : '保存设置' }}
               </button>

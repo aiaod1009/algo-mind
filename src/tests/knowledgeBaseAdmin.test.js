@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import {
+  deriveKnowledgeSectionId,
   KNOWLEDGE_ADMIN_DASHBOARD_CACHE_TTL,
   buildKnowledgeAdminStats,
   normalizeKnowledgeSlug,
@@ -13,6 +14,9 @@ import {
 const run = () => {
   assert.equal(normalizeKnowledgeSlug(' Graph / Shortest Path '), 'graph-shortest-path')
   assert.equal(normalizeKnowledgeSlug('DP__Intro'), 'dp-intro')
+  assert.equal(deriveKnowledgeSectionId('Graph Basics'), 'graph-basics')
+  assert.equal(deriveKnowledgeSectionId('图论'), deriveKnowledgeSectionId('图论'))
+  assert.match(deriveKnowledgeSectionId('图论'), /^section-/)
 
   const configValidation = validateKnowledgeAdminConfig(
     {
@@ -30,7 +34,7 @@ const run = () => {
     {
       slug: 'Graph Intro',
       title: '图论',
-      sectionId: 'graph',
+      sectionId: '',
       sectionTitle: '图论',
       relatedSlugsText: 'graph-intro,missing-one',
       spotlightEnabled: true,
@@ -44,7 +48,8 @@ const run = () => {
     null,
   )
   assert.match(articleValidation.warnings[0], /graph-intro/)
-  assert.equal(articleValidation.errors.length, 8)
+  assert.ok(articleValidation.normalized.sectionId.startsWith('section-'))
+  assert.equal(articleValidation.errors.length, 7)
   assert.ok(articleValidation.errors.some((message) => message.includes('相关文章')))
   assert.ok(articleValidation.errors.some((message) => message.includes('推荐标题')))
   assert.ok(articleValidation.errors.some((message) => message.includes('推荐描述')))

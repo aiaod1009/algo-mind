@@ -108,6 +108,7 @@ const toolbarRightText = computed(() => {
       <h3>{{ title }}</h3>
       <div class="pane-actions">
         <el-button :disabled="loading" @click="$emit('save-draft')">
+          <img src="../../assets/mini_icons/保存.png" alt="save" style="width: 16px; height: 16px; margin-right: 4px; border-radius: 3px; object-fit: cover; vertical-align: middle;" />
           <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
             <polyline points="17 21 17 13 7 13 7 21" />

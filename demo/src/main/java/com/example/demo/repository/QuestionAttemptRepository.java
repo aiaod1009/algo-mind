@@ -17,6 +17,8 @@ public interface QuestionAttemptRepository extends JpaRepository<QuestionAttempt
 
     Optional<QuestionAttempt> findByUserIdAndLevelId(Long userId, Long levelId);
 
+    List<QuestionAttempt> findByUserId(Long userId);
+
     List<QuestionAttempt> findByUserIdAndLevelIdIn(Long userId, Collection<Long> levelIds);
 
     long countByUserIdAndLatestStatus(Long userId, String latestStatus);

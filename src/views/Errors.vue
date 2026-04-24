@@ -529,7 +529,10 @@ onMounted(loadData)
 
       <template #footer>
         <el-button @click="addDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleAdd">保存</el-button>
+        <el-button type="primary" @click="handleAdd">
+          <img src="../assets/mini_icons/保存.png" alt="save" style="width: 16px; height: 16px; margin-right: 4px; border-radius: 3px; object-fit: cover; vertical-align: middle;" />
+          保存
+        </el-button>
       </template>
     </el-dialog>
 

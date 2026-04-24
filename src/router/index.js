@@ -13,6 +13,7 @@ import Register from '../views/Register.vue'
 import CodeHistory from '../views/CodeHistory.vue'
 import KnowledgeBase from '../views/KnowledgeBase.vue'
 const KnowledgeBaseAdmin = () => import('../views/KnowledgeBaseAdmin.vue')
+const KnowledgeGraph = () => import('../views/KnowledgeGraph.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -110,6 +111,12 @@ const router = createRouter({
       name: 'knowledge-base-admin',
       component: KnowledgeBaseAdmin,
       meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/knowledge-graph',
+      name: 'knowledge-graph',
+      component: KnowledgeGraph,
+      meta: { requiresAuth: true },
     },
     {
       path: '/private-message',

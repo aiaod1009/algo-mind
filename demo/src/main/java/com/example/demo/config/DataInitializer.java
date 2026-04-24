@@ -27,7 +27,7 @@ import java.util.Random;
 
 @Slf4j
 @Component
-@Profile("dev")
+@Profile({"dev", "local"})
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
 

@@ -31,7 +31,86 @@ prohibited-word:
 
 spring:
   profiles:
-    active: prod
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:mysql://43.139.148.97:9191/algomind_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: algomind_user
+    password: 123456
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+  jackson:
+    date-format: yyyy-MM-dd'T'HH:mm:ss.SSS'Z'
+    time-zone: Asia/Shanghai
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 50MB
+
+cors:
+  allowed-origins: "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://127.0.0.1:5173"
+
+file:
+  upload-dir: ./uploads/avatars
+  max-size: 10485760
+  allowed-types: image/jpeg,image/png,image/gif,image/webp
+
+app:
+  upload:
+    chat-files: ./uploads/chat-files
+    base-url: http://localhost:8080/api/uploads
+
+judge0:
+  api:
+    url: http://43.139.148.97:2358
+    urls: http://43.139.148.97:2358
+    health-check-enabled: true
+  limits:
+    cpu-time: 5
+    memory: 262144
+    wall-time: 10
+    output: 10240
+    max-cpu-time: 15
+    max-memory: 524288
+    max-wall-time: 30
+    max-output: 65536
+  use-mock: true
+
+doubao:
+  api:
+    key: ${ARK_API_KEY:${DOUBAO_API_KEY:4d0e1258-05a6-45dd-aa71-36a6cdf8c832}}
+    url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+    base-url: https://ark.cn-beijing.volces.com/api/v3
+    multimodal-url: https://ark.cn-beijing.volces.com/api/v3/responses
+    model: ${DOUBAO_MODEL:doubao-seed-1-8-251228}
+    multimodal-key: ${ARK_MULTIMODAL_API_KEY:${DOUBAO_MULTIMODAL_KEY:${ARK_API_KEY:4d0e1258-05a6-45dd-aa71-36a6cdf8c832}}}
+    timeout: 30000
+    max-retries: 3
+    temperature: 0.7
+    max-tokens: 4096
+    code-evaluation-model: ${DOUBAO_CODE_EVAL_MODEL:${DOUBAO_MODEL:doubao-seed-1-8-251228}}
+    code-evaluation-max-tokens: ${DOUBAO_CODE_EVAL_MAX_TOKENS:1400}
+    code-evaluation-temperature: ${DOUBAO_CODE_EVAL_TEMPERATURE:0.2}
+    code-evaluation-connect-timeout-ms: ${DOUBAO_CODE_EVAL_CONNECT_TIMEOUT_MS:10000}
+    code-evaluation-read-timeout-ms: ${DOUBAO_CODE_EVAL_READ_TIMEOUT_MS:45000}
 
 ---
 spring:

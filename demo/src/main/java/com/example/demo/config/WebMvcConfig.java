@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -25,10 +26,24 @@ public class WebMvcConfig implements WebMvcConfigurer {
         log.info("WebMvcConfig 初始化");
     }
 
+    private Path getChatFilesPath() {
+        Path chatFilesPath;
+        String normalizedPath = chatFilesDir.replace('/', File.separatorChar).replace('\\', File.separatorChar);
+        
+        if (Paths.get(normalizedPath).isAbsolute()) {
+            chatFilesPath = Paths.get(normalizedPath);
+        } else {
+            // 使用项目根目录作为基础路径
+            String userDir = System.getProperty("user.dir");
+            chatFilesPath = Paths.get(userDir, normalizedPath);
+        }
+        return chatFilesPath.toAbsolutePath().normalize();
+    }
+
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // 聊天文件访问路径
-        Path chatFilesPath = Paths.get(chatFilesDir).toAbsolutePath().normalize();
+        Path chatFilesPath = getChatFilesPath();
         registry.addResourceHandler("/uploads/chat-files/**")
                 .addResourceLocations("file:" + chatFilesPath.toString() + "/");
 

@@ -90,7 +90,30 @@ public class WebSocketController extends TextWebSocketHandler {
                         "id", messageId,
                         "content", "AI 正在思考..."));
 
+        // 构建消息列表，包含历史对话上下文
         List<ChatMessage> messages = new ArrayList<>();
+        
+        // 添加历史消息（如果存在）
+        Object historyObj = request.get("messages");
+        if (historyObj instanceof List) {
+            try {
+                List<?> historyList = (List<?>) historyObj;
+                for (Object item : historyList) {
+                    if (item instanceof Map) {
+                        Map<?, ?> msgMap = (Map<?, ?>) item;
+                        String role = stringValue(msgMap.get("role"));
+                        String msgContent = stringValue(msgMap.get("content"));
+                        if (role != null && !role.isBlank() && msgContent != null && !msgContent.isBlank()) {
+                            messages.add(new ChatMessage(role, msgContent));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("解析历史消息失败，将只使用当前消息", e);
+            }
+        }
+        
+        // 添加当前用户消息
         messages.add(new ChatMessage("user", content));
 
         StringBuilder accumulatedContent = new StringBuilder();

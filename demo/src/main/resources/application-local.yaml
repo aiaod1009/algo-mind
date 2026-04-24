@@ -1,0 +1,65 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:algodb;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+
+ip:
+  location:
+    enabled: false
+
+cors:
+  allowed-origins: "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://127.0.0.1:5173"
+
+file:
+  upload-dir: ./uploads/avatars
+  max-size: 10485760
+  allowed-types: image/jpeg,image/png,image/gif,image/webp
+
+app:
+  upload:
+    chat-files: ./uploads/chat-files
+    base-url: http://localhost:8080/api/uploads
+
+judge0:
+  api:
+    url: http://localhost:2358
+    urls: http://localhost:2358
+    health-check-enabled: false
+  limits:
+    cpu-time: 5
+    memory: 262144
+    wall-time: 10
+    output: 10240
+    max-cpu-time: 15
+    max-memory: 524288
+    max-wall-time: 30
+    max-output: 65536
+  use-mock: true
+
+doubao:
+  api:
+    key: ${ARK_API_KEY:${DOUBAO_API_KEY:4d0e1258-05a6-45dd-aa71-36a6cdf8c832}}
+    url: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+    base-url: https://ark.cn-beijing.volces.com/api/v3
+    multimodal-url: https://ark.cn-beijing.volces.com/api/v3/responses
+    model: ${DOUBAO_MODEL:doubao-seed-1-8-251228}
+    multimodal-key: ${ARK_MULTIMODAL_API_KEY:${DOUBAO_MULTIMODAL_KEY:${ARK_API_KEY:4d0e1258-05a6-45dd-aa71-36a6cdf8c832}}}
+    timeout: 30000
+    max-retries: 3
+    temperature: 0.7
+    max-tokens: 4096
+    code-evaluation-model: ${DOUBAO_CODE_EVAL_MODEL:${DOUBAO_MODEL:doubao-seed-1-8-251228}}
+    code-evaluation-max-tokens: ${DOUBAO_CODE_EVAL_MAX_TOKENS:1400}
+    code-evaluation-temperature: ${DOUBAO_CODE_EVAL_TEMPERATURE:0.2}
+    code-evaluation-connect-timeout-ms: ${DOUBAO_CODE_EVAL_CONNECT_TIMEOUT_MS:10000}
+    code-evaluation-read-timeout-ms: ${DOUBAO_CODE_EVAL_READ_TIMEOUT_MS:45000}

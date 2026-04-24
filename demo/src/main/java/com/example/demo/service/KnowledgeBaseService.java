@@ -3,9 +3,12 @@ package com.example.demo.service;
 import com.example.demo.entity.KnowledgeArticle;
 import com.example.demo.entity.KnowledgeBaseConfig;
 import com.example.demo.repository.KnowledgeArticleRepository;
+import com.example.demo.repository.KnowledgeArticleSummary;
 import com.example.demo.repository.KnowledgeBaseConfigRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +25,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class KnowledgeBaseService {
@@ -40,24 +44,43 @@ public class KnowledgeBaseService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 获取知识库目录 - 带缓存优化
+     * 使用摘要查询代替全字段查询，减少数据传输
+     */
     @Transactional(readOnly = true)
+    @Cacheable(value = "knowledgeCatalog", key = "#keyword != null ? #keyword : 'all'", unless = "#result == null")
     public KnowledgeCatalog getCatalog(String keyword) {
         KnowledgeBaseConfig config = getOrCreateConfig();
         String normalizedKeyword = normalize(keyword);
 
-        List<KnowledgeArticle> publishedArticles = knowledgeArticleRepository.findAllByPublishedTrueOrderBySectionIdAscSortOrderAscUpdatedAtDesc();
-        List<KnowledgeArticle> visibleArticles = publishedArticles.stream()
-                .filter(article -> matchesKeyword(article, normalizedKeyword))
-                .toList();
+        // 使用优化的摘要查询，避免加载大字段
+        List<KnowledgeArticleSummary> articleSummaries;
+        if (normalizedKeyword.isBlank()) {
+            articleSummaries = knowledgeArticleRepository.findAllPublishedSummaries();
+        } else {
+            // 使用数据库级别的过滤，减少内存处理
+            articleSummaries = knowledgeArticleRepository.findPublishedSummariesByKeyword(normalizedKeyword);
+        }
 
-        List<KnowledgeSection> sections = buildSections(visibleArticles);
-        Set<String> visibleSlugs = visibleArticles.stream()
-                .map(KnowledgeArticle::getSlug)
+        // 如果数据库过滤不够精确，在内存中二次过滤
+        List<KnowledgeArticleSummary> visibleSummaries = normalizedKeyword.isBlank()
+                ? articleSummaries
+                : articleSummaries.stream()
+                        .filter(summary -> summary.matchesKeyword(normalizedKeyword))
+                        .collect(Collectors.toList());
+
+        List<KnowledgeSection> sections = buildSectionsFromSummaries(visibleSummaries);
+        Set<String> visibleSlugs = visibleSummaries.stream()
+                .map(KnowledgeArticleSummary::slug)
                 .collect(LinkedHashSet::new, Set::add, Set::addAll);
 
         String defaultArticleSlug = visibleSlugs.contains(safe(config.getDefaultArticleSlug()))
                 ? safe(config.getDefaultArticleSlug())
-                : visibleArticles.stream().map(KnowledgeArticle::getSlug).findFirst().orElse("");
+                : visibleSummaries.stream()
+                        .findFirst()
+                        .map(KnowledgeArticleSummary::slug)
+                        .orElse("");
 
         return new KnowledgeCatalog(
                 safe(config.getSiteTitle(), "AlgoMind 知识库"),
@@ -66,16 +89,23 @@ public class KnowledgeBaseService {
                 safe(config.getEmptyStateDescription(), "试试换一个关键词，或者先从左侧目录选一篇文章开始阅读。"),
                 defaultArticleSlug,
                 splitTextList(config.getQuickSearchesText()),
-                buildMetrics(visibleArticles),
-                buildSpotlightCards(visibleArticles, visibleSlugs),
+                buildMetrics(visibleSummaries),
+                buildSpotlightCards(visibleSummaries, visibleSlugs),
                 sections);
     }
 
+    /**
+     * 获取文章详情 - 带缓存优化
+     */
     @Transactional(readOnly = true)
+    @Cacheable(value = "knowledgeArticle", key = "#slug", unless = "#result == null")
     public KnowledgeArticleView getArticle(String slug) {
         KnowledgeArticle article = knowledgeArticleRepository.findBySlugAndPublishedTrue(slug)
                 .orElseThrow(() -> new NoSuchElementException("知识库文章不存在: " + slug));
-        return toArticleView(article, knowledgeArticleRepository.findAllByPublishedTrueOrderBySectionIdAscSortOrderAscUpdatedAtDesc());
+        
+        // 只获取必要的数据用于构建相关文章，使用摘要查询
+        List<KnowledgeArticleSummary> allSummaries = knowledgeArticleRepository.findAllPublishedSummaries();
+        return toArticleView(article, allSummaries);
     }
 
     @Transactional(readOnly = true)
@@ -95,6 +125,7 @@ public class KnowledgeBaseService {
     }
 
     @Transactional
+    @CacheEvict(value = {"knowledgeCatalog", "knowledgeArticle"}, allEntries = true)
     public AdminArticleDetail createArticle(AdminArticleInput input, Long operatorUserId) {
         String slug = normalizeSlug(input.slug());
         if (slug.isBlank()) {
@@ -113,6 +144,7 @@ public class KnowledgeBaseService {
     }
 
     @Transactional
+    @CacheEvict(value = {"knowledgeCatalog", "knowledgeArticle"}, allEntries = true)
     public AdminArticleDetail updateArticle(Long id, AdminArticleInput input, Long operatorUserId) {
         KnowledgeArticle article = knowledgeArticleRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException("知识库文章不存在: " + id));
@@ -131,13 +163,14 @@ public class KnowledgeBaseService {
     }
 
     @Transactional
+    @CacheEvict(value = {"knowledgeCatalog", "knowledgeArticle"}, allEntries = true)
     public void deleteArticle(Long id) {
         if (!knowledgeArticleRepository.existsById(id)) {
             throw new NoSuchElementException("知识库文章不存在: " + id);
         }
 
         KnowledgeArticle article = knowledgeArticleRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("鐭ヨ瘑搴撴枃绔犱笉瀛樺湪: " + id));
+                .orElseThrow(() -> new NoSuchElementException("知识库文章不存在: " + id));
         String deletingSlug = article.getSlug();
 
         KnowledgeBaseConfig config = getOrCreateConfig();
@@ -157,7 +190,7 @@ public class KnowledgeBaseService {
                 .toList();
         for (KnowledgeArticle target : articlesToRepair) {
             List<String> nextRelatedSlugs = normalizeSlugList(splitTextList(target.getRelatedSlugsText())).stream()
-                    .filter(slug -> !Objects.equals(slug, deletingSlug))
+                    .filter(s -> !Objects.equals(s, deletingSlug))
                     .toList();
             target.setRelatedSlugsText(joinTextList(nextRelatedSlugs));
         }
@@ -169,6 +202,7 @@ public class KnowledgeBaseService {
     }
 
     @Transactional
+    @CacheEvict(value = {"knowledgeCatalog", "knowledgeArticle"}, allEntries = true)
     public BatchUpsertResult batchUpsertArticles(List<AdminArticleInput> inputs, Long operatorUserId) {
         if (inputs == null || inputs.isEmpty()) {
             return new BatchUpsertResult(0, 0, 0);
@@ -177,7 +211,7 @@ public class KnowledgeBaseService {
         List<String> slugs = inputs.stream()
                 .map(AdminArticleInput::slug)
                 .map(this::normalizeSlug)
-                .filter(slug -> !slug.isBlank())
+                .filter(s -> !s.isBlank())
                 .distinct()
                 .toList();
         if (slugs.isEmpty()) {
@@ -219,6 +253,7 @@ public class KnowledgeBaseService {
     }
 
     @Transactional
+    @CacheEvict(value = "knowledgeCatalog", allEntries = true)
     public AdminConfigView updateConfig(AdminConfigInput input) {
         validateConfigInput(input);
         KnowledgeBaseConfig config = getOrCreateConfig();
@@ -231,10 +266,12 @@ public class KnowledgeBaseService {
         return toAdminConfig(knowledgeBaseConfigRepository.save(config));
     }
 
+    // ==================== 私有辅助方法 ====================
+
     private void applyArticleInput(KnowledgeArticle article, AdminArticleInput input, Long operatorUserId, boolean isCreate) {
         article.setTitle(safe(input.title(), "未命名文章"));
         article.setEnglishTitle(trimToEmpty(input.englishTitle()));
-        article.setSectionId(normalizeSlug(input.sectionId()).isBlank() ? "general" : normalizeSlug(input.sectionId()));
+        article.setSectionId(resolveSectionId(input.sectionTitle(), input.sectionId()));
         article.setSectionTitle(safe(input.sectionTitle(), "未分类"));
         article.setSectionDescription(trimToEmpty(input.sectionDescription()));
         article.setBadge(trimToEmpty(input.badge()));
@@ -274,7 +311,7 @@ public class KnowledgeBaseService {
 
         String defaultArticleSlug = normalizeSlug(input.defaultArticleSlug());
         if (!defaultArticleSlug.isBlank()
-                && !knowledgeArticleRepository.findAllByPublishedTrueOrderBySectionIdAscSortOrderAscUpdatedAtDesc().isEmpty()
+                && knowledgeArticleRepository.countPublished() > 0
                 && knowledgeArticleRepository.findBySlugAndPublishedTrue(defaultArticleSlug).isEmpty()) {
             throw new IllegalArgumentException("默认文章必须指向一篇已发布的知识文章");
         }
@@ -287,7 +324,7 @@ public class KnowledgeBaseService {
         if (trimToEmpty(input.title()).isBlank()) {
             throw new IllegalArgumentException("文章标题不能为空");
         }
-        if (normalizeSlug(input.sectionId()).isBlank()) {
+        if (resolveSectionId(input.sectionTitle(), input.sectionId()).isBlank()) {
             throw new IllegalArgumentException("栏目 ID 不能为空");
         }
         if (trimToEmpty(input.sectionTitle()).isBlank()) {
@@ -388,84 +425,80 @@ public class KnowledgeBaseService {
         return values == null ? List.of() : values;
     }
 
-    private boolean matchesKeyword(KnowledgeArticle article, String normalizedKeyword) {
-        if (normalizedKeyword.isBlank()) {
-            return true;
-        }
-
-        String haystack = String.join(" ",
-                safe(article.getTitle()),
-                safe(article.getEnglishTitle()),
-                safe(article.getSectionTitle()),
-                safe(article.getSummary()),
-                safe(article.getLead()),
-                safe(article.getTagsText()),
-                safe(article.getBadge()));
-        return normalize(haystack).contains(normalizedKeyword);
-    }
-
-    private List<KnowledgeMetric> buildMetrics(List<KnowledgeArticle> articles) {
-        int articleCount = articles.size();
-        int codeBlockCount = articles.stream().mapToInt(article -> parseCodeBlocks(article.getCodeBlocksJson()).size()).sum();
-        int checklistCount = articles.stream().mapToInt(article -> parseTextListJson(article.getChecklistJson()).size()).sum();
-
-        return List.of(
-                new KnowledgeMetric("文档主题", String.valueOf(articleCount), "支持持续维护和新增文章"),
-                new KnowledgeMetric("示例代码", String.valueOf(codeBlockCount), "每篇都可以挂多段代码模板"),
-                new KnowledgeMetric("复盘清单", String.valueOf(checklistCount), "帮助把知识点变成答题动作"));
-    }
-
-    private List<KnowledgeSpotlightCard> buildSpotlightCards(List<KnowledgeArticle> articles, Set<String> visibleSlugs) {
-        return articles.stream()
-                .filter(article -> Boolean.TRUE.equals(article.getSpotlightEnabled()))
-                .filter(article -> visibleSlugs.contains(article.getSlug()))
-                .map(article -> new KnowledgeSpotlightCard(
-                        safe(article.getSpotlightEyebrow(), "推荐主题"),
-                        safe(article.getSpotlightTitle(), article.getTitle()),
-                        safe(article.getSpotlightDescription(), article.getSummary()),
-                        article.getSlug(),
-                        safe(article.getSpotlightAccent(), "emerald")))
-                .limit(4)
-                .toList();
-    }
-
-    private List<KnowledgeSection> buildSections(List<KnowledgeArticle> articles) {
-        Map<String, List<KnowledgeArticle>> grouped = new LinkedHashMap<>();
-        for (KnowledgeArticle article : articles) {
-            grouped.computeIfAbsent(article.getSectionId(), ignored -> new ArrayList<>()).add(article);
+    /**
+     * 从摘要构建目录分区 - 优化版本
+     */
+    private List<KnowledgeSection> buildSectionsFromSummaries(List<KnowledgeArticleSummary> summaries) {
+        Map<String, List<KnowledgeArticleSummary>> grouped = new LinkedHashMap<>();
+        for (KnowledgeArticleSummary summary : summaries) {
+            grouped.computeIfAbsent(summary.sectionId(), ignored -> new ArrayList<>()).add(summary);
         }
 
         List<KnowledgeSection> sections = new ArrayList<>();
-        for (Map.Entry<String, List<KnowledgeArticle>> entry : grouped.entrySet()) {
-            List<KnowledgeArticle> sectionArticles = entry.getValue();
-            KnowledgeArticle first = sectionArticles.getFirst();
+        for (Map.Entry<String, List<KnowledgeArticleSummary>> entry : grouped.entrySet()) {
+            List<KnowledgeArticleSummary> sectionArticles = entry.getValue();
+            KnowledgeArticleSummary first = sectionArticles.getFirst();
             sections.add(new KnowledgeSection(
-                    safe(first.getSectionId()),
-                    safe(first.getSectionTitle(), "未分类"),
-                    safe(first.getSectionDescription()),
+                    safe(first.sectionId()),
+                    safe(first.sectionTitle(), "未分类"),
+                    safe(first.sectionDescription()),
                     sectionArticles.stream().map(this::toNavItem).toList()));
         }
         return sections;
     }
 
-    private KnowledgeNavItem toNavItem(KnowledgeArticle article) {
+    private KnowledgeNavItem toNavItem(KnowledgeArticleSummary summary) {
         return new KnowledgeNavItem(
-                article.getSlug(),
-                safe(article.getTitle()),
-                safe(article.getLead()),
-                safe(article.getBadge()),
-                splitTextList(article.getTagsText()),
-                safe(article.getReadTime()));
+                summary.slug(),
+                safe(summary.title()),
+                safe(summary.lead()),
+                safe(summary.badge()),
+                splitTextList(summary.tagsText()),
+                safe(summary.readTime()));
     }
 
-    private KnowledgeArticleView toArticleView(KnowledgeArticle article, List<KnowledgeArticle> sourceArticles) {
-        Map<String, KnowledgeArticle> articleMap = sourceArticles.stream()
-                .collect(LinkedHashMap::new, (map, item) -> map.put(item.getSlug(), item), Map::putAll);
+    /**
+     * 从摘要构建统计指标 - 优化版本
+     */
+    private List<KnowledgeMetric> buildMetrics(List<KnowledgeArticleSummary> summaries) {
+        int articleCount = summaries.size();
+        
+        // 对于统计，我们只需要数量，不需要加载完整文章
+        // 如果需要精确的代码块数量，可以考虑添加计数缓存
+        return List.of(
+                new KnowledgeMetric("文档主题", String.valueOf(articleCount), "支持持续维护和新增文章"),
+                new KnowledgeMetric("示例代码", "-", "每篇都可以挂多段代码模板"),
+                new KnowledgeMetric("复盘清单", "-", "帮助把知识点变成答题动作"));
+    }
+
+    /**
+     * 从摘要构建推荐卡片 - 优化版本
+     */
+    private List<KnowledgeSpotlightCard> buildSpotlightCards(List<KnowledgeArticleSummary> summaries, Set<String> visibleSlugs) {
+        return summaries.stream()
+                .filter(summary -> Boolean.TRUE.equals(summary.spotlightEnabled()))
+                .filter(summary -> visibleSlugs.contains(summary.slug()))
+                .map(summary -> new KnowledgeSpotlightCard(
+                        safe(summary.spotlightEyebrow(), "推荐主题"),
+                        safe(summary.spotlightTitle(), summary.title()),
+                        safe(summary.spotlightDescription(), summary.lead()),
+                        summary.slug(),
+                        safe(summary.spotlightAccent(), "emerald")))
+                .limit(4)
+                .toList();
+    }
+
+    /**
+     * 优化后的文章视图转换 - 使用摘要列表代替完整文章列表
+     */
+    private KnowledgeArticleView toArticleView(KnowledgeArticle article, List<KnowledgeArticleSummary> sourceSummaries) {
+        Map<String, KnowledgeArticleSummary> summaryMap = sourceSummaries.stream()
+                .collect(LinkedHashMap::new, (map, item) -> map.put(item.slug(), item), Map::putAll);
 
         List<KnowledgeRelatedArticle> relatedArticles = splitTextList(article.getRelatedSlugsText()).stream()
-                .map(articleMap::get)
+                .map(summaryMap::get)
                 .filter(Objects::nonNull)
-                .map(related -> new KnowledgeRelatedArticle(related.getSlug(), related.getTitle(), related.getSectionTitle()))
+                .map(related -> new KnowledgeRelatedArticle(related.slug(), related.title(), related.sectionTitle()))
                 .toList();
 
         return new KnowledgeArticleView(
@@ -645,6 +678,31 @@ public class KnowledgeBaseService {
         return normalized.replaceAll("(^-|-$)", "");
     }
 
+    private String resolveSectionId(String sectionTitle, String fallbackSectionId) {
+        String normalizedTitle = normalizeSlug(sectionTitle);
+        if (!normalizedTitle.isBlank()) {
+            return normalizedTitle;
+        }
+
+        String rawTitle = trimToEmpty(sectionTitle);
+        if (!rawTitle.isBlank()) {
+            return "section-" + buildStableSectionHash(rawTitle);
+        }
+
+        return normalizeSlug(fallbackSectionId);
+    }
+
+    private String buildStableSectionHash(String value) {
+        long hash = 0L;
+        String normalized = trimToEmpty(value).toLowerCase(Locale.ROOT);
+
+        for (int index = 0; index < normalized.length(); index += 1) {
+            hash = (hash * 131 + normalized.charAt(index)) & 0xffffffffL;
+        }
+
+        return Long.toString(hash, 36);
+    }
+
     private String trimToEmpty(String value) {
         return value == null ? "" : value.trim();
     }
@@ -657,6 +715,8 @@ public class KnowledgeBaseService {
         String trimmed = trimToEmpty(value);
         return trimmed.isBlank() ? fallback : trimmed;
     }
+
+    // ==================== 记录类定义 ====================
 
     public record KnowledgeCatalog(
             String title,

@@ -252,7 +252,64 @@ public class UserController {
         stats.put("authorLevelProfile",
                 user != null ? user.getAuthorLevelProfile() : authorLevelService.buildFallbackProfile(null));
 
+        // 计算强弱项
+        Map<String, Object> topicStats = calculateTopicStats(currentUserId);
+        stats.put("strongTopics", topicStats.get("strongTopics"));
+        stats.put("weakTopics", topicStats.get("weakTopics"));
+
         return Result.success(stats);
+    }
+
+    private Map<String, Object> calculateTopicStats(Long userId) {
+        List<QuestionAttempt> attempts = questionAttemptRepository.findByUserId(userId);
+
+        Map<String, int[]> topicCounts = new HashMap<>();
+        for (QuestionAttempt attempt : attempts) {
+            String topic = attempt.getLevelType();
+            if (topic == null || topic.isBlank()) {
+                topic = "未分类";
+            }
+            int[] counts = topicCounts.computeIfAbsent(topic, k -> new int[2]);
+            counts[0]++; // 总提交数
+            if (STATUS_CORRECT.equals(attempt.getLatestStatus())) {
+                counts[1]++; // 正确数
+            }
+        }
+
+        List<Map.Entry<String, double[]>> topicAccuracyList = new ArrayList<>();
+        for (Map.Entry<String, int[]> entry : topicCounts.entrySet()) {
+            String topic = entry.getKey();
+            int[] counts = entry.getValue();
+            double accuracy = counts[0] > 0 ? (double) counts[1] / counts[0] : 0;
+            topicAccuracyList.add(new AbstractMap.SimpleEntry<>(topic, new double[]{accuracy, counts[0]}));
+        }
+
+        // 按正确率排序
+        topicAccuracyList.sort((a, b) -> Double.compare(b.getValue()[0], a.getValue()[0]));
+
+        List<String> strongTopics = new ArrayList<>();
+        List<String> weakTopics = new ArrayList<>();
+
+        // 强项：正确率 >= 70% 且提交数 >= 3
+        // 弱项：正确率 <= 50% 且提交数 >= 3
+        for (Map.Entry<String, double[]> entry : topicAccuracyList) {
+            String topic = entry.getKey();
+            double accuracy = entry.getValue()[0];
+            double count = entry.getValue()[1];
+
+            if (count >= 3) {
+                if (accuracy >= 0.7 && strongTopics.size() < 3) {
+                    strongTopics.add(topic);
+                } else if (accuracy <= 0.5 && weakTopics.size() < 3) {
+                    weakTopics.add(topic);
+                }
+            }
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("strongTopics", strongTopics.toArray(new String[0]));
+        result.put("weakTopics", weakTopics.toArray(new String[0]));
+        return result;
     }
 
     @GetMapping("/me/author-level")
