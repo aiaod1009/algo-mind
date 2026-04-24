@@ -1,5 +1,5 @@
 <template>
-  <div ref="pointer" class="pointer" :class="{ 'is-active': isActive }" aria-hidden="true">
+  <div v-if="isEnabled" ref="pointer" class="pointer" :class="{ 'is-active': isActive }" aria-hidden="true">
     <div></div>
     <div></div>
     <div></div>
@@ -11,10 +11,12 @@
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+const STORAGE_KEY = 'magnetic-pointer-enabled'
 const route = useRoute()
 const pointer = ref(null)
 const currentTarget = ref(null)
 const isActive = ref(false)
+const isEnabled = ref(false)
 const lastPointerPosition = ref({
   x: typeof window === 'undefined' ? 0 : Math.round(window.innerWidth / 2),
   y: typeof window === 'undefined' ? 0 : Math.round(window.innerHeight / 2),
@@ -22,6 +24,28 @@ const lastPointerPosition = ref({
 
 const DEFAULT_POINTER_SIZE = '4rem'
 const TARGET_SELECTOR = '._target, .el-sub-menu__title'
+
+const loadEnabledState = () => {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY)
+    return stored === 'true'
+  } catch {
+    return false
+  }
+}
+
+const handleToggleEvent = (event) => {
+  if (event?.detail && typeof event.detail.enabled === 'boolean') {
+    isEnabled.value = event.detail.enabled
+    if (!isEnabled.value) {
+      clearCurrentTarget()
+    }
+  }
+}
 
 const setPointerSize = (width = DEFAULT_POINTER_SIZE, height = DEFAULT_POINTER_SIZE) => {
   if (!pointer.value) {
@@ -105,6 +129,13 @@ const move = (event) => {
     y: event.clientY,
   }
 
+  const target = getClosestMagneticTarget(event.target)
+  if (target) {
+    applyMagneticTarget(target)
+  } else if (currentTarget.value && !currentTarget.value.contains(event.target)) {
+    clearCurrentTarget()
+  }
+
   let x = event.clientX
   let y = event.clientY
 
@@ -128,28 +159,6 @@ const move = (event) => {
   updatePointerPosition(x, y)
 }
 
-const handlePointerOver = (event) => {
-  const target = getClosestMagneticTarget(event?.target)
-  if (target) {
-    applyMagneticTarget(target)
-  }
-}
-
-const handlePointerOut = (event) => {
-  const target = getClosestMagneticTarget(event?.target)
-  if (!target || currentTarget.value !== target) {
-    return
-  }
-
-  const nextTarget = getClosestMagneticTarget(event?.relatedTarget)
-  if (nextTarget) {
-    applyMagneticTarget(nextTarget)
-    return
-  }
-
-  clearCurrentTarget()
-}
-
 const handleWindowBlur = () => {
   clearCurrentTarget()
 }
@@ -170,13 +179,19 @@ watch(
 )
 
 onMounted(() => {
+  isEnabled.value = loadEnabledState()
+
+  window.addEventListener('magnetic-pointer-toggle', handleToggleEvent)
+
+  if (!isEnabled.value) {
+    return
+  }
+
   setPointerSize()
   updatePointerPosition(lastPointerPosition.value.x, lastPointerPosition.value.y)
 
   window.addEventListener('pointermove', move, { passive: true })
   window.addEventListener('blur', handleWindowBlur)
-  document.addEventListener('pointerover', handlePointerOver, true)
-  document.addEventListener('pointerout', handlePointerOut, true)
   document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
@@ -184,9 +199,25 @@ onUnmounted(() => {
   clearCurrentTarget()
   window.removeEventListener('pointermove', move)
   window.removeEventListener('blur', handleWindowBlur)
-  document.removeEventListener('pointerover', handlePointerOver, true)
-  document.removeEventListener('pointerout', handlePointerOut, true)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('magnetic-pointer-toggle', handleToggleEvent)
+})
+
+watch(isEnabled, async (newValue) => {
+  if (newValue) {
+    await nextTick()
+    setPointerSize()
+    updatePointerPosition(lastPointerPosition.value.x, lastPointerPosition.value.y)
+
+    window.addEventListener('pointermove', move, { passive: true })
+    window.addEventListener('blur', handleWindowBlur)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+  } else {
+    clearCurrentTarget()
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('blur', handleWindowBlur)
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }
 })
 </script>
 

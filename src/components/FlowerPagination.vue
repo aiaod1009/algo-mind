@@ -12,7 +12,7 @@
     <div 
       class="flower-container" 
       :class="{ 'is-active': isExpanded }"
-      @wheel.prevent="handleWheel"
+      @wheel="handleWheel"
     >
       <div class="flower-wheel">
         <div 
@@ -136,7 +136,14 @@ const getPetalStyle = (index) => {
 
 let isScrolling = false
 const handleWheel = (e) => {
-  if (!isExpanded.value || isScrolling) return
+  if (!isExpanded.value) return
+  
+  if (isScrolling) {
+    e.preventDefault()
+    return
+  }
+  
+  e.preventDefault()
   isScrolling = true
   setTimeout(() => { isScrolling = false }, 100)
 

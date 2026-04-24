@@ -7,6 +7,7 @@ import AppFooter from './components/AppFooter.vue'
 import AIAssistant from './components/AIAssistant.vue'
 import FloatingAIAssistant from './components/FloatingAIAssistant.vue'
 import MagneticPointer from './components/MagneticPointer.vue'
+import MagneticPointerToggle from './components/MagneticPointerToggle.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,6 +17,7 @@ const isAuthPage = computed(() => ['/', '/register'].includes(route.path))
 const showTopbar = computed(() => !isAuthPage.value)
 const showFloatingAssistant = computed(() => !!userStore.userInfo?.token && !isAuthPage.value)
 const canUseTextAnalysis = computed(() => !!userStore.userInfo?.token && !isAuthPage.value)
+const showMagneticPointerToggle = computed(() => route.path.startsWith('/knowledge-base'))
 
 const menuItems = [
   { path: '/home', label: '学习计划' },
@@ -423,6 +425,7 @@ const toggleTheme = () => {
     <FloatingAIAssistant v-if="showFloatingAssistant" ref="aiAssistantRef" />
   </div>
   <MagneticPointer />
+  <MagneticPointerToggle v-if="showMagneticPointerToggle" />
 </template>
 
 <style scoped>

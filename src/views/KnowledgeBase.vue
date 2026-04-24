@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<script setup>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -6,6 +6,7 @@ import api from '../api'
 import { useUserStore } from '../stores/user'
 import FlowerPagination from '../components/FlowerPagination.vue'
 import CodeBlock from '../components/CodeBlock.vue'
+import AlgorithmKnowledgeGraph from '../components/AlgorithmKnowledgeGraph.vue'
 import {
   KNOWLEDGE_ADMIN_DASHBOARD_CACHE_KEY,
   KNOWLEDGE_ADMIN_DASHBOARD_CACHE_TTL,
@@ -148,6 +149,7 @@ const loadingArticle = ref(false)
 const errorMessage = ref('')
 const showRelatedPanel = ref(false)
 let relatedPanelTimer = null
+const graphOverlayOpen = ref(false)
 
 const articleCache = new Map()
 let catalogRequestId = 0
@@ -1388,6 +1390,34 @@ watch(
               </ul>
             </div>
           </section>
+
+          <button
+            class="graph-trigger-bar"
+            :class="{ 'is-active': graphOverlayOpen }"
+            type="button"
+            @click="graphOverlayOpen = !graphOverlayOpen"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="6" cy="6" r="2.5"/>
+              <circle cx="18" cy="6" r="2.5"/>
+              <circle cx="12" cy="18" r="2.5"/>
+              <line x1="7.8" y1="7.5" x2="10.5" y2="16"/>
+              <line x1="16.2" y1="7.5" x2="13.5" y2="16"/>
+              <line x1="8.5" y1="6" x2="15.5" y2="6"/>
+            </svg>
+          </button>
+
+          <Transition name="graph-overlay">
+            <div v-if="graphOverlayOpen" class="graph-overlay">
+              <button class="graph-overlay-close" type="button" @click="graphOverlayOpen = false">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                </svg>
+              </button>
+              <AlgorithmKnowledgeGraph />
+            </div>
+          </Transition>
         </article>
 
       </main>
@@ -2970,6 +3000,139 @@ watch(
 @media (max-width: 560px) {
   .knowledge-map-board {
     grid-template-columns: 1fr;
+  }
+}
+
+.article-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.graph-trigger-bar {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 6px;
+  height: 72px;
+  border: none;
+  border-radius: 6px 0 0 6px;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: -2px 0 12px rgba(16, 42, 67, 0.08);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+             background 0.25s ease,
+             box-shadow 0.25s ease;
+  color: var(--kb-muted, #5f7286);
+  outline: none;
+}
+
+.graph-trigger-bar:hover,
+.graph-trigger-bar.is-active {
+  width: 32px;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: -4px 0 20px rgba(16, 42, 67, 0.12);
+  color: var(--kb-emerald, #1ea97c);
+}
+
+.graph-trigger-bar svg {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.graph-trigger-bar:hover svg,
+.graph-trigger-bar.is-active svg {
+  opacity: 1;
+}
+
+.graph-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: inset 0 0 0 1px rgba(154, 178, 196, 0.18);
+  overflow: hidden;
+}
+
+.graph-overlay-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 2px 12px rgba(16, 42, 67, 0.1);
+  cursor: pointer;
+  color: var(--kb-muted, #5f7286);
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  outline: none;
+}
+
+.graph-overlay-close:hover {
+  background: rgba(255, 255, 255, 1);
+  color: var(--kb-text, #123047);
+  transform: scale(1.05);
+}
+
+.graph-overlay-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.graph-placeholder {
+  margin: 0;
+  font-size: 15px;
+  color: var(--kb-muted, #5f7286);
+  letter-spacing: 0.02em;
+}
+
+.graph-overlay-enter-active {
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.graph-overlay-leave-active {
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.graph-overlay-enter-from {
+  opacity: 0;
+  transform: translateX(40px);
+}
+
+.graph-overlay-leave-to {
+  opacity: 0;
+  transform: translateX(40px);
+}
+
+@media (max-width: 768px) {
+  .graph-trigger-bar:hover,
+  .graph-trigger-bar.is-active {
+    width: 28px;
   }
 }
 </style>

@@ -33,21 +33,12 @@ const visible = computed({
 
 const activeTab = ref('analysis')
 
-// 阻止背景页面滚动的处理函数
-const preventBodyScroll = (e) => {
-  e.preventDefault()
-}
-
-// 控制背景页面滚动
+// 控制背景页面滚动（只使用 overflow，不阻止 wheel 事件）
 const toggleBodyScroll = (shouldPrevent) => {
   if (shouldPrevent) {
     document.body.style.overflow = 'hidden'
-    document.body.addEventListener('wheel', preventBodyScroll, { passive: false })
-    document.body.addEventListener('touchmove', preventBodyScroll, { passive: false })
   } else {
     document.body.style.overflow = ''
-    document.body.removeEventListener('wheel', preventBodyScroll)
-    document.body.removeEventListener('touchmove', preventBodyScroll)
   }
 }
 
