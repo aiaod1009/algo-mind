@@ -21,6 +21,6 @@ RUN mkdir -p /www/algo-mind/uploads/avatars /www/algo-mind/uploads/chat-files &&
 
 USER appuser
 
-EXPOSE 8000
+EXPOSE 8080
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
