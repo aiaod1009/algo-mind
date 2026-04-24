@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Component
@@ -25,6 +26,10 @@ public class LevelOptionsMigrationRunner implements CommandLineRunner {
 
   private final DataSource dataSource;
   private final ObjectMapper objectMapper;
+
+  private static final Map<Long, List<String>> DEFAULT_OPTIONS = Map.of(
+      5L, List.of("O(n)", "O(n²)", "O(n*m)", "O(n+m)")
+  );
 
   @Override
   @Transactional
@@ -35,9 +40,6 @@ public class LevelOptionsMigrationRunner implements CommandLineRunner {
       }
 
       Map<Long, List<String>> rowsByLevel = loadOptionsRows();
-      if (rowsByLevel.isEmpty()) {
-        return;
-      }
 
       int migratedLevels = 0;
       int migratedRows = 0;
@@ -71,6 +73,29 @@ public class LevelOptionsMigrationRunner implements CommandLineRunner {
 
           migratedLevels++;
           migratedRows += parsed.options.size();
+        }
+
+        Set<Long> levelsWithOptions = rowsByLevel.keySet();
+        for (Map.Entry<Long, List<String>> entry : DEFAULT_OPTIONS.entrySet()) {
+          Long levelId = entry.getKey();
+          if (levelsWithOptions.contains(levelId)) {
+            continue;
+          }
+
+          List<String> options = entry.getValue();
+          try (var insertStmt = connection
+              .prepareStatement("INSERT INTO t_level_options(level_id, options) VALUES (?, ?)")) {
+            for (String option : options) {
+              insertStmt.setLong(1, levelId);
+              insertStmt.setString(2, option);
+              insertStmt.addBatch();
+            }
+            insertStmt.executeBatch();
+          }
+
+          migratedLevels++;
+          migratedRows += options.size();
+          log.info("已为关卡 {} 添加缺失的 {} 个选项", levelId, options.size());
         }
       }
 

@@ -129,7 +129,11 @@ public class KnowledgeBaseController {
         if (adminUser.isEmpty()) {
             return unauthorizedResult();
         }
-        return Result.success(knowledgeBaseService.updateConfig(input));
+        try {
+            return Result.success(knowledgeBaseService.updateConfig(input));
+        } catch (IllegalArgumentException exception) {
+            return Result.fail(40001, exception.getMessage());
+        }
     }
 
     private Optional<User> requireAdminUser() {

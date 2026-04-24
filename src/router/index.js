@@ -12,6 +12,7 @@ import ForumPost from '../views/ForumPost.vue'
 import Register from '../views/Register.vue'
 import CodeHistory from '../views/CodeHistory.vue'
 import KnowledgeBase from '../views/KnowledgeBase.vue'
+const KnowledgeBaseAdmin = () => import('../views/KnowledgeBaseAdmin.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -105,6 +106,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/knowledge-base/admin',
+      name: 'knowledge-base-admin',
+      component: KnowledgeBaseAdmin,
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
       path: '/private-message',
       name: 'private-message',
       component: () => import('../views/PrivateMessage.vue'),
@@ -114,8 +121,22 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  const user = localStorage.getItem('user')
-  if (to.meta.requiresAuth && !user) {
+  const userRaw = localStorage.getItem('user')
+  if (to.meta.requiresAuth && !userRaw) {
+    return '/'
+  }
+
+  if (!to.meta.requiresAdmin) {
+    return undefined
+  }
+
+  try {
+    const user = JSON.parse(userRaw || '{}')
+    const isAdmin = Boolean(user?.isAdmin) || user?.email === 'admin@example.com'
+    if (!isAdmin) {
+      return '/knowledge-base'
+    }
+  } catch (error) {
     return '/'
   }
 })

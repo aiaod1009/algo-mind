@@ -104,6 +104,8 @@ public class KnowledgeBaseService {
             throw new IllegalArgumentException("slug 已存在，请换一个");
         }
 
+        validateArticleInput(input, slug, null, collectAvailableSlugs(List.of(slug)));
+
         KnowledgeArticle article = new KnowledgeArticle();
         applyArticleInput(article, input, operatorUserId, true);
         article.setSlug(slug);
@@ -133,7 +135,37 @@ public class KnowledgeBaseService {
         if (!knowledgeArticleRepository.existsById(id)) {
             throw new NoSuchElementException("知识库文章不存在: " + id);
         }
-        knowledgeArticleRepository.deleteById(id);
+
+        KnowledgeArticle article = knowledgeArticleRepository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("鐭ヨ瘑搴撴枃绔犱笉瀛樺湪: " + id));
+        String deletingSlug = article.getSlug();
+
+        KnowledgeBaseConfig config = getOrCreateConfig();
+        if (Objects.equals(config.getDefaultArticleSlug(), deletingSlug)) {
+            String nextDefaultSlug = knowledgeArticleRepository.findAllByPublishedTrueOrderBySectionIdAscSortOrderAscUpdatedAtDesc().stream()
+                    .filter(item -> !Objects.equals(item.getId(), id))
+                    .map(KnowledgeArticle::getSlug)
+                    .findFirst()
+                    .orElse("");
+            config.setDefaultArticleSlug(nextDefaultSlug);
+            knowledgeBaseConfigRepository.save(config);
+        }
+
+        List<KnowledgeArticle> articlesToRepair = knowledgeArticleRepository.findAllByOrderBySectionIdAscSortOrderAscUpdatedAtDesc().stream()
+                .filter(item -> !Objects.equals(item.getId(), id))
+                .filter(item -> splitTextList(item.getRelatedSlugsText()).contains(deletingSlug))
+                .toList();
+        for (KnowledgeArticle target : articlesToRepair) {
+            List<String> nextRelatedSlugs = normalizeSlugList(splitTextList(target.getRelatedSlugsText())).stream()
+                    .filter(slug -> !Objects.equals(slug, deletingSlug))
+                    .toList();
+            target.setRelatedSlugsText(joinTextList(nextRelatedSlugs));
+        }
+        if (!articlesToRepair.isEmpty()) {
+            knowledgeArticleRepository.saveAll(articlesToRepair);
+        }
+
+        knowledgeArticleRepository.delete(article);
     }
 
     @Transactional
@@ -154,6 +186,7 @@ public class KnowledgeBaseService {
 
         Map<String, KnowledgeArticle> existingBySlug = knowledgeArticleRepository.findAllBySlugIn(slugs).stream()
                 .collect(LinkedHashMap::new, (map, article) -> map.put(article.getSlug(), article), Map::putAll);
+        Set<String> availableSlugs = collectAvailableSlugs(slugs);
 
         int inserted = 0;
         int updated = 0;
@@ -163,8 +196,10 @@ public class KnowledgeBaseService {
             if (slug.isBlank()) {
                 throw new IllegalArgumentException("slug must not be blank");
             }
+            KnowledgeArticle existingArticle = existingBySlug.get(slug);
+            validateArticleInput(input, slug, existingArticle == null ? null : existingArticle.getId(), availableSlugs);
 
-            KnowledgeArticle article = existingBySlug.get(slug);
+            KnowledgeArticle article = existingArticle;
             boolean isCreate = article == null;
             if (isCreate) {
                 article = new KnowledgeArticle();
@@ -185,13 +220,14 @@ public class KnowledgeBaseService {
 
     @Transactional
     public AdminConfigView updateConfig(AdminConfigInput input) {
+        validateConfigInput(input);
         KnowledgeBaseConfig config = getOrCreateConfig();
         config.setSiteTitle(safe(input.siteTitle(), "AlgoMind 知识库"));
         config.setSiteSubtitle(safe(input.siteSubtitle(), "把高频算法与工程知识点整理成可持续维护的学习文档。"));
         config.setEmptyStateTitle(safe(input.emptyStateTitle(), "没有找到匹配的知识主题"));
         config.setEmptyStateDescription(safe(input.emptyStateDescription(), "试试换一个关键词，或者先从左侧目录选一篇文章开始阅读。"));
         config.setDefaultArticleSlug(normalizeSlug(input.defaultArticleSlug()));
-        config.setQuickSearchesText(joinTextList(input.quickSearches()));
+        config.setQuickSearchesText(joinTextList(normalizeTextList(input.quickSearches())));
         return toAdminConfig(knowledgeBaseConfigRepository.save(config));
     }
 
@@ -206,24 +242,150 @@ public class KnowledgeBaseService {
         article.setLead(trimToEmpty(input.lead()));
         article.setComplexity(trimToEmpty(input.complexity()));
         article.setReadTime(trimToEmpty(input.readTime()));
-        article.setTagsText(joinTextList(input.tags()));
+        article.setTagsText(joinTextList(normalizeTextList(input.tags())));
         article.setLearningObjectivesJson(toJson(input.learningObjectives()));
         article.setStrategyStepsJson(toJson(input.strategySteps()));
         article.setInsightsJson(toJson(input.insights()));
         article.setCodeBlocksJson(toJson(input.codeBlocks()));
         article.setChecklistJson(toJson(input.checklist()));
-        article.setRelatedSlugsText(joinTextList(input.relatedArticleSlugs()));
+        article.setRelatedSlugsText(joinTextList(normalizeSlugList(input.relatedArticleSlugs())));
         article.setSpotlightEnabled(Boolean.TRUE.equals(input.spotlightEnabled()));
         article.setSpotlightEyebrow(trimToEmpty(input.spotlightEyebrow()));
         article.setSpotlightTitle(trimToEmpty(input.spotlightTitle()));
         article.setSpotlightDescription(trimToEmpty(input.spotlightDescription()));
-        article.setSpotlightAccent(trimToEmpty(input.spotlightAccent()));
+        article.setSpotlightAccent(resolveSpotlightAccent(input.spotlightAccent()));
         article.setPublished(Boolean.TRUE.equals(input.published()));
         article.setSortOrder(input.sortOrder() == null ? 0 : input.sortOrder());
         if (isCreate) {
             article.setCreatedByUserId(operatorUserId);
         }
         article.setUpdatedByUserId(operatorUserId);
+    }
+
+    private void validateConfigInput(AdminConfigInput input) {
+        if (trimToEmpty(input.siteTitle()).isBlank()) {
+            throw new IllegalArgumentException("站点标题不能为空");
+        }
+
+        List<String> quickSearches = normalizeTextList(input.quickSearches());
+        if (quickSearches.size() > 12) {
+            throw new IllegalArgumentException("推荐搜索最多保留 12 个关键词");
+        }
+
+        String defaultArticleSlug = normalizeSlug(input.defaultArticleSlug());
+        if (!defaultArticleSlug.isBlank()
+                && !knowledgeArticleRepository.findAllByPublishedTrueOrderBySectionIdAscSortOrderAscUpdatedAtDesc().isEmpty()
+                && knowledgeArticleRepository.findBySlugAndPublishedTrue(defaultArticleSlug).isEmpty()) {
+            throw new IllegalArgumentException("默认文章必须指向一篇已发布的知识文章");
+        }
+    }
+
+    private void validateArticleInput(AdminArticleInput input, String slug, Long currentId, Set<String> availableSlugs) {
+        if (slug.isBlank()) {
+            throw new IllegalArgumentException("slug 不能为空");
+        }
+        if (trimToEmpty(input.title()).isBlank()) {
+            throw new IllegalArgumentException("文章标题不能为空");
+        }
+        if (normalizeSlug(input.sectionId()).isBlank()) {
+            throw new IllegalArgumentException("栏目 ID 不能为空");
+        }
+        if (trimToEmpty(input.sectionTitle()).isBlank()) {
+            throw new IllegalArgumentException("栏目名称不能为空");
+        }
+        if (input.sortOrder() != null && input.sortOrder() < 0) {
+            throw new IllegalArgumentException("排序值不能为负数");
+        }
+
+        List<String> relatedSlugs = normalizeSlugList(input.relatedArticleSlugs());
+        if (relatedSlugs.contains(slug)) {
+            throw new IllegalArgumentException("相关文章不能引用自己");
+        }
+        if (Boolean.TRUE.equals(input.spotlightEnabled())) {
+            if (trimToEmpty(input.spotlightTitle()).isBlank()) {
+                throw new IllegalArgumentException("启用推荐位时必须填写推荐标题");
+            }
+            if (trimToEmpty(input.spotlightDescription()).isBlank()) {
+                throw new IllegalArgumentException("启用推荐位时必须填写推荐描述");
+            }
+        }
+
+        for (KnowledgeStep step : safeList(input.strategySteps())) {
+            boolean hasAnyValue = !trimToEmpty(step.index()).isBlank()
+                    || !trimToEmpty(step.title()).isBlank()
+                    || !trimToEmpty(step.description()).isBlank()
+                    || !trimToEmpty(step.badge()).isBlank();
+            if (hasAnyValue && (trimToEmpty(step.title()).isBlank() || trimToEmpty(step.description()).isBlank())) {
+                throw new IllegalArgumentException("每个步骤都需要同时填写标题和描述");
+            }
+        }
+
+        for (KnowledgeInsight insight : safeList(input.insights())) {
+            boolean hasAnyValue = !trimToEmpty(insight.title()).isBlank()
+                    || !trimToEmpty(insight.description()).isBlank();
+            if (hasAnyValue && (trimToEmpty(insight.title()).isBlank() || trimToEmpty(insight.description()).isBlank())) {
+                throw new IllegalArgumentException("每条洞察都需要同时填写标题和描述");
+            }
+            if (!trimToEmpty(insight.accent()).isBlank()
+                    && !List.of("emerald", "cyan", "amber").contains(trimToEmpty(insight.accent()))) {
+                throw new IllegalArgumentException("洞察主题色仅支持 emerald、cyan、amber");
+            }
+        }
+
+        for (KnowledgeCodeBlock codeBlock : safeList(input.codeBlocks())) {
+            boolean hasAnyValue = !trimToEmpty(codeBlock.language()).isBlank()
+                    || !trimToEmpty(codeBlock.title()).isBlank()
+                    || !trimToEmpty(codeBlock.code()).isBlank()
+                    || !safeList(codeBlock.callouts()).isEmpty();
+            if (hasAnyValue && (trimToEmpty(codeBlock.title()).isBlank() || trimToEmpty(codeBlock.code()).isBlank())) {
+                throw new IllegalArgumentException("代码块需要同时填写标题和代码");
+            }
+        }
+    }
+
+    private Set<String> collectAvailableSlugs(Collection<String> currentInputSlugs) {
+        Set<String> slugs = knowledgeArticleRepository.findAllByOrderBySectionIdAscSortOrderAscUpdatedAtDesc().stream()
+                .map(KnowledgeArticle::getSlug)
+                .collect(LinkedHashSet::new, Set::add, Set::addAll);
+        slugs.addAll(normalizeSlugList(currentInputSlugs));
+        return slugs;
+    }
+
+    private List<String> normalizeSlugList(Collection<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .map(this::normalizeSlug)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private List<String> normalizeTextList(Collection<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .map(this::trimToEmpty)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private String resolveSpotlightAccent(String value) {
+        String accent = trimToEmpty(value);
+        if (accent.isBlank()) {
+            return "emerald";
+        }
+        if (!List.of("emerald", "cyan", "amber").contains(accent)) {
+            throw new IllegalArgumentException("推荐位主题色仅支持 emerald、cyan、amber");
+        }
+        return accent;
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? List.of() : values;
     }
 
     private boolean matchesKeyword(KnowledgeArticle article, String normalizedKeyword) {

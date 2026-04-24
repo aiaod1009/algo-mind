@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
 import { confirmInfo, confirmWarning } from '../composables/useConfirm.js'
 import { message } from '../composables/useMessage.js'
 import api from '../api'
@@ -1019,7 +1020,7 @@ watch(
         <ChallengeAnswerPane v-model:answer="answer" v-model:language="language" v-model:stdin-input="stdinInput"
           :level="currentLevel" :is-code-challenge="isCodeChallenge" :loading="loading" :max-attempts="maxAttempts"
           :attempts-in-run="attemptsInRun" :pass-score="CODE_PASS_SCORE" :type-label="typeLabelMap[currentLevel.type]"
-          @save-draft="handleSaveDraft" @quick-run="handleQuickRun" @run-only="runCodeOnly" @reset-template="handleResetTemplate" @git-it="handleGitIt" />
+          @submit="handleSubmit" @save-draft="handleSaveDraft" @quick-run="handleQuickRun" @run-only="runCodeOnly" @reset-template="handleResetTemplate" @git-it="handleGitIt" />
 
         <section v-if="showRunPanel" class="surface-card run-result-panel">
           <div class="run-result-head">

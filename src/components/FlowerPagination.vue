@@ -82,6 +82,13 @@ const changePage = (step) => {
   emit('change', next)
 }
 
+const syncPageState = (page) => {
+  const safePage = Math.min(Math.max(page || 1, 1), totalPages.value || 1)
+  currentPage.value = safePage
+  activeWheelPage.value = safePage
+  wheelRotation.value = -(safePage - 1) * degreesPerPetal
+}
+
 const openFlower = () => {
   suppressFalling = true
   activeWheelPage.value = currentPage.value
@@ -154,6 +161,20 @@ watch(activeWheelPage, (newVal, oldVal) => {
   }
 })
 
+watch(
+  () => props.defaultPage,
+  (page) => {
+    syncPageState(page)
+  },
+)
+
+watch(
+  () => props.total,
+  () => {
+    syncPageState(currentPage.value)
+  },
+)
+
 let petalIdCounter = 0
 
 const spawnFallingPetal = (pageNum) => {
@@ -177,6 +198,7 @@ const handleClickOutside = (e) => {
 }
 
 onMounted(() => {
+  syncPageState(props.defaultPage)
   document.addEventListener('mousedown', handleClickOutside)
 })
 

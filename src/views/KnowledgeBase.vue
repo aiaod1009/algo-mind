@@ -1,10 +1,22 @@
-<script setup>
+﻿<script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '../api'
 import { useUserStore } from '../stores/user'
 import FlowerPagination from '../components/FlowerPagination.vue'
+import CodeBlock from '../components/CodeBlock.vue'
+import {
+  KNOWLEDGE_ADMIN_DASHBOARD_CACHE_KEY,
+  KNOWLEDGE_ADMIN_DASHBOARD_CACHE_TTL,
+  buildKnowledgeAdminStats,
+  normalizeKnowledgeSlug,
+  readTimedCache,
+  serializeComparable,
+  validateKnowledgeAdminArticle,
+  validateKnowledgeAdminConfig,
+  writeTimedCache,
+} from '../utils/knowledgeBaseAdmin'
 
 const route = useRoute()
 const router = useRouter()
@@ -148,6 +160,13 @@ const adminSavingConfig = ref(false)
 const adminSavingArticle = ref(false)
 const adminDeletingArticle = ref(false)
 const selectedAdminArticleId = ref(null)
+const adminErrorMessage = ref('')
+const adminListKeyword = ref('')
+const adminStatusFilter = ref('all')
+const adminConfigBaseline = ref(serializeComparable(createEmptyAdminConfig()))
+const adminArticleBaseline = ref(serializeComparable(createEmptyArticleForm()))
+
+const adminArticleDetailCache = new Map()
 
 const routeKeyword = computed(() => String(route.query.keyword || '').trim())
 const routeArticleSlug = computed(() => String(route.query.article || '').trim())
@@ -250,6 +269,33 @@ const adminArticles = computed(() => adminDashboard.value.articles || [])
 const isAdmin = computed(() =>
   Boolean(userStore.userInfo?.isAdmin) || userStore.userInfo?.email === 'admin@example.com',
 )
+const adminStats = computed(() => buildKnowledgeAdminStats(adminArticles.value))
+const filteredAdminArticles = computed(() => {
+  const keyword = adminListKeyword.value.trim().toLowerCase()
+
+  return adminArticles.value.filter((item) => {
+    const matchesKeyword = !keyword
+      || item.title?.toLowerCase().includes(keyword)
+      || item.slug?.toLowerCase().includes(keyword)
+      || item.sectionTitle?.toLowerCase().includes(keyword)
+    const matchesStatus = adminStatusFilter.value === 'all'
+      || (adminStatusFilter.value === 'published' && item.published)
+      || (adminStatusFilter.value === 'draft' && !item.published)
+      || (adminStatusFilter.value === 'spotlight' && item.spotlightEnabled)
+
+    return matchesKeyword && matchesStatus
+  })
+})
+const adminConfigValidation = computed(() =>
+  validateKnowledgeAdminConfig(adminConfigForm.value, adminArticles.value),
+)
+const adminArticleValidation = computed(() =>
+  validateKnowledgeAdminArticle(
+    adminArticleForm.value,
+    adminArticles.value,
+    selectedAdminArticleId.value,
+  ),
+)
 
 const toTextLines = (value) => value
   .split('\n')
@@ -260,6 +306,17 @@ const toCommaItems = (value) => value
   .split(/[，,]/)
   .map((item) => item.trim())
   .filter(Boolean)
+
+const getSessionStorage = () => (typeof window !== 'undefined' ? window.sessionStorage : null)
+
+const buildAdminConfigPayload = (validation = adminConfigValidation.value) => ({
+  siteTitle: adminConfigForm.value.siteTitle.trim(),
+  siteSubtitle: adminConfigForm.value.siteSubtitle.trim(),
+  emptyStateTitle: adminConfigForm.value.emptyStateTitle.trim(),
+  emptyStateDescription: adminConfigForm.value.emptyStateDescription.trim(),
+  defaultArticleSlug: validation.normalized.defaultArticleSlug,
+  quickSearches: validation.normalized.quickSearches,
+})
 
 const setAdminArticleForm = (payload = {}) => {
   adminArticleForm.value = {
@@ -293,6 +350,128 @@ const setAdminArticleForm = (payload = {}) => {
         : [],
       createEmptyCodeBlock,
     ),
+  }
+}
+
+const buildAdminArticlePayload = (validation = adminArticleValidation.value) => ({
+  slug: validation.normalized.slug,
+  title: adminArticleForm.value.title.trim(),
+  englishTitle: adminArticleForm.value.englishTitle.trim(),
+  sectionId: validation.normalized.sectionId,
+  sectionTitle: adminArticleForm.value.sectionTitle.trim(),
+  sectionDescription: adminArticleForm.value.sectionDescription.trim(),
+  badge: adminArticleForm.value.badge.trim(),
+  summary: adminArticleForm.value.summary.trim(),
+  lead: adminArticleForm.value.lead.trim(),
+  complexity: adminArticleForm.value.complexity.trim(),
+  readTime: adminArticleForm.value.readTime.trim(),
+  tags: toCommaItems(adminArticleForm.value.tagsText),
+  learningObjectives: toTextLines(adminArticleForm.value.learningObjectivesText),
+  checklist: toTextLines(adminArticleForm.value.checklistText),
+  relatedArticleSlugs: validation.normalized.relatedSlugs,
+  spotlightEnabled: Boolean(adminArticleForm.value.spotlightEnabled),
+  spotlightEyebrow: adminArticleForm.value.spotlightEyebrow.trim(),
+  spotlightTitle: adminArticleForm.value.spotlightTitle.trim(),
+  spotlightDescription: adminArticleForm.value.spotlightDescription.trim(),
+  spotlightAccent: adminArticleForm.value.spotlightAccent.trim(),
+  published: Boolean(adminArticleForm.value.published),
+  sortOrder: Number(adminArticleForm.value.sortOrder || 0),
+  strategySteps: adminArticleForm.value.strategySteps
+    .map((step, index) => ({
+      index: (step.index || `${index + 1}`.padStart(2, '0')).trim(),
+      title: step.title.trim(),
+      description: step.description.trim(),
+      badge: step.badge.trim(),
+    }))
+    .filter((step) => step.title || step.description),
+  insights: adminArticleForm.value.insights
+    .map((insight) => ({
+      title: insight.title.trim(),
+      description: insight.description.trim(),
+      accent: (insight.accent || 'emerald').trim(),
+    }))
+    .filter((insight) => insight.title || insight.description),
+  codeBlocks: adminArticleForm.value.codeBlocks
+    .map((block) => ({
+      language: block.language.trim(),
+      title: block.title.trim(),
+      code: block.code,
+      callouts: toTextLines(block.calloutsText || ''),
+    }))
+    .filter((block) => block.title || block.code),
+})
+
+const snapshotAdminConfig = () => serializeComparable(buildAdminConfigPayload())
+const snapshotAdminArticle = () => serializeComparable(buildAdminArticlePayload())
+
+const syncAdminConfigBaseline = () => {
+  adminConfigBaseline.value = snapshotAdminConfig()
+}
+
+const syncAdminArticleBaseline = () => {
+  adminArticleBaseline.value = snapshotAdminArticle()
+}
+
+const adminHasDirtyConfig = computed(() => snapshotAdminConfig() !== adminConfigBaseline.value)
+const adminHasDirtyArticle = computed(() => snapshotAdminArticle() !== adminArticleBaseline.value)
+const adminPendingChangesCount = computed(() =>
+  Number(adminHasDirtyConfig.value) + Number(adminHasDirtyArticle.value),
+)
+const adminStatusText = computed(() => {
+  if (adminLoading.value) {
+    return '管理台数据同步中...'
+  }
+  if (adminErrorMessage.value) {
+    return adminErrorMessage.value
+  }
+  if (adminHasDirtyArticle.value && adminArticleValidation.value.errors.length) {
+    return `当前文章还有 ${adminArticleValidation.value.errors.length} 个待修正项`
+  }
+  if (adminHasDirtyConfig.value && adminConfigValidation.value.errors.length) {
+    return `运营配置还有 ${adminConfigValidation.value.errors.length} 个待修正项`
+  }
+  if (adminPendingChangesCount.value) {
+    return `当前有 ${adminPendingChangesCount.value} 处未保存修改`
+  }
+  return `已发布 ${adminStats.value.published} 篇，草稿 ${adminStats.value.drafts} 篇`
+})
+const adminEditorValidationMessages = computed(() => {
+  if (!adminHasDirtyArticle.value && !selectedAdminArticleId.value) {
+    return []
+  }
+  return adminArticleValidation.value.errors
+})
+const adminConfigValidationMessages = computed(() =>
+  adminHasDirtyConfig.value ? adminConfigValidation.value.errors : [],
+)
+
+const applyAdminDashboard = (payload) => {
+  const dashboard = normalizeAdminDashboard(payload)
+  adminDashboard.value = dashboard
+  adminConfigForm.value = { ...dashboard.config }
+  syncAdminConfigBaseline()
+
+  const selectedStillExists = dashboard.articles.some((item) => item.id === selectedAdminArticleId.value)
+  if (!selectedStillExists && selectedAdminArticleId.value != null) {
+    selectedAdminArticleId.value = null
+    setAdminArticleForm()
+    syncAdminArticleBaseline()
+  }
+}
+
+const refreshAdminDashboard = async () => {
+  if ((adminHasDirtyConfig.value || adminHasDirtyArticle.value)
+    && !window.confirm('刷新会覆盖当前未保存的管理台修改，确认继续吗？')) {
+    return
+  }
+
+  await loadAdminDashboard({ preferCache: false })
+}
+
+const toggleAdminPanel = () => {
+  adminPanelOpen.value = !adminPanelOpen.value
+  if (adminPanelOpen.value && !adminDashboard.value.articles.length) {
+    void loadAdminDashboard()
   }
 }
 
@@ -456,22 +635,35 @@ const openRelatedArticle = (slug) => {
   void replaceQuery('', slug)
 }
 
-const loadAdminDashboard = async () => {
+const goToKnowledgeBaseAdmin = () => {
+  void router.push({ name: 'knowledge-base-admin' })
+}
+
+const loadAdminDashboard = async ({ preferCache = true } = {}) => {
   if (!isAdmin.value) return
 
+  const storage = getSessionStorage()
+  const cachedDashboard = preferCache
+    ? readTimedCache(
+      KNOWLEDGE_ADMIN_DASHBOARD_CACHE_KEY,
+      storage,
+      KNOWLEDGE_ADMIN_DASHBOARD_CACHE_TTL,
+    )
+    : null
+
+  if (cachedDashboard && !adminDashboard.value.articles.length) {
+    applyAdminDashboard(cachedDashboard)
+  }
+
   adminLoading.value = true
+  adminErrorMessage.value = ''
   try {
     const response = await api.getKnowledgeAdminDashboard()
-    const dashboard = normalizeAdminDashboard(response?.data?.data)
-    adminDashboard.value = dashboard
-    adminConfigForm.value = { ...dashboard.config }
-
-    const selectedStillExists = dashboard.articles.some((item) => item.id === selectedAdminArticleId.value)
-    if (!selectedStillExists && selectedAdminArticleId.value != null) {
-      selectedAdminArticleId.value = null
-      setAdminArticleForm()
-    }
+    const dashboard = response?.data?.data || {}
+    applyAdminDashboard(dashboard)
+    writeTimedCache(KNOWLEDGE_ADMIN_DASHBOARD_CACHE_KEY, dashboard, storage)
   } catch (error) {
+    adminErrorMessage.value = error?.response?.data?.message || '知识库管理台加载失败。'
     ElMessage.error(error?.response?.data?.message || '知识库管理台加载失败。')
   } finally {
     adminLoading.value = false
@@ -481,12 +673,23 @@ const loadAdminDashboard = async () => {
 const loadAdminArticle = async (id) => {
   if (!id) return
 
+  if (adminArticleDetailCache.has(id)) {
+    const detail = adminArticleDetailCache.get(id)
+    selectedAdminArticleId.value = detail.id
+    setAdminArticleForm(detail)
+    syncAdminArticleBaseline()
+    adminPanelOpen.value = true
+    return
+  }
+
   adminLoading.value = true
   try {
     const response = await api.getKnowledgeAdminArticle(id)
     const detail = response?.data?.data
+    adminArticleDetailCache.set(id, detail)
     selectedAdminArticleId.value = detail.id
     setAdminArticleForm(detail)
+    syncAdminArticleBaseline()
     adminPanelOpen.value = true
   } catch (error) {
     ElMessage.error(error?.response?.data?.message || '文章详情加载失败。')
@@ -500,68 +703,21 @@ const openNewAdminArticle = () => {
   setAdminArticleForm({
     sortOrder: (adminArticles.value[adminArticles.value.length - 1]?.sortOrder || 0) + 10,
   })
+  syncAdminArticleBaseline()
   adminPanelOpen.value = true
 }
 
-const buildAdminArticlePayload = () => ({
-  slug: adminArticleForm.value.slug.trim(),
-  title: adminArticleForm.value.title.trim(),
-  englishTitle: adminArticleForm.value.englishTitle.trim(),
-  sectionId: adminArticleForm.value.sectionId.trim(),
-  sectionTitle: adminArticleForm.value.sectionTitle.trim(),
-  sectionDescription: adminArticleForm.value.sectionDescription.trim(),
-  badge: adminArticleForm.value.badge.trim(),
-  summary: adminArticleForm.value.summary.trim(),
-  lead: adminArticleForm.value.lead.trim(),
-  complexity: adminArticleForm.value.complexity.trim(),
-  readTime: adminArticleForm.value.readTime.trim(),
-  tags: toCommaItems(adminArticleForm.value.tagsText),
-  learningObjectives: toTextLines(adminArticleForm.value.learningObjectivesText),
-  checklist: toTextLines(adminArticleForm.value.checklistText),
-  relatedArticleSlugs: toCommaItems(adminArticleForm.value.relatedSlugsText),
-  spotlightEnabled: Boolean(adminArticleForm.value.spotlightEnabled),
-  spotlightEyebrow: adminArticleForm.value.spotlightEyebrow.trim(),
-  spotlightTitle: adminArticleForm.value.spotlightTitle.trim(),
-  spotlightDescription: adminArticleForm.value.spotlightDescription.trim(),
-  spotlightAccent: adminArticleForm.value.spotlightAccent.trim(),
-  published: Boolean(adminArticleForm.value.published),
-  sortOrder: Number(adminArticleForm.value.sortOrder || 0),
-  strategySteps: adminArticleForm.value.strategySteps
-    .map((step, index) => ({
-      index: (step.index || `${index + 1}`.padStart(2, '0')).trim(),
-      title: step.title.trim(),
-      description: step.description.trim(),
-      badge: step.badge.trim(),
-    }))
-    .filter((step) => step.title || step.description),
-  insights: adminArticleForm.value.insights
-    .map((insight) => ({
-      title: insight.title.trim(),
-      description: insight.description.trim(),
-      accent: (insight.accent || 'emerald').trim(),
-    }))
-    .filter((insight) => insight.title || insight.description),
-  codeBlocks: adminArticleForm.value.codeBlocks
-    .map((block) => ({
-      language: block.language.trim(),
-      title: block.title.trim(),
-      code: block.code,
-      callouts: toTextLines(block.calloutsText || ''),
-    }))
-    .filter((block) => block.title || block.code),
-})
-
 const saveAdminConfig = async () => {
+  const validation = adminConfigValidation.value
+  if (validation.errors.length) {
+    ElMessage.warning(validation.errors[0])
+    return
+  }
+
   adminSavingConfig.value = true
   try {
-    await api.updateKnowledgeAdminConfig({
-      siteTitle: adminConfigForm.value.siteTitle.trim(),
-      siteSubtitle: adminConfigForm.value.siteSubtitle.trim(),
-      emptyStateTitle: adminConfigForm.value.emptyStateTitle.trim(),
-      emptyStateDescription: adminConfigForm.value.emptyStateDescription.trim(),
-      defaultArticleSlug: adminConfigForm.value.defaultArticleSlug.trim(),
-      quickSearches: toCommaItems(adminConfigForm.value.quickSearchesText),
-    })
+    adminConfigForm.value.defaultArticleSlug = validation.normalized.defaultArticleSlug
+    await api.updateKnowledgeAdminConfig(buildAdminConfigPayload(validation))
     await Promise.all([
       loadAdminDashboard(),
       loadKnowledgeBase(routeKeyword.value, routeArticleSlug.value),
@@ -575,7 +731,17 @@ const saveAdminConfig = async () => {
 }
 
 const saveAdminArticle = async () => {
-  const payload = buildAdminArticlePayload()
+  const validation = adminArticleValidation.value
+  if (validation.errors.length) {
+    ElMessage.warning(validation.errors[0])
+    return
+  }
+
+  adminArticleForm.value.slug = validation.normalized.slug
+  adminArticleForm.value.sectionId = validation.normalized.sectionId || normalizeKnowledgeSlug(adminArticleForm.value.sectionId)
+  adminArticleForm.value.relatedSlugsText = validation.normalized.relatedSlugs.join(', ')
+
+  const payload = buildAdminArticlePayload(validation)
   if (!payload.slug || !payload.title) {
     ElMessage.warning('slug 和标题不能为空。')
     return
@@ -589,8 +755,10 @@ const saveAdminArticle = async () => {
       : await api.createKnowledgeAdminArticle(payload)
 
     const detail = response?.data?.data
+    adminArticleDetailCache.set(detail.id, detail)
     selectedAdminArticleId.value = detail.id
     setAdminArticleForm(detail)
+    syncAdminArticleBaseline()
     await loadAdminDashboard()
 
     if (detail.published) {
@@ -616,9 +784,11 @@ const deleteAdminArticle = async () => {
   adminDeletingArticle.value = true
   try {
     const deletingSlug = adminArticleForm.value.slug
+    adminArticleDetailCache.delete(selectedAdminArticleId.value)
     await api.deleteKnowledgeAdminArticle(selectedAdminArticleId.value)
     selectedAdminArticleId.value = null
     setAdminArticleForm()
+    syncAdminArticleBaseline()
     await loadAdminDashboard()
 
     if (routeArticleSlug.value === deletingSlug) {
@@ -709,14 +879,18 @@ watch(
 watch(
   isAdmin,
   (value) => {
-    if (value) {
-      void loadAdminDashboard()
-    } else {
+    if (!value) {
       adminPanelOpen.value = false
       selectedAdminArticleId.value = null
       adminDashboard.value = { config: createEmptyAdminConfig(), articles: [] }
       adminConfigForm.value = createEmptyAdminConfig()
+      adminErrorMessage.value = ''
+      adminListKeyword.value = ''
+      adminStatusFilter.value = 'all'
       setAdminArticleForm()
+      syncAdminConfigBaseline()
+      syncAdminArticleBaseline()
+      adminArticleDetailCache.clear()
     }
   },
   { immediate: true },
@@ -745,15 +919,24 @@ watch(
           </div>
           <button v-if="routeKeyword" type="button" class="hero-clear-btn" @click="clearSearch">清空</button>
           <button type="submit" class="hero-submit-btn">搜索主题</button>
-          <button
-            v-if="isAdmin"
-            type="button"
-            class="hero-admin-btn"
-            @click="adminPanelOpen = !adminPanelOpen"
-          >
-            {{ adminPanelOpen ? '收起管理台' : '打开管理台' }}
-          </button>
+          <div v-if="isAdmin" class="hero-admin-entry">
+            <button
+              type="button"
+              class="hero-admin-btn"
+              @click="goToKnowledgeBaseAdmin"
+            >
+              进入知识库管理台
+            </button>
+            <div class="hero-admin-meta">
+              <span class="admin-chip accent">独立路由</span>
+              <span class="admin-chip muted">Admin Console</span>
+            </div>
+          </div>
         </form>
+
+        <p v-if="isAdmin" class="hero-admin-feedback">
+          管理功能已迁移到独立页面，点击上方按钮后会跳转到单独的“知识库管理台”路由，而不会在当前知识库页面内联展开。
+        </p>
 
         <div class="hero-chip-group">
           <button
@@ -954,24 +1137,16 @@ watch(
               <h3>可直接复习的代码片段</h3>
             </div>
             <div class="code-stack">
-              <article
+              <CodeBlock
                 v-for="block in currentArticle.codeBlocks"
                 :key="`${currentArticle.slug}-${block.title}`"
-                class="code-card"
-              >
-                <header class="code-card-head">
-                  <div>
-                    <span class="code-lang">{{ block.language }}</span>
-                    <h4>{{ block.title }}</h4>
-                  </div>
-                </header>
-                <pre><code>{{ block.code }}</code></pre>
-                <div v-if="block.callouts.length" class="code-callouts">
-                  <span v-for="(callout, index) in block.callouts" :key="`${block.title}-${index}`">
-                    {{ callout }}
-                  </span>
-                </div>
-              </article>
+                :language="block.language"
+                :title="block.title"
+                :code="block.code"
+                :callouts="block.callouts"
+                :max-lines="15"
+                show-line-numbers
+              />
             </div>
           </section>
 
@@ -990,325 +1165,6 @@ watch(
           </section>
         </article>
 
-        <section v-if="isAdmin && adminPanelOpen" class="admin-panel kb-panel">
-          <div class="admin-panel-head">
-            <div>
-              <span class="sidebar-eyebrow">Admin Console</span>
-              <h3>知识库管理台</h3>
-              <p>这里可以维护首页运营配置、发布文章、下线文章和调整推荐位。</p>
-            </div>
-            <button type="button" class="hero-submit-btn compact" @click="openNewAdminArticle">新增文章</button>
-          </div>
-
-          <div class="admin-grid">
-            <section class="admin-config-card">
-              <header class="admin-card-head">
-                <h4>运营配置</h4>
-                <button
-                  type="button"
-                  class="hero-submit-btn compact"
-                  :disabled="adminSavingConfig"
-                  @click="saveAdminConfig"
-                >
-                  {{ adminSavingConfig ? '保存中...' : '保存配置' }}
-                </button>
-              </header>
-
-              <div class="admin-form-grid two-column">
-                <label class="admin-field">
-                  <span>站点标题</span>
-                  <input v-model="adminConfigForm.siteTitle" type="text" />
-                </label>
-                <label class="admin-field">
-                  <span>默认文章 slug</span>
-                  <input v-model="adminConfigForm.defaultArticleSlug" type="text" />
-                </label>
-              </div>
-
-              <label class="admin-field">
-                <span>站点副标题</span>
-                <textarea v-model="adminConfigForm.siteSubtitle" rows="3" />
-              </label>
-
-              <div class="admin-form-grid two-column">
-                <label class="admin-field">
-                  <span>空状态标题</span>
-                  <input v-model="adminConfigForm.emptyStateTitle" type="text" />
-                </label>
-                <label class="admin-field">
-                  <span>推荐搜索词</span>
-                  <input v-model="adminConfigForm.quickSearchesText" type="text" placeholder="逗号分隔" />
-                </label>
-              </div>
-
-              <label class="admin-field">
-                <span>空状态描述</span>
-                <textarea v-model="adminConfigForm.emptyStateDescription" rows="3" />
-              </label>
-            </section>
-
-            <section class="admin-list-card">
-              <header class="admin-card-head">
-                <h4>文章列表</h4>
-                <span class="admin-meta">{{ adminArticles.length }} 篇</span>
-              </header>
-
-              <div v-if="adminLoading && !adminArticles.length" class="sidebar-state">正在加载管理数据...</div>
-
-              <button
-                v-for="item in adminArticles"
-                :key="item.id"
-                type="button"
-                class="admin-article-row"
-                :class="{ active: item.id === selectedAdminArticleId }"
-                @click="loadAdminArticle(item.id)"
-              >
-                <div>
-                  <strong>{{ item.title }}</strong>
-                  <p>{{ item.slug }} · {{ item.sectionTitle }}</p>
-                </div>
-                <div class="admin-row-meta">
-                  <span class="admin-chip" :class="{ success: item.published, muted: !item.published }">
-                    {{ item.published ? '已发布' : '草稿' }}
-                  </span>
-                  <span class="admin-chip accent" v-if="item.spotlightEnabled">推荐位</span>
-                </div>
-              </button>
-            </section>
-
-            <section class="admin-editor-card">
-              <header class="admin-card-head">
-                <h4>{{ selectedAdminArticleId ? '编辑文章' : '新建文章' }}</h4>
-                <div class="admin-card-actions">
-                  <button
-                    v-if="selectedAdminArticleId"
-                    type="button"
-                    class="hero-clear-btn compact danger"
-                    :disabled="adminDeletingArticle"
-                    @click="deleteAdminArticle"
-                  >
-                    {{ adminDeletingArticle ? '删除中...' : '删除文章' }}
-                  </button>
-                  <button
-                    type="button"
-                    class="hero-submit-btn compact"
-                    :disabled="adminSavingArticle"
-                    @click="saveAdminArticle"
-                  >
-                    {{ adminSavingArticle ? '保存中...' : '保存文章' }}
-                  </button>
-                </div>
-              </header>
-
-              <div class="admin-form-grid three-column">
-                <label class="admin-field">
-                  <span>slug</span>
-                  <input v-model="adminArticleForm.slug" type="text" />
-                </label>
-                <label class="admin-field">
-                  <span>标题</span>
-                  <input v-model="adminArticleForm.title" type="text" />
-                </label>
-                <label class="admin-field">
-                  <span>英文标题</span>
-                  <input v-model="adminArticleForm.englishTitle" type="text" />
-                </label>
-              </div>
-
-              <div class="admin-form-grid four-column">
-                <label class="admin-field">
-                  <span>栏目 ID</span>
-                  <input v-model="adminArticleForm.sectionId" type="text" />
-                </label>
-                <label class="admin-field">
-                  <span>栏目名称</span>
-                  <input v-model="adminArticleForm.sectionTitle" type="text" />
-                </label>
-                <label class="admin-field">
-                  <span>徽标</span>
-                  <input v-model="adminArticleForm.badge" type="text" />
-                </label>
-                <label class="admin-field">
-                  <span>排序</span>
-                  <input v-model="adminArticleForm.sortOrder" type="number" />
-                </label>
-              </div>
-
-              <label class="admin-field">
-                <span>栏目描述</span>
-                <textarea v-model="adminArticleForm.sectionDescription" rows="2" />
-              </label>
-
-              <div class="admin-form-grid two-column">
-                <label class="admin-field">
-                  <span>复杂度提示</span>
-                  <input v-model="adminArticleForm.complexity" type="text" />
-                </label>
-                <label class="admin-field">
-                  <span>阅读时长</span>
-                  <input v-model="adminArticleForm.readTime" type="text" />
-                </label>
-              </div>
-
-              <label class="admin-field">
-                <span>摘要</span>
-                <textarea v-model="adminArticleForm.summary" rows="3" />
-              </label>
-
-              <label class="admin-field">
-                <span>导语</span>
-                <textarea v-model="adminArticleForm.lead" rows="3" />
-              </label>
-
-              <div class="admin-form-grid two-column">
-                <label class="admin-field">
-                  <span>标签</span>
-                  <input v-model="adminArticleForm.tagsText" type="text" placeholder="逗号分隔" />
-                </label>
-                <label class="admin-field">
-                  <span>相关文章 slug</span>
-                  <input v-model="adminArticleForm.relatedSlugsText" type="text" placeholder="逗号分隔" />
-                </label>
-              </div>
-
-              <div class="admin-form-grid two-column">
-                <label class="admin-field">
-                  <span>学习目标</span>
-                  <textarea v-model="adminArticleForm.learningObjectivesText" rows="5" placeholder="每行一条" />
-                </label>
-                <label class="admin-field">
-                  <span>复盘清单</span>
-                  <textarea v-model="adminArticleForm.checklistText" rows="5" placeholder="每行一条" />
-                </label>
-              </div>
-
-              <div class="admin-switch-row">
-                <label><input v-model="adminArticleForm.published" type="checkbox" /> 发布到公开页</label>
-                <label><input v-model="adminArticleForm.spotlightEnabled" type="checkbox" /> 加入首页推荐位</label>
-              </div>
-
-              <div class="admin-form-grid four-column">
-                <label class="admin-field">
-                  <span>推荐位眉标题</span>
-                  <input v-model="adminArticleForm.spotlightEyebrow" type="text" />
-                </label>
-                <label class="admin-field">
-                  <span>推荐位标题</span>
-                  <input v-model="adminArticleForm.spotlightTitle" type="text" />
-                </label>
-                <label class="admin-field">
-                  <span>推荐位主题色</span>
-                  <select v-model="adminArticleForm.spotlightAccent">
-                    <option value="emerald">emerald</option>
-                    <option value="cyan">cyan</option>
-                    <option value="amber">amber</option>
-                  </select>
-                </label>
-              </div>
-
-              <label class="admin-field">
-                <span>推荐位描述</span>
-                <textarea v-model="adminArticleForm.spotlightDescription" rows="2" />
-              </label>
-
-              <section class="admin-subsection">
-                <div class="admin-subsection-head">
-                  <h5>步骤卡片</h5>
-                  <button type="button" class="mini-action" @click="addStep">新增步骤</button>
-                </div>
-                <div
-                  v-for="(step, index) in adminArticleForm.strategySteps"
-                  :key="`step-${index}`"
-                  class="admin-repeat-card"
-                >
-                  <div class="admin-form-grid four-column">
-                    <label class="admin-field">
-                      <span>序号</span>
-                      <input v-model="step.index" type="text" />
-                    </label>
-                    <label class="admin-field">
-                      <span>标题</span>
-                      <input v-model="step.title" type="text" />
-                    </label>
-                    <label class="admin-field">
-                      <span>徽标</span>
-                      <input v-model="step.badge" type="text" />
-                    </label>
-                  </div>
-                  <label class="admin-field">
-                    <span>描述</span>
-                    <textarea v-model="step.description" rows="2" />
-                  </label>
-                  <button type="button" class="mini-action danger" @click="removeStep(index)">删除步骤</button>
-                </div>
-              </section>
-
-              <section class="admin-subsection">
-                <div class="admin-subsection-head">
-                  <h5>洞察卡片</h5>
-                  <button type="button" class="mini-action" @click="addInsight">新增洞察</button>
-                </div>
-                <div
-                  v-for="(insight, index) in adminArticleForm.insights"
-                  :key="`insight-${index}`"
-                  class="admin-repeat-card"
-                >
-                  <div class="admin-form-grid three-column">
-                    <label class="admin-field">
-                      <span>标题</span>
-                      <input v-model="insight.title" type="text" />
-                    </label>
-                    <label class="admin-field">
-                      <span>主题色</span>
-                      <select v-model="insight.accent">
-                        <option value="emerald">emerald</option>
-                        <option value="cyan">cyan</option>
-                        <option value="amber">amber</option>
-                      </select>
-                    </label>
-                  </div>
-                  <label class="admin-field">
-                    <span>描述</span>
-                    <textarea v-model="insight.description" rows="2" />
-                  </label>
-                  <button type="button" class="mini-action danger" @click="removeInsight(index)">删除洞察</button>
-                </div>
-              </section>
-
-              <section class="admin-subsection">
-                <div class="admin-subsection-head">
-                  <h5>代码块</h5>
-                  <button type="button" class="mini-action" @click="addCodeBlock">新增代码块</button>
-                </div>
-                <div
-                  v-for="(block, index) in adminArticleForm.codeBlocks"
-                  :key="`code-${index}`"
-                  class="admin-repeat-card"
-                >
-                  <div class="admin-form-grid three-column">
-                    <label class="admin-field">
-                      <span>语言</span>
-                      <input v-model="block.language" type="text" />
-                    </label>
-                    <label class="admin-field">
-                      <span>标题</span>
-                      <input v-model="block.title" type="text" />
-                    </label>
-                  </div>
-                  <label class="admin-field">
-                    <span>代码</span>
-                    <textarea v-model="block.code" rows="8" class="code-editor" />
-                  </label>
-                  <label class="admin-field">
-                    <span>讲解要点</span>
-                    <textarea v-model="block.calloutsText" rows="3" placeholder="每行一条" />
-                  </label>
-                  <button type="button" class="mini-action danger" @click="removeCodeBlock(index)">删除代码块</button>
-                </div>
-              </section>
-            </section>
-          </div>
-        </section>
       </main>
 
       <aside class="kb-aside">
@@ -1535,6 +1391,31 @@ watch(
   margin-top: 18px;
 }
 
+.hero-admin-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hero-admin-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hero-admin-feedback {
+  margin: 14px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--kb-muted);
+}
+
+.hero-admin-feedback.error {
+  color: #b84444;
+}
+
 .hero-chip,
 .mini-chip,
 .mini-action {
@@ -1672,6 +1553,10 @@ watch(
   padding: 24px;
 }
 
+.article-card {
+  width: 1100px;
+}
+
 .sidebar-head,
 .admin-card-head,
 .admin-panel-head {
@@ -1710,6 +1595,34 @@ watch(
   color: var(--kb-muted);
   text-align: center;
   font-size: 14px;
+}
+
+.admin-status-banner {
+  margin: 18px 0 0;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(31, 148, 168, 0.14);
+  background: rgba(244, 250, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-status-banner strong {
+  display: block;
+  font-size: 14px;
+}
+
+.admin-status-banner p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--kb-muted);
+}
+
+.admin-status-banner.error {
+  border-color: rgba(184, 68, 68, 0.18);
+  background: rgba(255, 245, 245, 0.92);
 }
 
 .sidebar-sections {
@@ -1895,6 +1808,11 @@ watch(
 .admin-chip.accent {
   background: rgba(31, 148, 168, 0.1);
   color: var(--kb-cyan);
+}
+
+.admin-chip.warning {
+  background: rgba(212, 140, 36, 0.12);
+  color: var(--kb-amber);
 }
 
 .nav-item-footer,
@@ -2160,46 +2078,7 @@ watch(
   background: linear-gradient(180deg, rgba(31, 148, 168, 0.14), rgba(255, 255, 255, 0.92));
 }
 
-.code-card {
-  overflow: hidden;
-}
-
-.code-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 20px 0;
-}
-
-.code-lang {
-  background: rgba(18, 48, 71, 0.08);
-  color: var(--kb-text);
-}
-
-.code-card h4 {
-  margin-top: 10px;
-  font-size: 20px;
-}
-
-.code-card pre {
-  margin: 16px 0 0;
-  padding: 18px 20px;
-  background: #0e2230;
-  color: #e8f8ff;
-  overflow: auto;
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.code-card code,
-.code-editor {
-  font-family: 'Fira Code', 'Consolas', monospace;
-  white-space: pre;
-}
-
-.code-callouts {
-  padding: 16px 20px 20px;
-}
+/* CodeBlock 组件样式已移至组件内部 */
 
 .aside-card + .aside-card {
   margin-top: 16px;
@@ -2318,6 +2197,13 @@ watch(
   gap: 18px;
 }
 
+.admin-list-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(180px, 0.8fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+
 .admin-editor-card {
   grid-column: 1 / -1;
 }
@@ -2345,6 +2231,10 @@ watch(
   margin-top: 14px;
 }
 
+.admin-field.compact {
+  margin-top: 0;
+}
+
 .admin-field span {
   font-size: 13px;
   font-weight: 700;
@@ -2359,6 +2249,18 @@ watch(
   padding: 12px 14px;
   background: rgba(255, 255, 255, 0.9);
   resize: vertical;
+}
+
+.admin-validation-list {
+  margin: 16px 0 0;
+  padding: 14px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(212, 140, 36, 0.16);
+  background: rgba(255, 250, 241, 0.92);
+  color: #9b6420;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
 }
 
 .admin-switch-row {
@@ -2414,6 +2316,7 @@ watch(
   .insight-grid,
   .kb-metrics,
   .admin-grid,
+  .admin-list-toolbar,
   .admin-form-grid.two-column,
   .admin-form-grid.three-column,
   .admin-form-grid.four-column {
@@ -2477,6 +2380,13 @@ watch(
     align-items: stretch;
   }
 
+  .hero-admin-entry,
+  .hero-admin-meta,
+  .admin-status-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .hero-search-input {
     min-width: 0;
   }
@@ -2504,3 +2414,4 @@ watch(
   }
 }
 </style>
+

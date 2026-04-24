@@ -18,13 +18,32 @@ const canUseTextAnalysis = computed(() => !!userStore.userInfo?.token && !isAuth
 
 const menuItems = [
   { path: '/home', label: '学习计划' },
-  { path: '/courses', label: '网课' },
+  {
+    path: '/courses',
+    label: '知识专区',
+    children: [
+      { path: '/courses', label: '网课' },
+      { path: '/knowledge-base', label: '知识库' },
+    ],
+  },
   { path: '/projects', label: '项目实战' },
   { path: '/forum', label: '论坛' },
   { path: '/private-message', label: '消息' },
   { path: '/ranking', label: '积分排行' },
   { path: '/errors', label: '错题本' },
 ]
+
+const expandedMobileMenus = ref(new Set())
+
+const toggleMobileSubmenu = (path) => {
+  if (expandedMobileMenus.value.has(path)) {
+    expandedMobileMenus.value.delete(path)
+  } else {
+    expandedMobileMenus.value.add(path)
+  }
+}
+
+const isMobileSubmenuExpanded = (path) => expandedMobileMenus.value.has(path)
 
 const activePath = computed(() => {
   if (route.path.startsWith('/challenge/') || route.path.startsWith('/levels')) {
@@ -378,10 +397,29 @@ const toggleTheme = () => {
 
     <div v-if="showTopbar" class="mobile-menu-wrapper hidden-on-desktop">
       <div class="mobile-menu">
-        <div v-for="item in menuItems" :key="item.path"
-          :class="['mobile-menu-item', { active: activePath === item.path }]" @click="handleMenuSelect(item.path)">
-          {{ item.label }}
-        </div>
+        <template v-for="item in menuItems" :key="item.path">
+          <div v-if="!item.children" :class="['mobile-menu-item', { active: activePath === item.path }]"
+            @click="handleMenuSelect(item.path)">
+            {{ item.label }}
+          </div>
+          <div v-else class="mobile-menu-item-has-children">
+            <div :class="['mobile-menu-item', { active: activePath.startsWith(item.path), expanded: isMobileSubmenuExpanded(item.path) }]"
+              @click="toggleMobileSubmenu(item.path)">
+              {{ item.label }}
+              <svg class="submenu-arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
+            <div v-show="isMobileSubmenuExpanded(item.path)" class="mobile-submenu">
+              <div v-for="child in item.children" :key="child.path"
+                :class="['mobile-menu-item mobile-submenu-item', { active: activePath === child.path }]"
+                @click="handleMenuSelect(child.path)">
+                {{ child.label }}
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -1223,6 +1261,40 @@ const toggleTheme = () => {
     background: var(--brand-blue);
     color: #fff;
     box-shadow: 0 2px 8px rgba(74, 111, 157, 0.3);
+  }
+
+  .mobile-menu-item-has-children {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .mobile-menu-item.expanded {
+    background: rgba(64, 158, 255, 0.15);
+    color: var(--brand-blue);
+  }
+
+  .mobile-menu-item .submenu-arrow {
+    margin-left: 4px;
+    transition: transform 0.2s ease;
+  }
+
+  .mobile-menu-item.expanded .submenu-arrow {
+    transform: rotate(180deg);
+  }
+
+  .mobile-submenu {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 0 4px 12px;
+    margin-top: 2px;
+    border-left: 2px solid rgba(64, 158, 255, 0.2);
+  }
+
+  .mobile-submenu-item {
+    padding: 5px 10px;
+    font-size: 12px;
+    border-radius: 12px;
   }
 
   .actions {
