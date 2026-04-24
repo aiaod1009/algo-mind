@@ -1,36 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '../api'
+import { normalizeUserAnswerPayload, toStringList } from '../utils/errorAnalysisPayload.js'
 
 const ANALYSIS_CACHE_PREFIX = 'error-analysis-cache'
-
-const toStringList = (value) => {
-  if (Array.isArray(value)) {
-    return value.map((item) => String(item).trim()).filter(Boolean)
-  }
-
-  if (typeof value === 'string') {
-    const text = value.trim()
-    if (!text) return []
-
-    try {
-      const parsed = JSON.parse(text)
-      if (Array.isArray(parsed)) {
-        return parsed.map((item) => String(item).trim()).filter(Boolean)
-      }
-    } catch (error) {
-      // Ignore JSON parse error and fallback to delimiter split.
-    }
-
-    return text
-      .split(/[\n,，、]/)
-      .map((item) => item.trim())
-      .filter(Boolean)
-  }
-
-  if (value == null) return []
-  return [String(value).trim()].filter(Boolean)
-}
 
 const normalizeList = (items) => (Array.isArray(items) ? items : [])
 
@@ -130,7 +103,7 @@ export const useErrorStore = defineStore('error', () => {
       return { fromCache: false }
     }
 
-    throw new Error(res.data?.message || '获取错题数据失败')
+    throw new Error(res.data?.message || '????????')
   }
 
   const fetchCompletedErrors = async ({ skipIfLoaded = true } = {}) => {
@@ -144,7 +117,7 @@ export const useErrorStore = defineStore('error', () => {
       return { fromCache: false }
     }
 
-    throw new Error(res.data?.message || '获取已完成错题失败')
+    throw new Error(res.data?.message || '?????????')
   }
 
   const refreshAll = async () => {
@@ -161,10 +134,10 @@ export const useErrorStore = defineStore('error', () => {
 
     const payload = {
       levelId: errorItem.levelId || null,
-      question: errorItem.question || '未命名题目',
+      question: errorItem.question || '?????',
       userAnswer: userAnswerStr,
-      description: errorItem.description || '暂无描述',
-      analysisStatus: '未分析',
+      description: errorItem.description || '????',
+      analysisStatus: '???',
       analysis: '',
     }
 
@@ -184,7 +157,7 @@ export const useErrorStore = defineStore('error', () => {
       return res.data.data
     }
 
-    throw new Error(res.data?.message || '保存错题失败')
+    throw new Error(res.data?.message || '??????')
   }
 
   const completeError = async (errorId) => {
@@ -197,14 +170,17 @@ export const useErrorStore = defineStore('error', () => {
       return completedItem
     }
 
-    throw new Error(res.data?.message || '归档已完成错题失败')
+    throw new Error(res.data?.message || '?????????')
   }
 
   const getAnalysis = async (errorItem) => {
+    const answerPayload = normalizeUserAnswerPayload(errorItem)
     const payload = {
       errorId: errorItem.id,
       question: errorItem.question || '',
-      userAnswer: toStringList(errorItem.userAnswer),
+      questionType: answerPayload.questionType,
+      userAnswer: answerPayload.userAnswer,
+      userAnswers: answerPayload.userAnswers,
       description: errorItem.description || '',
       difficulty: errorItem.difficulty || 'medium',
       track: errorItem.track || 'algo',
@@ -231,7 +207,7 @@ export const useErrorStore = defineStore('error', () => {
       }
     }
 
-    const error = new Error(res.data?.message || 'AI 分析失败')
+    const error = new Error(res.data?.message || 'AI ????')
     error.code = res.data?.code
     throw error
   }
@@ -265,7 +241,7 @@ export const useErrorStore = defineStore('error', () => {
     const item = collection.value.find((row) => Number(row.id) === Number(errorId))
     if (!item) return
 
-    item.analysisStatus = '已分析'
+    item.analysisStatus = '???'
     item.analysis = analysis
     item.analysisData = analysisData || null
   }

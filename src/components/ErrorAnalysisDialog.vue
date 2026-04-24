@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   modelValue: {
@@ -32,18 +32,23 @@ const visible = computed({
 })
 
 const activeTab = ref('analysis')
-const contentReady = ref(false)
-const bufferTimer = ref(null)
 
-// 5秒缓冲加载
-const startBufferLoading = () => {
-  contentReady.value = false
-  if (bufferTimer.value) {
-    clearTimeout(bufferTimer.value)
+// 阻止背景页面滚动的处理函数
+const preventBodyScroll = (e) => {
+  e.preventDefault()
+}
+
+// 控制背景页面滚动
+const toggleBodyScroll = (shouldPrevent) => {
+  if (shouldPrevent) {
+    document.body.style.overflow = 'hidden'
+    document.body.addEventListener('wheel', preventBodyScroll, { passive: false })
+    document.body.addEventListener('touchmove', preventBodyScroll, { passive: false })
+  } else {
+    document.body.style.overflow = ''
+    document.body.removeEventListener('wheel', preventBodyScroll)
+    document.body.removeEventListener('touchmove', preventBodyScroll)
   }
-  bufferTimer.value = setTimeout(() => {
-    contentReady.value = true
-  }, 5000)
 }
 
 watch(
@@ -51,15 +56,16 @@ watch(
   (isVisible) => {
     if (isVisible) {
       activeTab.value = 'analysis'
-      startBufferLoading()
+      toggleBodyScroll(true)
     } else {
-      contentReady.value = false
-      if (bufferTimer.value) {
-        clearTimeout(bufferTimer.value)
-      }
+      toggleBodyScroll(false)
     }
   }
 )
+
+onUnmounted(() => {
+  toggleBodyScroll(false)
+})
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -398,18 +404,8 @@ const getLinkedReinforcementProblems = (linkedIds) => {
               <p>AI 正在分析中...</p>
             </div>
 
-            <!-- 缓冲加载状态 -->
-            <div v-else-if="!contentReady" class="ai-loading ai-buffer-loading">
-              <div class="ai-loading-spinner"></div>
-              <p>正在准备分析内容...</p>
-              <div class="buffer-progress">
-                <div class="buffer-progress-bar"></div>
-              </div>
-              <span class="buffer-hint">预计等待 5 秒</span>
-            </div>
-
             <!-- 内容区域 -->
-            <div v-else class="ai-content">
+            <div v-else class="ai-content" @wheel.stop @scroll.stop>
               <!-- 标签页 -->
               <div class="ai-tabs">
                 <button 
@@ -1982,62 +1978,6 @@ const getLinkedReinforcementProblems = (linkedIds) => {
   box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
 }
 
-/* ================================
-   缓冲加载样式
-   ================================ */
-
-.ai-buffer-loading {
-  gap: 16px;
-}
-
-.ai-buffer-loading .ai-loading-spinner {
-  width: 56px;
-  height: 56px;
-  border-width: 4px;
-}
-
-.buffer-progress {
-  width: 200px;
-  height: 4px;
-  background: rgba(226, 232, 240, 0.6);
-  border-radius: 2px;
-  overflow: hidden;
-  position: relative;
-}
-
-.buffer-progress-bar {
-  height: 100%;
-  background: linear-gradient(90deg, #4f46e5, #7c3aed, #4f46e5);
-  background-size: 200% 100%;
-  border-radius: 2px;
-  animation: bufferProgress 5s ease-in-out forwards,
-             shimmer 1.5s ease-in-out infinite;
-}
-
-@keyframes bufferProgress {
-  0% {
-    width: 0%;
-  }
-  100% {
-    width: 100%;
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-.buffer-hint {
-  font-size: 12px;
-  color: #94a3b8;
-  margin-top: 8px;
-}
-
 /* 内容区域淡入动画 */
 .ai-content {
   animation: contentFadeIn 0.5s ease;
@@ -2086,10 +2026,6 @@ const getLinkedReinforcementProblems = (linkedIds) => {
     width: 100%;
     justify-content: space-between;
     margin-top: 8px;
-  }
-  
-  .buffer-progress {
-    width: 160px;
   }
 }
 </style>

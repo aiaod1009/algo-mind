@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:error-analysis": "node src/tests/errorAnalysis.test.js",
+    "test:unit": "node src/tests/knowledgeBaseAdmin.test.js && node src/tests/errorAnalysis.test.js"
   },
   "dependencies": {
     "@codemirror/lang-cpp": "^6.0.3",

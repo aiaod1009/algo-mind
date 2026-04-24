@@ -1,5 +1,5 @@
 <template>
-  <div ref="pointer" class="pointer" :class="{ 'is-active': isActive, 'is-hidden': isHidden }">
+  <div ref="pointer" class="pointer" :class="{ 'is-active': isActive }" aria-hidden="true">
     <div></div>
     <div></div>
     <div></div>
@@ -8,114 +8,185 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
+const route = useRoute()
 const pointer = ref(null)
 const currentTarget = ref(null)
 const isActive = ref(false)
-const isHidden = ref(false)
-
-const move = (e) => {
-  if (!e || typeof e.clientX === 'undefined' || typeof e.clientY === 'undefined') {
-    return
-  }
-  let x = e.clientX
-  let y = e.clientY
-  
-  // 检测鼠标是否在需要隐藏指针的区域
-  let targetElement = e.target
-  while (targetElement) {
-    if (targetElement.classList && (
-      targetElement.classList.contains('view-lines') ||
-      targetElement.classList.contains('messages-container') ||
-      targetElement.classList.contains('input-container') ||
-      targetElement.classList.contains('helper-content')
-    )) {
-      isHidden.value = true
-      break
-    }
-    targetElement = targetElement.parentElement
-  }
-  if (!targetElement) {
-    isHidden.value = false
-  }
-  
-  if (currentTarget.value) {
-    try {
-      const rect = currentTarget.value.getBoundingClientRect()
-      const centerX = rect.left + rect.width / 2
-      const centerY = rect.top + rect.height / 2
-      
-      x = centerX + (x - centerX) * 0.1
-      y = centerY + (y - centerY) * 0.1
-    } catch (error) {
-      // 忽略错误，继续执行
-    }
-  }
-  
-  if (pointer.value) {
-    try {
-      pointer.value.style.transform = `translate(${x}px, ${y}px)`
-    } catch (error) {
-      // 忽略错误，继续执行
-    }
-  }
-}
-
-const handleMouseEnter = (e) => {
-  // 不阻止事件传递
-  if (!e || !e.target || typeof e.target.closest !== 'function') {
-    return
-  }
-  const target = e.target.closest('._target, .el-sub-menu__title')
-  if (target) {
-    currentTarget.value = target
-    isActive.value = true
-    const rect = target.getBoundingClientRect()
-    if (pointer.value) {
-      pointer.value.style.setProperty('--width', rect.width + 'px')
-      pointer.value.style.setProperty('--height', rect.height + 'px')
-    }
-    // 添加目标元素的高亮效果
-    target.classList.add('target-highlight')
-  }
-}
-
-const handleMouseLeave = (e) => {
-  // 不阻止事件传递
-  if (!e || !e.target || typeof e.target.closest !== 'function') {
-    return
-  }
-  const target = e.target.closest('._target, .el-sub-menu__title')
-  if (target && currentTarget.value === target) {
-    currentTarget.value = null
-    isActive.value = false
-    if (pointer.value) {
-      pointer.value.style.setProperty('--width', '4rem')
-      pointer.value.style.setProperty('--height', '4rem')
-    }
-    // 移除目标元素的高亮效果
-    target.classList.remove('target-highlight')
-  }
-}
-
-// 监听isActive变化，确保样式更新
-watch(isActive, (newValue) => {
-  console.log('isActive changed:', newValue)
+const lastPointerPosition = ref({
+  x: typeof window === 'undefined' ? 0 : Math.round(window.innerWidth / 2),
+  y: typeof window === 'undefined' ? 0 : Math.round(window.innerHeight / 2),
 })
 
+const DEFAULT_POINTER_SIZE = '4rem'
+const TARGET_SELECTOR = '._target, .el-sub-menu__title'
+
+const setPointerSize = (width = DEFAULT_POINTER_SIZE, height = DEFAULT_POINTER_SIZE) => {
+  if (!pointer.value) {
+    return
+  }
+
+  pointer.value.style.setProperty('--width', width)
+  pointer.value.style.setProperty('--height', height)
+}
+
+const updatePointerPosition = (x, y) => {
+  if (!pointer.value) {
+    return
+  }
+
+  pointer.value.style.transform = `translate(${x}px, ${y}px)`
+}
+
+const clearCurrentTarget = () => {
+  if (currentTarget.value?.classList) {
+    currentTarget.value.classList.remove('target-highlight')
+  }
+
+  currentTarget.value = null
+  isActive.value = false
+  setPointerSize()
+}
+
+const applyMagneticTarget = (target) => {
+  if (!target || currentTarget.value === target) {
+    return
+  }
+
+  clearCurrentTarget()
+  currentTarget.value = target
+  isActive.value = true
+
+  const rect = target.getBoundingClientRect()
+  if (rect.width > 0 && rect.height > 0) {
+    setPointerSize(`${rect.width}px`, `${rect.height}px`)
+  }
+
+  target.classList.add('target-highlight')
+}
+
+const getClosestMagneticTarget = (node) => {
+  if (!node || typeof node.closest !== 'function') {
+    return null
+  }
+
+  return node.closest(TARGET_SELECTOR)
+}
+
+const syncTargetFromPointer = () => {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  const hoveredElement = document.elementFromPoint(
+    lastPointerPosition.value.x,
+    lastPointerPosition.value.y,
+  )
+  const target = getClosestMagneticTarget(hoveredElement)
+
+  if (target) {
+    applyMagneticTarget(target)
+  } else {
+    clearCurrentTarget()
+  }
+
+  updatePointerPosition(lastPointerPosition.value.x, lastPointerPosition.value.y)
+}
+
+const move = (event) => {
+  if (!event || typeof event.clientX !== 'number' || typeof event.clientY !== 'number') {
+    return
+  }
+
+  lastPointerPosition.value = {
+    x: event.clientX,
+    y: event.clientY,
+  }
+
+  let x = event.clientX
+  let y = event.clientY
+
+  if (currentTarget.value) {
+    if (!currentTarget.value.isConnected) {
+      clearCurrentTarget()
+    } else {
+      const rect = currentTarget.value.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) {
+        const centerX = rect.left + rect.width / 2
+        const centerY = rect.top + rect.height / 2
+
+        x = centerX + (x - centerX) * 0.1
+        y = centerY + (y - centerY) * 0.1
+      } else {
+        clearCurrentTarget()
+      }
+    }
+  }
+
+  updatePointerPosition(x, y)
+}
+
+const handlePointerOver = (event) => {
+  const target = getClosestMagneticTarget(event?.target)
+  if (target) {
+    applyMagneticTarget(target)
+  }
+}
+
+const handlePointerOut = (event) => {
+  const target = getClosestMagneticTarget(event?.target)
+  if (!target || currentTarget.value !== target) {
+    return
+  }
+
+  const nextTarget = getClosestMagneticTarget(event?.relatedTarget)
+  if (nextTarget) {
+    applyMagneticTarget(nextTarget)
+    return
+  }
+
+  clearCurrentTarget()
+}
+
+const handleWindowBlur = () => {
+  clearCurrentTarget()
+}
+
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    clearCurrentTarget()
+  }
+}
+
+watch(
+  () => route.fullPath,
+  async () => {
+    clearCurrentTarget()
+    await nextTick()
+    requestAnimationFrame(syncTargetFromPointer)
+  },
+)
+
 onMounted(() => {
-  window.addEventListener('mousemove', move)
-  // 使用事件委托，监听整个文档的鼠标事件
-  // 使用捕获阶段，但确保不阻止事件传递
-  document.addEventListener('mouseenter', handleMouseEnter, true)
-  document.addEventListener('mouseleave', handleMouseLeave, true)
+  setPointerSize()
+  updatePointerPosition(lastPointerPosition.value.x, lastPointerPosition.value.y)
+
+  window.addEventListener('pointermove', move, { passive: true })
+  window.addEventListener('blur', handleWindowBlur)
+  document.addEventListener('pointerover', handlePointerOver, true)
+  document.addEventListener('pointerout', handlePointerOut, true)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('mousemove', move)
-  document.removeEventListener('mouseenter', handleMouseEnter, true)
-  document.removeEventListener('mouseleave', handleMouseLeave, true)
+  clearCurrentTarget()
+  window.removeEventListener('pointermove', move)
+  window.removeEventListener('blur', handleWindowBlur)
+  document.removeEventListener('pointerover', handlePointerOver, true)
+  document.removeEventListener('pointerout', handlePointerOut, true)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>
 
@@ -128,14 +199,12 @@ onUnmounted(() => {
   left: calc(var(--width) / -2);
   width: var(--width);
   height: var(--height);
-  transition: all 0.2s ease-out;
+  transition:
+    transform 0.12s ease-out,
+    width 0.18s ease,
+    height 0.18s ease;
   pointer-events: none;
-  z-index: 9999;
-}
-
-.pointer.is-hidden {
-  opacity: 0;
-  visibility: hidden;
+  z-index: 10010;
 }
 
 .pointer div {
@@ -144,14 +213,13 @@ onUnmounted(() => {
   height: 1rem;
   border-width: 0.3rem;
   border-color: #17f700;
-  transition: all 0.3s ease;
+  transition: all 0.22s ease;
 }
 
 .pointer.is-active div {
   border-color: #ff6b6b !important;
   transform: scale(1) !important;
   box-shadow: 0 0 15px rgba(255, 107, 107, 0.8) !important;
-  transition: all 0.3s ease !important;
 }
 
 .pointer div:nth-child(1) {
@@ -182,7 +250,6 @@ onUnmounted(() => {
   border-right-style: solid;
 }
 
-/* 为目标元素添加样式 */
 :global(._target),
 :global(.el-sub-menu__title) {
   cursor: pointer;
@@ -194,6 +261,5 @@ onUnmounted(() => {
   transform: scale(1);
   box-shadow: 0 0 20px rgba(255, 107, 107, 0.6);
   border-radius: 4px;
-  pointer-events: auto;
 }
 </style>

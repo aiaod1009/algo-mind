@@ -326,8 +326,12 @@ export const userApi = {
     return api.get('/users/me/solved-problems', { params })
   },
 
-  analyzeError(errorId, description) {
-    return api.post('/error-analysis', { errorId, description }, { timeout: AI_TIMEOUT })
+  analyzeError(payloadOrErrorId, description) {
+    const payload = typeof payloadOrErrorId === 'object' && payloadOrErrorId !== null
+      ? payloadOrErrorId
+      : { errorId: payloadOrErrorId, description }
+
+    return api.post('/error-analysis', payload, { timeout: AI_TIMEOUT })
   },
 
   getLearningPlans() {

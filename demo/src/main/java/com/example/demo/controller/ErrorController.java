@@ -183,13 +183,7 @@ public class ErrorController {
         }
 
         try {
-            ProblemAnalysisResponse analysisResponse;
-            try {
-                analysisResponse = callAIForAnalysis(request);
-            } catch (Exception exception) {
-                log.warn("AI analysis failed, fallback to local analysis: {}", exception.getMessage());
-                analysisResponse = generateLocalAnalysis(request);
-            }
+            ProblemAnalysisResponse analysisResponse = callAIForAnalysis(request);
 
             Long currentLevelId = optionalErrorItem.map(ErrorItem::getLevelId).orElse(null);
             analysisResponse.setRecommendedProblems(buildRecommendedProblems(request, analysisResponse, currentLevelId));
@@ -301,8 +295,9 @@ public class ErrorController {
     private String buildAnalysisPrompt(ProblemAnalysisRequest request) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("请分析以下错题，所有回复必须使用中文，并严格按照系统提示词中定义的 JSON 格式返回。\n\n");
+        prompt.append("题型: ").append(resolveQuestionTypeLabel(request)).append('\n');
         prompt.append("题目: ").append(nullToText(request.getQuestion())).append('\n');
-        prompt.append("用户答案: ").append(nullToText(request.getUserAnswer())).append('\n');
+        prompt.append("用户答案: ").append(formatUserAnswer(request)).append('\n');
 
         if (hasText(request.getDescription())) {
             prompt.append("题目描述: ").append(request.getDescription()).append('\n');
@@ -325,6 +320,65 @@ public class ErrorController {
         return prompt.toString();
     }
 
+    private String resolveQuestionTypeLabel(ProblemAnalysisRequest request) {
+        String type = normalizeQuestionType(request.getQuestionType());
+        return switch (type) {
+            case "multi" -> "多选题";
+            case "judge" -> "判断题";
+            case "fill" -> "填空题";
+            case "code" -> "编程题";
+            default -> "单选题";
+        };
+    }
+
+    private String normalizeQuestionType(String questionType) {
+        if (!hasText(questionType)) {
+            return "single";
+        }
+
+        String normalized = questionType.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "multiple", "multiple_choice" -> "multi";
+            case "single_choice" -> "single";
+            case "single", "multi", "judge", "fill", "code" -> normalized;
+            default -> "single";
+        };
+    }
+
+    private String formatUserAnswer(ProblemAnalysisRequest request) {
+        List<String> answers = normalizeUserAnswers(request);
+        if (answers.isEmpty()) {
+            return nullToText(request.getUserAnswer());
+        }
+
+        if ("multi".equals(normalizeQuestionType(request.getQuestionType()))) {
+            return "[" + String.join(", ", answers) + "]";
+        }
+
+        return answers.get(0);
+    }
+
+    private List<String> normalizeUserAnswers(ProblemAnalysisRequest request) {
+        LinkedHashSet<String> answers = new LinkedHashSet<>();
+
+        if (request.getUserAnswers() != null) {
+            request.getUserAnswers().stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(value -> !value.isEmpty())
+                    .forEach(answers::add);
+        }
+
+        if (hasText(request.getUserAnswer())) {
+            Arrays.stream(request.getUserAnswer().split(","))
+                    .map(String::trim)
+                    .filter(value -> !value.isEmpty())
+                    .forEach(answers::add);
+        }
+
+        return new ArrayList<>(answers);
+    }
+
     private ProblemAnalysisResponse parseAnalysisResponse(String content) {
         try {
             String jsonContent = content;
@@ -337,41 +391,6 @@ public class ErrorController {
         } catch (JsonProcessingException exception) {
             throw new AIService.AIException("Failed to parse AI analysis response", exception);
         }
-    }
-
-    private ProblemAnalysisResponse generateLocalAnalysis(ProblemAnalysisRequest request) {
-        ProblemAnalysisResponse response = new ProblemAnalysisResponse();
-        response.setSummary("先重新审题，再对比你的答案和正确思路之间的差异，优先找出最关键的误区。");
-
-        ProblemAnalysisResponse.ErrorAnalysis errorAnalysis = new ProblemAnalysisResponse.ErrorAnalysis();
-        errorAnalysis.setRootCause("可能遗漏了题目中的关键条件，或者对知识点理解还不够稳定。");
-        errorAnalysis.setDetailedExplanation("建议重新梳理题目要求，定位答案不匹配的具体步骤，并总结成一句可以复用的纠错提醒。");
-        errorAnalysis.setCommonMistakes(List.of("遗漏边界条件", "概念混淆", "解题步骤不完整"));
-        response.setErrorAnalysis(errorAnalysis);
-
-        ProblemAnalysisResponse.KnowledgePoint knowledgePoint = new ProblemAnalysisResponse.KnowledgePoint();
-        knowledgePoint.setName("题意拆解");
-        knowledgePoint.setDescription("在动手作答前，先明确题目真正要求的目标、限制条件和判定标准。");
-        knowledgePoint.setMasteryLevel("beginner");
-        response.setKnowledgePoints(List.of(knowledgePoint));
-
-        ProblemAnalysisResponse.ImprovementSuggestion suggestion = new ProblemAnalysisResponse.ImprovementSuggestion();
-        suggestion.setTitle("做一次针对性复盘");
-        suggestion.setDescription("把正确思路、你的答案和错误原因并排写出来，找出最容易重复出错的步骤。");
-        suggestion.setPriority("high");
-        suggestion.setActionItems(List.of("重新审题", "对照正确思路", "记录错误模式"));
-        response.setSuggestions(List.of(suggestion));
-
-        ProblemAnalysisResponse.RecommendedProblem recommendedProblem = new ProblemAnalysisResponse.RecommendedProblem();
-        recommendedProblem.setTitle("补一题同类型基础练习");
-        recommendedProblem.setQuestion("请围绕这道错题的核心知识点，再完成一题同类型但难度更基础的练习。");
-        recommendedProblem.setType("practice");
-        recommendedProblem.setDifficulty("easy");
-        recommendedProblem.setReason("先把相同知识点的基础题做稳，再继续提升难度。");
-        recommendedProblem.setFromQuestionBank(false);
-        response.setRecommendedProblems(List.of(recommendedProblem));
-
-        return response;
     }
 
     private List<ProblemAnalysisResponse.RecommendedProblem> buildRecommendedProblems(
@@ -396,7 +415,7 @@ public class ErrorController {
             return aiProblems;
         }
 
-        return List.of(buildLocalGeneratedProblem(request, analysisResponse));
+        return List.of();
     }
 
     private List<ProblemAnalysisResponse.RecommendedProblem> findQuestionBankRecommendations(

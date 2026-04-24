@@ -381,9 +381,6 @@ export default {
 
     const wsUrl = computed(() => {
       const token = userStore.userInfo?.token
-      if (import.meta.env.DEV) {
-        return `/api/ws/chat${token ? `?token=${token}` : ''}`
-      }
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       return `${protocol}//${window.location.host}/api/ws/chat${token ? `?token=${token}` : ''}`
     })
