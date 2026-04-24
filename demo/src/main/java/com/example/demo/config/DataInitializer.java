@@ -205,15 +205,15 @@ public class DataInitializer implements CommandLineRunner {
 
         private List<String> resolveOptions(LevelSeed seed) {
                 if (seed.options() != null && !seed.options().isEmpty()) {
-                        return seed.options();
+                        return new ArrayList<>(seed.options());
                 }
 
                 if ("code".equals(seed.type()) || "fill".equals(seed.type())) {
-                        return List.of();
+                        return new ArrayList<>();
                 }
 
                 if ("judge".equals(seed.type())) {
-                        return List.of("正确", "错误");
+                        return new ArrayList<>(List.of("正确", "错误"));
                 }
 
                 return defaultSingleOptions(seed.answer());
@@ -222,7 +222,7 @@ public class DataInitializer implements CommandLineRunner {
         private List<String> defaultSingleOptions(String answer) {
                 String safeAnswer = answer == null ? "" : answer.trim();
                 if (safeAnswer.isEmpty()) {
-                        return List.of("选项A", "选项B", "选项C", "选项D");
+                        return new ArrayList<>(List.of("选项A", "选项B", "选项C", "选项D"));
                 }
 
                 if (safeAnswer.startsWith("O(")) {
@@ -235,10 +235,10 @@ public class DataInitializer implements CommandLineRunner {
                         options.add("O(n²)");
                         options.add("O(nW)");
                         options.add("O(2^n)");
-                        return options.stream().limit(4).toList();
+                        return new ArrayList<>(options.stream().limit(4).toList());
                 }
 
-                return switch (safeAnswer) {
+                return new ArrayList<>(switch (safeAnswer) {
                         case "哈希表" -> List.of("哈希表", "双指针", "动态规划", "回溯法");
                         case "斐波那契数列" -> List.of("斐波那契数列", "贪心算法", "并查集", "拓扑排序");
                         case "后进先出" -> List.of("后进先出", "先进先出", "随机访问", "层序遍历");
@@ -255,7 +255,7 @@ public class DataInitializer implements CommandLineRunner {
                         case "寻找下一个更大元素" -> List.of("寻找下一个更大元素", "求连通分量", "求最短路径", "统计逆序对");
                         case "左右子树高度差不超过 1" -> List.of("左右子树高度差不超过 1", "每层节点数相同", "根节点必须最小", "叶子节点高度相等");
                         default -> List.of(safeAnswer, "以上都不正确", "需要更多信息", "无法确定");
-                };
+                });
         }
 
         private void applyUser(User user, UserSeed seed, OffsetDateTime now, Random random, int colorIndex,
@@ -372,19 +372,9 @@ public class DataInitializer implements CommandLineRunner {
         }
 
         private String buildAvatar(String name, int colorIndex) {
-                String displayName = shortDisplayName(name);
                 String background = AVATAR_BACKGROUND_COLORS
                                 .get(Math.floorMod(colorIndex, AVATAR_BACKGROUND_COLORS.size()));
-                String svg = """
-                                <svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
-                                  <rect width='128' height='128' rx='30' fill='%s'/>
-                                  <circle cx='96' cy='30' r='12' fill='rgba(255,255,255,0.18)'/>
-                                  <text x='64' y='76' font-size='34' text-anchor='middle' fill='#ffffff'
-                                        font-family='Arial, PingFang SC, Microsoft YaHei, sans-serif'>%s</text>
-                                </svg>
-                                """.formatted(background, displayName);
-                return "data:image/svg+xml;charset=UTF-8,"
-                                + URLEncoder.encode(svg, StandardCharsets.UTF_8).replace("+", "%20");
+                return "https://api.dicebear.com/7.x/initials/svg?seed=" + name + "&backgroundColor=" + background.substring(1);
         }
 
         private String shortDisplayName(String name) {

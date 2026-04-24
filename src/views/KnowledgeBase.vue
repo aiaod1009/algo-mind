@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<script setup>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -1390,35 +1390,35 @@ watch(
               </ul>
             </div>
           </section>
-
-          <button
-            class="graph-trigger-bar"
-            :class="{ 'is-active': graphOverlayOpen }"
-            type="button"
-            @click="graphOverlayOpen = !graphOverlayOpen"
-          >
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
-              <circle cx="6" cy="6" r="2.5"/>
-              <circle cx="18" cy="6" r="2.5"/>
-              <circle cx="12" cy="18" r="2.5"/>
-              <line x1="7.8" y1="7.5" x2="10.5" y2="16"/>
-              <line x1="16.2" y1="7.5" x2="13.5" y2="16"/>
-              <line x1="8.5" y1="6" x2="15.5" y2="6"/>
-            </svg>
-          </button>
-
-          <Transition name="graph-overlay">
-            <div v-if="graphOverlayOpen" class="graph-overlay">
-              <button class="graph-overlay-close" type="button" @click="graphOverlayOpen = false">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="6" y1="6" x2="18" y2="18"/>
-                  <line x1="18" y1="6" x2="6" y2="18"/>
-                </svg>
-              </button>
-              <AlgorithmKnowledgeGraph />
-            </div>
-          </Transition>
         </article>
+
+        <button
+          class="graph-trigger-bar"
+          :class="{ 'is-active': graphOverlayOpen }"
+          type="button"
+          @click="graphOverlayOpen = !graphOverlayOpen"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="6" cy="6" r="2.5"/>
+            <circle cx="18" cy="6" r="2.5"/>
+            <circle cx="12" cy="18" r="2.5"/>
+            <line x1="7.8" y1="7.5" x2="10.5" y2="16"/>
+            <line x1="16.2" y1="7.5" x2="13.5" y2="16"/>
+            <line x1="8.5" y1="6" x2="15.5" y2="6"/>
+          </svg>
+        </button>
+
+        <Transition name="graph-overlay">
+          <div v-if="graphOverlayOpen" class="graph-overlay">
+            <button class="graph-overlay-close" type="button" @click="graphOverlayOpen = false">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="6" y1="6" x2="18" y2="18"/>
+                <line x1="18" y1="6" x2="6" y2="18"/>
+              </svg>
+            </button>
+            <AlgorithmKnowledgeGraph />
+          </div>
+        </Transition>
 
       </main>
 
@@ -3010,11 +3010,11 @@ watch(
 
 .graph-trigger-bar {
   position: absolute;
-  right: 0;
+  right: -25px;
   top: 50%;
   transform: translateY(-50%);
   z-index: 10;
-  width: 6px;
+  width: 30px;
   height: 72px;
   border: none;
   border-radius: 6px 0 0 6px;
