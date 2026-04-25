@@ -4,6 +4,7 @@ import com.example.demo.Result;
 import com.example.demo.ai.DouBaoAiService;
 import com.example.demo.dto.ai.ChatMessage;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Resource;
 import lombok.Data;
@@ -32,20 +33,12 @@ public class AIController {
 
     private static final String CODE_EVALUATION_SYSTEM_PROMPT_V2 = """
             角色：算法代码评测助手
-            任务：中文评测代码
 
-            输出格式：
-            [3-6行中文分析]
-            ---CODE---
-            [完整代码，直接输出，不要 markdown]
+            输出格式（严格按顺序，不要输出其他文字）：
             ---JSON---
-            {
-              "score": 0-100,
-              "stars": 0-3,
-              "shortComment": "120-220字详细分析",
-              "suggestions": ["建议1", "建议2"],
-              "recommendedCode": "同上方代码"
-            }
+            {"score":0-100,"stars":0-3,"analysis":"80-150字中文分析","suggestions":["建议1","建议2"]}
+            ---CODE---
+            完整推荐代码，直接输出，不要markdown
 
             评分标准：
             - 90-100：完整高质量，3星
@@ -55,11 +48,11 @@ public class AIController {
 
             约束：
             1. 全部中文
-            2. suggestions 固定 2 条，每条不超过 30 字
-            3. 推荐代码必须放在 ---CODE--- 和 ---JSON--- 之间，按 100 分标准给出完整可运行代码，不要 markdown
-            4. 仅保留 score、stars、shortComment、suggestions、recommendedCode
-            5. JSON 前只能保留 3-6 行中文分析，JSON 后不要追加内容
-            6. ---CODE--- 中必须保留语法所需空格、换行和缩进，禁止输出 publicclass、returnnew、newArrayList 这类连写错误
+            2. suggestions 固定2条，每条不超过30字
+            3. ---JSON--- 必须在最前面，---CODE--- 在 JSON 之后
+            4. 推荐代码按100分标准给出完整可运行代码，不要markdown
+            5. 代码中必须保留语法所需空格、换行和缩进，禁止输出 publicclass、returnnew 等连写错误
+            6. JSON 和代码后不要追加其他内容
             """;
 
     private static final String ASSISTANT_SYSTEM_PROMPT = """
@@ -413,14 +406,29 @@ public class AIController {
 
         String normalized = stripMarkdownFence(content);
 
-        int separatorIndex = normalized.indexOf(JSON_SEPARATOR);
-        String afterSeparator = separatorIndex >= 0
-                ? normalized.substring(separatorIndex + JSON_SEPARATOR.length()).trim()
-                : normalized.trim();
+        int jsonSeparatorIndex = normalized.indexOf(JSON_SEPARATOR);
+        if (jsonSeparatorIndex < 0) {
+            return extractFirstJsonObject(normalized.trim());
+        }
 
-        int braceStart = afterSeparator.indexOf('{');
+        String afterJsonSeparator = normalized.substring(jsonSeparatorIndex + JSON_SEPARATOR.length()).trim();
+
+        int codeSeparatorIndex = afterJsonSeparator.indexOf(CODE_SEPARATOR);
+        String jsonRegion = codeSeparatorIndex >= 0
+                ? afterJsonSeparator.substring(0, codeSeparatorIndex).trim()
+                : afterJsonSeparator;
+
+        return extractFirstJsonObject(jsonRegion);
+    }
+
+    private String extractFirstJsonObject(String text) {
+        if (text == null || text.isBlank()) {
+            return "{}";
+        }
+
+        int braceStart = text.indexOf('{');
         if (braceStart < 0) {
-            return afterSeparator;
+            return text;
         }
 
         int depth = 0;
@@ -429,8 +437,8 @@ public class AIController {
         char stringDelim = 0;
         boolean escape = false;
 
-        for (int i = braceStart; i < afterSeparator.length(); i++) {
-            char c = afterSeparator.charAt(i);
+        for (int i = braceStart; i < text.length(); i++) {
+            char c = text.charAt(i);
 
             if (escape) {
                 escape = false;
@@ -467,10 +475,10 @@ public class AIController {
         }
 
         if (braceEnd >= 0) {
-            return afterSeparator.substring(braceStart, braceEnd + 1);
+            return text.substring(braceStart, braceEnd + 1);
         }
 
-        return afterSeparator.substring(braceStart);
+        return text.substring(braceStart);
     }
 
     private String extractEvaluationCode(String content) {
@@ -485,9 +493,9 @@ public class AIController {
         }
 
         int contentStart = codeStart + CODE_SEPARATOR.length();
-        int jsonStart = normalized.indexOf(JSON_SEPARATOR, contentStart);
-        String codeSection = jsonStart >= 0
-                ? normalized.substring(contentStart, jsonStart)
+        int jsonAfterCode = normalized.indexOf(JSON_SEPARATOR, contentStart);
+        String codeSection = jsonAfterCode >= 0
+                ? normalized.substring(contentStart, jsonAfterCode)
                 : normalized.substring(contentStart);
         return cleanRecommendedCode(codeSection);
     }
@@ -678,6 +686,7 @@ public class AIController {
     public static class CodeEvaluationResponse {
         private Integer score;
         private Integer stars;
+        @JsonAlias("analysis")
         private String shortComment;
         private List<String> suggestions;
         private String recommendedCode;

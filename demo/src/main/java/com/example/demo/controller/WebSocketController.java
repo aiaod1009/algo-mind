@@ -22,6 +22,24 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class WebSocketController extends TextWebSocketHandler {
 
+    private static final String ASSISTANT_SYSTEM_PROMPT = """
+            你是一位专业、耐心、鼓励式的算法学习助手。
+
+            你的职责：
+            - 分析学生当前的薄弱点和学习节奏
+            - 解答算法与数据结构相关问题
+            - 根据学生画像给出更有针对性的练习建议
+            - 结合上下文保持连续对话，不要每次都重新开始
+
+            回答要求：
+            - 使用中文
+            - 语气友好、直接、清晰
+            - 优先给出结论，再给简短解释
+            - 需要分步骤时用清晰的编号或短列表
+            - 涉及知识点时尽量给出简短示例
+            - 如果用户问的是学习计划或错题分析，要结合提供的上下文回答
+            """;
+
     private final DouBaoAiService douBaoAiService;
     private final ObjectMapper objectMapper;
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
@@ -92,7 +110,14 @@ public class WebSocketController extends TextWebSocketHandler {
 
         // 构建消息列表，包含历史对话上下文
         List<ChatMessage> messages = new ArrayList<>();
-        
+
+        messages.add(ChatMessage.system(ASSISTANT_SYSTEM_PROMPT));
+
+        ChatMessage contextMessage = buildContextMessage(request.get("context"));
+        if (contextMessage != null) {
+            messages.add(contextMessage);
+        }
+
         // 添加历史消息（如果存在）
         Object historyObj = request.get("messages");
         if (historyObj instanceof List) {
@@ -112,42 +137,47 @@ public class WebSocketController extends TextWebSocketHandler {
                 log.warn("解析历史消息失败，将只使用当前消息", e);
             }
         }
-        
+
         // 添加当前用户消息
         messages.add(new ChatMessage("user", content));
 
         StringBuilder accumulatedContent = new StringBuilder();
-        try {
-            douBaoAiService.sendMessageStream(messages, chunk -> {
-                if (chunk == null || chunk.isBlank() || !session.isOpen()) {
-                    return;
-                }
+        douBaoAiService.sendMessageStream(messages, chunk -> {
+            if (chunk == null || chunk.isBlank() || !session.isOpen()) {
+                return;
+            }
 
-                accumulatedContent.append(chunk);
-                try {
-                    sendJson(
-                            session,
-                            Map.of(
-                                    "type", "assistant",
-                                    "status", "streaming",
-                                    "id", messageId,
-                                    "content", accumulatedContent.toString()));
-                } catch (IOException ioException) {
-                    log.error("Failed to stream websocket assistant response", ioException);
-                }
-            });
-
-            sendJson(
-                    session,
-                    Map.of(
-                            "type", "assistant",
-                            "status", "completed",
-                            "id", messageId,
-                            "content", accumulatedContent.toString()));
-        } catch (Exception exception) {
-            log.error("Failed to call AI service", exception);
-            sendErrorMessage(session, "AI 服务调用失败: " + exception.getMessage());
-        }
+            accumulatedContent.append(chunk);
+            try {
+                sendJson(
+                        session,
+                        Map.of(
+                                "type", "assistant",
+                                "status", "streaming",
+                                "id", messageId,
+                                "content", accumulatedContent.toString()));
+            } catch (IOException ioException) {
+                log.error("Failed to stream websocket assistant response", ioException);
+            }
+        }, () -> {
+            try {
+                sendJson(
+                        session,
+                        Map.of(
+                                "type", "assistant",
+                                "status", "completed",
+                                "id", messageId,
+                                "content", accumulatedContent.toString()));
+            } catch (IOException ioException) {
+                log.error("Failed to send completed websocket message", ioException);
+            }
+        }, exception -> {
+            try {
+                sendErrorMessage(session, "AI 服务调用失败: " + exception.getMessage());
+            } catch (Exception e) {
+                log.error("Failed to send error websocket message", e);
+            }
+        });
     }
 
     private void handleClearMessage(WebSocketSession session) throws Exception {
@@ -199,6 +229,62 @@ public class WebSocketController extends TextWebSocketHandler {
 
     private String stringValue(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ChatMessage buildContextMessage(Object contextObj) {
+        if (!(contextObj instanceof Map)) {
+            return null;
+        }
+
+        Map<String, Object> context = (Map<String, Object>) contextObj;
+        StringBuilder builder = new StringBuilder("以下是当前学生画像，请结合这些信息回答，但不要逐条复述：\n");
+        boolean hasContent = false;
+
+        String track = stringValue(context.get("track"));
+        if (track != null && !track.isBlank()) {
+            String trackLabel = stringValue(context.get("trackLabel"));
+            builder.append("- 当前赛道：").append(trackLabel != null && !trackLabel.isBlank() ? trackLabel : track).append('\n');
+            hasContent = true;
+        }
+
+        Object weeklyGoal = context.get("weeklyGoal");
+        if (weeklyGoal != null) {
+            builder.append("- 周目标：").append(weeklyGoal).append(" 个关卡\n");
+            hasContent = true;
+        }
+
+        Object weakTopics = context.get("weakTopics");
+        if (weakTopics instanceof List) {
+            List<?> topics = (List<?>) weakTopics;
+            if (!topics.isEmpty()) {
+                builder.append("- 薄弱点：").append(String.join("、", topics.stream().map(String::valueOf).toList())).append('\n');
+                hasContent = true;
+            }
+        }
+
+        Object strongTopics = context.get("strongTopics");
+        if (strongTopics instanceof List) {
+            List<?> topics = (List<?>) strongTopics;
+            if (!topics.isEmpty()) {
+                builder.append("- 擅长点：").append(String.join("、", topics.stream().map(String::valueOf).toList())).append('\n');
+                hasContent = true;
+            }
+        }
+
+        Object totalErrors = context.get("totalErrors");
+        if (totalErrors != null) {
+            builder.append("- 累计错题：").append(totalErrors).append(" 道\n");
+            hasContent = true;
+        }
+
+        Object consistencyScore = context.get("consistencyScore");
+        if (consistencyScore != null) {
+            builder.append("- 坚持指数：").append(consistencyScore).append("/100\n");
+            hasContent = true;
+        }
+
+        return hasContent ? ChatMessage.system(builder.toString()) : null;
     }
 
     @Override

@@ -187,21 +187,35 @@ const parseEvaluationResponseContent = (content) => {
   }
 
   const jsonStart = rawText.indexOf(JSON_SEPARATOR)
-  let jsonText = jsonStart >= 0
-    ? rawText.slice(jsonStart + JSON_SEPARATOR.length).trim()
-    : rawText
+  const codeStart = rawText.indexOf(CODE_SEPARATOR)
+
+  let jsonText = ''
+  if (jsonStart >= 0) {
+    const afterJsonSeparator = rawText.slice(jsonStart + JSON_SEPARATOR.length)
+    const codeInAfter = afterJsonSeparator.indexOf(CODE_SEPARATOR)
+    jsonText = codeInAfter >= 0
+      ? afterJsonSeparator.slice(0, codeInAfter).trim()
+      : afterJsonSeparator.trim()
+  } else {
+    jsonText = rawText
+  }
+
   if (jsonText.startsWith('```json')) {
     jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '')
   } else if (jsonText.startsWith('```')) {
     jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '')
   }
 
-  const codeStart = rawText.indexOf(CODE_SEPARATOR)
   const extractedCode = codeStart >= 0
-    ? rawText.slice(codeStart + CODE_SEPARATOR.length, jsonStart >= 0 ? jsonStart : undefined).trim()
+    ? (codeStart < jsonStart
+        ? rawText.slice(codeStart + CODE_SEPARATOR.length, jsonStart).trim()
+        : rawText.slice(codeStart + CODE_SEPARATOR.length).trim())
     : ''
 
   const parsed = JSON.parse(jsonText.trim())
+  if (!parsed.shortComment && parsed.analysis) {
+    parsed.shortComment = parsed.analysis
+  }
   if (extractedCode) {
     parsed.recommendedCode = extractedCode
   }

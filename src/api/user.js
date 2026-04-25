@@ -147,7 +147,7 @@ class WebSocketManager {
 
       // 构建 WebSocket URL
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsUrl = `${wsProtocol}//${window.location.host}/ws/ai/chat`
+      const wsUrl = `${wsProtocol}//${window.location.host}/api/ws/chat`
 
       this.socket = new WebSocket(wsUrl)
 
@@ -191,15 +191,23 @@ class WebSocketManager {
   }
 
   handleMessage(data) {
-    // 处理 WebSocket 消息
     console.log('收到 WebSocket 消息：', data)
-    
-    // 这里可以根据需要处理不同类型的消息
-    // 目前我们只处理 AI 聊天消息
-    if (data.type === 'message') {
-      // 调用回调函数处理消息
+
+    if (data.type === 'assistant' && data.status === 'thinking') {
       this.callbacks.forEach(callback => {
-        callback(data)
+        callback({ type: 'thinking', content: data.content })
+      })
+    } else if (data.type === 'assistant' && data.status === 'streaming') {
+      this.callbacks.forEach(callback => {
+        callback({ type: 'message', content: data.content, finished: false })
+      })
+    } else if (data.type === 'assistant' && data.status === 'completed') {
+      this.callbacks.forEach(callback => {
+        callback({ type: 'message', content: data.content, finished: true })
+      })
+    } else if (data.type === 'error') {
+      this.callbacks.forEach(callback => {
+        callback({ type: 'error', content: data.content })
       })
     }
   }

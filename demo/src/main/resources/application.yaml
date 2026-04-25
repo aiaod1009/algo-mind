@@ -241,7 +241,7 @@ judge0:
     max-memory: ${JUDGE0_MAX_MEMORY:524288}
     max-wall-time: ${JUDGE0_MAX_WALL_TIME:30}
     max-output: ${JUDGE0_MAX_OUTPUT:65536}
-  use-mock: ${JUDGE0_USE_MOCK:false}
+  use-mock: ${JUDGE0_USE_MOCK:true}
 
 doubao:
   api:

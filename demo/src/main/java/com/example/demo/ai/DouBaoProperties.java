@@ -20,10 +20,10 @@ public class DouBaoProperties {
     private Double temperature = 0.7;
     private Integer maxTokens = 1200;
     private String codeEvaluationModel;
-    private Integer codeEvaluationMaxTokens = 1400;
+    private Integer codeEvaluationMaxTokens = 1000;
     private Double codeEvaluationTemperature = 0.2;
     private Integer codeEvaluationConnectTimeoutMs = 10_000;
-    private Integer codeEvaluationReadTimeoutMs = 45_000;
+    private Integer codeEvaluationReadTimeoutMs = 35_000;
 
     public String getMultimodalUrl() {
         if (multimodalUrl == null || multimodalUrl.isBlank()) {

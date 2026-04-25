@@ -465,10 +465,12 @@ public class DouBaoAiService {
     }
 
     // WebSocket 流式发送
-    public void sendMessageStream(List<ChatMessage> messages, java.util.function.Consumer<String> callback) {
+    public void sendMessageStream(List<ChatMessage> messages, java.util.function.Consumer<String> callback,
+                                   Runnable onComplete, java.util.function.Consumer<Exception> onError) {
         List<ChatMessage> sanitizedMessages = sanitizeMessages(messages);
         if (sanitizedMessages.isEmpty()) {
             callback.accept("请输入有效内容后重试");
+            if (onComplete != null) onComplete.run();
             return;
         }
 
@@ -498,9 +500,14 @@ public class DouBaoAiService {
                         }
                     }
                 }
+                if (onComplete != null) onComplete.run();
             } catch (Exception e) {
                 logger.error("DouBao streaming request failed", e);
-                callback.accept("调用失败：" + e.getMessage());
+                if (onError != null) {
+                    onError.accept(e);
+                } else {
+                    callback.accept("调用失败：" + e.getMessage());
+                }
             } finally {
                 if (conn != null) {
                     conn.disconnect();

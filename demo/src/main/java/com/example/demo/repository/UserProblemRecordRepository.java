@@ -15,12 +15,12 @@ import java.util.List;
 public interface UserProblemRecordRepository extends JpaRepository<UserProblemRecord, Long> {
 
     @Query(value = """
-      SELECT TO_CHAR(solved_at, 'YYYY-MM-DD') AS day, COUNT(*) AS cnt
+      SELECT DATE_FORMAT(solved_at, '%Y-%m-%d') AS day, COUNT(*) AS cnt
       FROM t_user_problem_record
       WHERE user_id = :userId
         AND solved_at >= :start
         AND solved_at < :end
-      GROUP BY TO_CHAR(solved_at, 'YYYY-MM-DD')
+      GROUP BY DATE_FORMAT(solved_at, '%Y-%m-%d')
       ORDER BY day
       """, nativeQuery = true)
     List<Object[]> countDailyAttempts(@Param("userId") Long userId,

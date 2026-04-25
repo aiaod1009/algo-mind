@@ -1022,11 +1022,13 @@ const sendMessage = async () => {
     } else {
       // 无文件，使用WebSocket接口
       await api.aiChatWebSocket({
-        message: userMessageContent,
+        type: 'chat',
+        content: userMessageContent,
         messages: historyMessages,
         context: buildChatContext(),
       }, (chunk) => {
-        streamedContent += chunk
+        // 后端发送的是累积的完整内容，直接赋值即可
+        streamedContent = chunk
         if (chatMessages.value[assistantMessageIndex]) {
           chatMessages.value[assistantMessageIndex].content = streamedContent
         }
@@ -1059,10 +1061,6 @@ const sendMessage = async () => {
         }
       })
     }
-
-    const aiContent = extractAIResponseContent(response, '抱歉，我现在无法回答，请稍后再试。')
-
-
   } catch (error) {
     console.warn('发送消息失败:', error)
     await finalizeStreamingMessage(assistantMessageIndex, '抱歉，服务暂时不可用，请稍后再试。')

@@ -9,14 +9,17 @@ COPY demo/mvnw .
 RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
 
 COPY demo/src/ src/
-RUN ./mvnw package -DskipTests -B
+RUN ./mvnw package -DskipTests -B && \
+    mv target/*.jar app.jar && \
+    rm -rf target && \
+    rm -rf .m2
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=build /app/app.jar app.jar
 
 RUN mkdir -p /www/algo-mind/uploads/avatars /www/algo-mind/uploads/chat-files && \
     chown -R appuser:appgroup /www/algo-mind

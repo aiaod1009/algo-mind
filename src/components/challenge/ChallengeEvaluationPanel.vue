@@ -38,16 +38,11 @@ const normalizeSuggestions = (value) => {
 
 const extractAnalysisText = (text) => {
   const source = String(text || '')
-  const codeSeparatorIndex = source.indexOf(CODE_SEPARATOR)
-  if (codeSeparatorIndex !== -1) {
-    return source.slice(0, codeSeparatorIndex).trim()
-  }
-
   const jsonSeparatorIndex = source.indexOf(JSON_SEPARATOR)
   if (jsonSeparatorIndex === -1) {
     return source.trim().startsWith('{') ? '' : source.trim()
   }
-  return source.slice(0, jsonSeparatorIndex).trim()
+  return ''
 }
 
 const extractCodeCandidate = (text) => {
@@ -58,15 +53,21 @@ const extractCodeCandidate = (text) => {
   }
 
   const codeStart = codeSeparatorIndex + CODE_SEPARATOR.length
-  const jsonSeparatorIndex = source.indexOf(JSON_SEPARATOR, codeStart)
-  return source.slice(codeStart, jsonSeparatorIndex === -1 ? undefined : jsonSeparatorIndex).trim()
+  const jsonAfterCode = source.indexOf(JSON_SEPARATOR, codeStart)
+  return jsonAfterCode !== -1
+    ? source.slice(codeStart, jsonAfterCode).trim()
+    : source.slice(codeStart).trim()
 }
 
 const extractJsonCandidate = (text) => {
   const source = String(text || '')
   const separatorIndex = source.indexOf(JSON_SEPARATOR)
   if (separatorIndex !== -1) {
-    return source.slice(separatorIndex + JSON_SEPARATOR.length).trim()
+    const afterSeparator = source.slice(separatorIndex + JSON_SEPARATOR.length).trim()
+    const codeSeparatorIndex = afterSeparator.indexOf(CODE_SEPARATOR)
+    return codeSeparatorIndex !== -1
+      ? afterSeparator.slice(0, codeSeparatorIndex).trim()
+      : afterSeparator
   }
 
   const trimmed = source.trim()
@@ -255,6 +256,7 @@ const parseStreamingPayload = (rawValue) => {
       recommendedCode = String(parsed.recommendedCode ?? '').trim()
     } catch {
       shortComment = extractJsonStringField(jsonCandidate, 'shortComment')
+        || extractJsonStringField(jsonCandidate, 'analysis')
       suggestions = extractJsonStringArrayField(jsonCandidate, 'suggestions')
       recommendedCode = extractJsonStringField(jsonCandidate, 'recommendedCode')
     }
