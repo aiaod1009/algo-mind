@@ -44,7 +44,7 @@ export const useLevelStore = defineStore('level', () => {
       order: Number(item.order || 1),
       type: item.type || 'single',
       options: Array.isArray(item.options) ? item.options : [],
-      isUnlocked: Boolean(item.isUnlocked),
+      isUnlocked: true, // 开发模式：全部解锁
       stars: clampStars(item.stars ?? item.bestStars ?? 0),
       bestStars: clampStars(item.bestStars ?? item.stars ?? 0),
       isCompleted: Boolean(item.isCompleted || clampStars(item.bestStars ?? item.stars ?? 0) > 0),
